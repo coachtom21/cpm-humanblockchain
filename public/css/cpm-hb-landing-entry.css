@@ -1,0 +1,350 @@
+/**
+ * Landing entry modal — aligned with hello-theme-child template-home .entry-overlay
+ * Scoped to #cpm-hb-landing-entry-modal
+ */
+
+#cpm-hb-landing-entry-modal {
+	--cpm-hb-line: rgba(232, 238, 252, 0.12);
+	--cpm-hb-text: #e8eefc;
+	--cpm-hb-muted: #b8c3e6;
+	--cpm-hb-accent: #7dd3fc;
+	--cpm-hb-accent2: #a78bfa;
+	--cpm-hb-good: #86efac;
+	--cpm-hb-warn: #fbbf24;
+	--cpm-hb-radius: 18px;
+	--cpm-hb-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+	--cpm-hb-shadow2: 0 8px 18px rgba(0, 0, 0, 0.22);
+	--cpm-hb-panel: rgba(18, 31, 61, 0.7);
+	--cpm-hb-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+	--cpm-hb-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+body.cpm-hb-landing-entry-active {
+	overflow: hidden;
+}
+
+#cpm-hb-landing-entry-modal.cpm-hb-entry-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.75);
+	backdrop-filter: blur(8px);
+	display: grid;
+	place-items: center;
+	z-index: 100050;
+	padding: 18px;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	font-family: var(--cpm-hb-font);
+}
+
+#cpm-hb-landing-entry-modal:not(.active) {
+	display: none;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-overlay-shell {
+	width: min(720px, 100%);
+	max-width: 100%;
+	max-height: calc(100vh - 36px);
+	background: rgba(11, 18, 32, 0.35);
+	border: 1px solid rgba(232, 238, 252, 0.1);
+	border-radius: calc(var(--cpm-hb-radius) + 6px);
+	padding: 10px;
+	box-shadow: var(--cpm-hb-shadow);
+	backdrop-filter: blur(10px);
+	margin: auto;
+	display: flex;
+	flex-direction: column;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
+	background: var(--cpm-hb-panel);
+	border: 1px solid var(--cpm-hb-line);
+	border-radius: var(--cpm-hb-radius);
+	padding: 20px;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	max-height: 100%;
+	display: flex;
+	flex-direction: column;
+	color: var(--cpm-hb-text);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 10px;
+	flex-wrap: wrap;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo {
+	width: 48px;
+	height: 48px;
+	border-radius: 14px;
+	background: linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(167, 139, 250, 0.95));
+	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	font-size: 11px;
+	font-weight: 900;
+	color: #071024;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo--has-image {
+	background: rgba(255, 255, 255, 0.06);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+	border: 1px solid rgba(232, 238, 252, 0.12);
+	padding: 4px;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo .custom-logo-link,
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo img,
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo .cpm-hb-entry-logo-img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+	border-radius: 10px;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-logo .custom-logo-link {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	background: transparent;
+	box-shadow: none;
+	border: none;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-h1 {
+	font-size: 26px;
+	line-height: 1.15;
+	margin: 8px 0 4px;
+	letter-spacing: -0.3px;
+	font-weight: 700;
+	color: var(--cpm-hb-text);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-sub {
+	font-size: 12px;
+	color: var(--cpm-hb-muted);
+	margin-top: 2px;
+	line-height: 1.4;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-header-cta {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	align-items: center;
+	margin-top: 0;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-q {
+	margin-top: 14px;
+	padding: 14px;
+	border-radius: 16px;
+	border: 1px solid var(--cpm-hb-line);
+	background: rgba(0, 0, 0, 0.18);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-q h2 {
+	margin: 0 0 6px;
+	font-size: 14px;
+	font-weight: 800;
+	color: var(--cpm-hb-text);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-q p {
+	margin: 0;
+	color: var(--cpm-hb-muted);
+	font-size: 13px;
+	line-height: 1.45;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pillRow {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: 10px;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pill {
+	border: 1px solid var(--cpm-hb-line);
+	border-radius: 999px;
+	padding: 8px 12px;
+	background: rgba(255, 255, 255, 0.04);
+	cursor: pointer;
+	font-weight: 800;
+	font-size: 13px;
+	color: var(--cpm-hb-text);
+	appearance: none;
+	transition: background 0.12s ease, outline 0.12s ease;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pill:hover {
+	background: rgba(232, 238, 252, 0.08);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pill[aria-pressed="true"] {
+	outline: 2px solid rgba(125, 211, 252, 0.55);
+	background: rgba(125, 211, 252, 0.08);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-divider {
+	height: 1px;
+	background: rgba(232, 238, 252, 0.12);
+	margin: 14px 0;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-cta-row {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: 12px;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border-radius: 14px;
+	border: 1px solid rgba(232, 238, 252, 0.16);
+	background: rgba(232, 238, 252, 0.06);
+	color: var(--cpm-hb-text);
+	font-weight: 900;
+	font-size: 14px;
+	cursor: pointer;
+	text-decoration: none;
+	transition: transform 0.08s ease, background 0.12s ease, filter 0.08s ease;
+	box-shadow: 0 10px 18px rgba(0, 0, 0, 0.18);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn:hover {
+	background: rgba(232, 238, 252, 0.1);
+	transform: translateY(-1px);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn:active {
+	transform: translateY(0);
+	filter: brightness(0.98);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn--primary {
+	border-color: transparent;
+	background: linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(167, 139, 250, 0.95));
+	color: #071024;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn--primary:hover {
+	filter: brightness(1.05);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-btn--ghost {
+	background: transparent;
+	border-color: rgba(232, 238, 252, 0.18);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-fine {
+	margin-top: 12px;
+	color: var(--cpm-hb-muted);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-fine code {
+	font-family: var(--cpm-hb-mono);
+	background: rgba(232, 238, 252, 0.06);
+	border: 1px solid var(--cpm-hb-line);
+	padding: 2px 6px;
+	border-radius: 10px;
+	font-size: 0.95em;
+	color: var(--cpm-hb-text);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-note {
+	font-size: 12px;
+	color: var(--cpm-hb-muted);
+	line-height: 1.5;
+	margin: 8px 0 0;
+}
+
+@media (max-width: 768px) {
+	#cpm-hb-landing-entry-modal.cpm-hb-entry-overlay {
+		padding: 0;
+		align-items: stretch;
+		display: flex;
+		flex-direction: column;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-overlay-shell {
+		max-height: 100vh;
+		width: 100%;
+		padding: 0;
+		border-radius: 0;
+		margin: 0;
+		flex: 1;
+		min-height: 0;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
+		padding: 20px 16px;
+		max-height: 100vh;
+		border-radius: 0;
+		flex: 1;
+		min-height: 0;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-h1 {
+		font-size: 22px;
+		margin: 4px 0 8px;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-logo {
+		width: 36px;
+		height: 36px;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-cta-row {
+		flex-direction: column;
+		margin-top: 16px;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-btn {
+		width: 100%;
+		min-height: 48px;
+		font-size: 15px;
+		padding: 12px 16px;
+	}
+}
+
+@media (max-width: 480px) {
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
+		padding: 16px 12px;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-h1 {
+		font-size: 20px;
+	}
+
+	#cpm-hb-landing-entry-modal .cpm-hb-entry-logo {
+		width: 32px;
+		height: 32px;
+	}
+}

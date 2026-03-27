@@ -1,0 +1,380 @@
+(function( $ ) {
+	'use strict';
+
+	$( function() {
+		var $registerFeedback = $( '#cpm-nwp-register-feedback' );
+		var $activateFeedback = $( '#cpm-nwp-activate-feedback' );
+		var $verifyFeedback = $( '#cpm-nwp-verify-feedback' );
+		var $activateModal = $( '#cpm-nwp-activate-modal' );
+		var $verifyModal = $( '#cpm-nwp-verify-otp-modal' );
+		var $discordModal = $( '#cpm-nwp-discord-modal' );
+
+		function closeDiscordModalAndRefresh() {
+			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			window.location.reload();
+		}
+
+		function showInlineFeedback( $box, message, type ) {
+			if ( ! $box.length ) {
+				return;
+			}
+			$box.removeClass( 'cpm-nwp-inline-feedback--hidden cpm-nwp-inline-feedback--success cpm-nwp-inline-feedback--error' );
+			if ( ! message ) {
+				$box.addClass( 'cpm-nwp-inline-feedback--hidden' ).empty();
+				return;
+			}
+			$box.addClass( 'cpm-nwp-inline-feedback--' + ( type === 'success' ? 'success' : 'error' ) );
+			$box.text( message );
+		}
+
+		function clearInlineFeedback( $box ) {
+			showInlineFeedback( $box, '', '' );
+		}
+
+		function getReferralFromUrl() {
+			var params = new URLSearchParams( window.location.search );
+			return params.get( 'issuer' ) || params.get( 'referrer' ) || params.get( 'ref' ) || params.get( 'nwp_issuer' ) || '';
+		}
+
+		$( document ).on( 'click', '.cpm-nwp-open-modal', function( e ) {
+			e.preventDefault();
+			var modalId = $( this ).data( 'cpm-modal' ) || 'cpm-nwp-register-modal';
+			var $modal = $( '#' + modalId );
+			if ( $modal.length ) {
+				var referralId = getReferralFromUrl();
+				$( '#cpm-nwp-referral-id' ).val( referralId );
+				clearInlineFeedback( $registerFeedback );
+				$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearInlineFeedback( $verifyFeedback );
+				$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				$modal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+				$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+			}
+		} );
+
+		function closeVerifyShowActivate() {
+			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $verifyFeedback );
+			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+		}
+
+		$( document ).on( 'click', '.cpm-nwp-modal-close, #cpm-nwp-register-modal .cpm-nwp-modal-overlay', function( e ) {
+			var $clickedModal = $( e.target ).closest( '.cpm-nwp-modal' );
+			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).length === 0 ) {
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			}
+		} );
+
+		$( document ).on( 'click', '.cpm-nwp-activate-close', function( e ) {
+			var $clickedModal = $( e.target ).closest( '.cpm-nwp-modal' );
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-discord-modal' ) {
+				closeDiscordModalAndRefresh();
+				return;
+			}
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-verify-otp-modal' ) {
+				closeVerifyShowActivate();
+				return;
+			}
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' && window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+				$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearInlineFeedback( $activateFeedback );
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				window.cpmHbLanding.phoneModalFromLanding = false;
+				window.cpmHbLanding.pendingOtpRedirect = '';
+				return;
+			}
+			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' ) {
+				$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+				clearInlineFeedback( $activateFeedback );
+			}
+			if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).length === 0 ) {
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			}
+		} );
+
+		$( document ).on( 'click', '#cpm-nwp-activate-modal .cpm-nwp-modal-overlay', function() {
+			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+				$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearInlineFeedback( $activateFeedback );
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				window.cpmHbLanding.phoneModalFromLanding = false;
+				window.cpmHbLanding.pendingOtpRedirect = '';
+				return;
+			}
+			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+			clearInlineFeedback( $activateFeedback );
+		} );
+
+		$( document ).on( 'click', '#cpm-nwp-verify-otp-modal .cpm-nwp-modal-overlay', function() {
+			closeVerifyShowActivate();
+		} );
+
+		$( document ).on( 'click', '#cpm-nwp-discord-modal .cpm-nwp-modal-overlay', function() {
+			closeDiscordModalAndRefresh();
+		} );
+
+		$( document ).on( 'click', '.cpm-nwp-discord-continue', function() {
+			closeDiscordModalAndRefresh();
+		} );
+
+		$( document ).on( 'keydown', function( e ) {
+			if ( e.key !== 'Escape' ) {
+				return;
+			}
+			if ( ! $discordModal.hasClass( 'cpm-nwp-modal--hidden' ) ) {
+				closeDiscordModalAndRefresh();
+				return;
+			}
+			if ( ! $verifyModal.hasClass( 'cpm-nwp-modal--hidden' ) ) {
+				closeVerifyShowActivate();
+				return;
+			}
+			var $visibleModal = $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).last();
+			if ( $visibleModal.length ) {
+				$visibleModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				if ( $visibleModal.attr( 'id' ) === 'cpm-nwp-activate-modal' ) {
+					if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+						clearInlineFeedback( $activateFeedback );
+						$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+						window.cpmHbLanding.phoneModalFromLanding = false;
+						window.cpmHbLanding.pendingOtpRedirect = '';
+					} else {
+						$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+						clearInlineFeedback( $activateFeedback );
+					}
+				}
+				if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).length === 0 ) {
+					$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				}
+			}
+		} );
+
+		$( document ).on( 'click', '.cpm-nwp-open-activate-modal', function( e ) {
+			e.preventDefault();
+			clearInlineFeedback( $registerFeedback );
+			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $verifyFeedback );
+			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $activateFeedback );
+			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+		} );
+
+		$( document ).on( 'submit', '#cpm-nwp-activate-form', function( e ) {
+			e.preventDefault();
+			var $form = $( this );
+			var $btn = $form.find( 'button[type="submit"]' );
+			var mobile = $( '#cpm-nwp-activate-mobile' ).val();
+			var digits = mobile.replace( /\D/g, '' );
+			if ( digits.length < 10 ) {
+				showInlineFeedback( $activateFeedback, 'Please enter a valid mobile number (at least 10 digits, or full international +977…).', 'error' );
+				return false;
+			}
+			clearInlineFeedback( $activateFeedback );
+			$btn.prop( 'disabled', true ).text( 'Sending...' );
+			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
+			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
+			$.post( ajaxUrl, formData )
+				.done( function( res ) {
+					if ( res.success && res.data && res.data.message ) {
+						$( '#cpm-nwp-verify-mobile' ).val( mobile );
+						$( '#cpm-nwp-verify-otp-input' ).val( '' );
+						$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+						clearInlineFeedback( $activateFeedback );
+						$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+						showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
+						$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
+					} else {
+						showInlineFeedback( $activateFeedback, ( res.data && res.data.message ) ? res.data.message : 'Request failed.', 'error' );
+					}
+				} )
+				.fail( function() {
+					showInlineFeedback( $activateFeedback, 'Request failed. Please check your connection and try again.', 'error' );
+				} )
+				.always( function() {
+					$btn.prop( 'disabled', false ).text( 'Send OTP' );
+				} );
+			return false;
+		} );
+
+		$( document ).on( 'submit', '#cpm-nwp-verify-otp-form', function( e ) {
+			e.preventDefault();
+			var $form = $( this );
+			var $btn = $form.find( 'button[type="submit"]' );
+			var mobile = $( '#cpm-nwp-verify-mobile' ).val();
+			var otp = $( '#cpm-nwp-verify-otp-input' ).val().replace( /\D/g, '' );
+			if ( otp.length !== 6 ) {
+				showInlineFeedback( $verifyFeedback, 'Please enter the 6-digit code from your SMS.', 'error' );
+				return false;
+			}
+			clearInlineFeedback( $verifyFeedback );
+			$btn.prop( 'disabled', true ).text( 'Verifying...' );
+			var payload = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.verifyOtpAction ? window.cpmNwp.verifyOtpAction : 'cpm_nwp_verify_otp' );
+			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+				payload += '&cpm_hb_verify_redirect=1';
+			}
+			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
+			$.post( ajaxUrl, payload )
+				.done( function( res ) {
+					if ( res.success && res.data ) {
+						if ( res.data.redirect_url ) {
+							window.location.href = res.data.redirect_url;
+							return;
+						}
+						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
+							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
+							window.cpmHbLanding.pendingOtpRedirect = '';
+							window.cpmHbLanding.phoneModalFromLanding = false;
+							window.location.href = postUrl;
+							return;
+						}
+						if ( res.data.show_discord_modal ) {
+							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+							clearInlineFeedback( $verifyFeedback );
+							if ( window.cpmNwp && window.cpmNwp.discordInviteUrl ) {
+								$( '#cpm-nwp-discord-join-link' ).attr( 'href', window.cpmNwp.discordInviteUrl );
+							}
+							$discordModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+							return;
+						}
+						window.location.reload();
+					} else {
+						showInlineFeedback( $verifyFeedback, ( res.data && res.data.message ) ? res.data.message : 'Verification failed.', 'error' );
+					}
+				} )
+				.fail( function() {
+					showInlineFeedback( $verifyFeedback, 'Request failed. Please try again.', 'error' );
+				} )
+				.always( function() {
+					$btn.prop( 'disabled', false ).text( 'Verify & continue' );
+				} );
+			return false;
+		} );
+
+		$( document ).on( 'input', '#cpm-nwp-verify-otp-input', function() {
+			var v = $( this ).val().replace( /\D/g, '' ).substring( 0, 6 );
+			$( this ).val( v );
+		} );
+
+		$( document ).on( 'input', '[data-phone-mask]', function() {
+			var v = $( this ).val().replace( /\D/g, '' );
+			if ( v.length > 0 && v[0] !== '1' ) {
+				v = '1' + v;
+			}
+			if ( v.length > 1 ) {
+				v = v.substring( 0, 11 );
+			}
+			var formatted = '';
+			if ( v.length > 0 ) {
+				formatted = '+1';
+				if ( v.length > 1 ) {
+					formatted += ' (' + v.substring( 1, 4 );
+					if ( v.length > 4 ) {
+						formatted += ') ' + v.substring( 4, 7 );
+						if ( v.length > 7 ) {
+							formatted += '-' + v.substring( 7 );
+						}
+					}
+				}
+			}
+			$( this ).val( formatted );
+		} );
+
+		function generateDeviceHash() {
+			var components = [
+				navigator.userAgent || '',
+				navigator.language || '',
+				screen.width + 'x' + screen.height,
+				new Date().getTimezoneOffset().toString(),
+				( navigator.hardwareConcurrency || '' ).toString()
+			];
+			var fingerprint = components.join( '|' );
+			if ( window.crypto && window.crypto.subtle && window.TextEncoder ) {
+				return window.btoa( fingerprint ).replace( /[^A-Za-z0-9]/g, '' ).substring( 0, 64 );
+			}
+			var h = 0;
+			for ( var i = 0; i < fingerprint.length; i++ ) {
+				h = ( ( h << 5 ) - h ) + fingerprint.charCodeAt( i ) | 0;
+			}
+			return 'd' + Math.abs( h ).toString( 16 );
+		}
+
+		function getGeoLocation() {
+			return new Promise( function( resolve ) {
+				if ( ! navigator.geolocation ) {
+					resolve( { lat: null, lng: null } );
+					return;
+				}
+				navigator.geolocation.getCurrentPosition(
+					function( pos ) {
+						resolve( { lat: pos.coords.latitude, lng: pos.coords.longitude } );
+					},
+					function() {
+						resolve( { lat: null, lng: null } );
+					},
+					{ enableHighAccuracy: false, timeout: 5000 }
+				);
+			} );
+		}
+
+		$( document ).on( 'submit', '#cpm-nwp-register-form', function( e ) {
+			e.preventDefault();
+			var $form = $( this );
+			var $submitBtn = $form.find( 'button[type="submit"]' );
+			$( '#cpm-nwp-device-hash' ).val( generateDeviceHash() );
+			$submitBtn.prop( 'disabled', true ).text( 'Processing...' );
+			clearInlineFeedback( $registerFeedback );
+
+			getGeoLocation().then( function( geo ) {
+				$( '#cpm-nwp-geo-lat' ).val( geo.lat || '' );
+				$( '#cpm-nwp-geo-lng' ).val( geo.lng || '' );
+
+				var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.action ? window.cpmNwp.action : 'cpm_nwp_register_device' );
+				var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
+
+				if ( ! ajaxUrl ) {
+					showInlineFeedback( $registerFeedback, 'Configuration error. Please refresh and try again.', 'error' );
+					$submitBtn.prop( 'disabled', false ).text( 'Confirm Registration' );
+					return;
+				}
+
+				$.post( ajaxUrl, formData )
+					.done( function( res ) {
+						if ( res.success && res.data && res.data.message ) {
+							showInlineFeedback( $registerFeedback, res.data.message, 'success' );
+							setTimeout( function() {
+								$( '.cpm-nwp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+								$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+								$form[0].reset();
+								clearInlineFeedback( $registerFeedback );
+							}, 2200 );
+						} else if ( res.success ) {
+							showInlineFeedback( $registerFeedback, 'Registration complete.', 'success' );
+							setTimeout( function() {
+								$( '.cpm-nwp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+								$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+								$form[0].reset();
+								clearInlineFeedback( $registerFeedback );
+							}, 2200 );
+						} else {
+							showInlineFeedback( $registerFeedback, ( res.data && res.data.message ) ? res.data.message : 'Registration failed. Please try again.', 'error' );
+						}
+					} )
+					.fail( function() {
+						showInlineFeedback( $registerFeedback, 'Request failed. Please check your connection and try again.', 'error' );
+					} )
+					.always( function() {
+						$submitBtn.prop( 'disabled', false ).text( 'Confirm Registration' );
+					} );
+			} );
+
+			return false;
+		} );
+	} );
+
+})( jQuery );

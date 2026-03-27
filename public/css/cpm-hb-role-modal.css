@@ -1,0 +1,193 @@
+/**
+ * Role modal — aligned with hello-theme-child hb-role-popup-overlay
+ * Scoped to #cpm-hb-role-modal (above landing entry z-index)
+ */
+
+#cpm-hb-role-modal {
+	--cpm-hb-role-accent: #7dd3fc;
+	--cpm-hb-role-panel: #1e293b;
+	--cpm-hb-role-text: #f1f5f9;
+	--cpm-hb-role-muted: #94a3b8;
+	--cpm-hb-role-continue-bg: #e2e8f0;
+	--cpm-hb-role-continue-text: #0f172a;
+	--cpm-hb-role-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+body.cpm-hb-role-modal-active {
+	overflow: hidden;
+}
+
+#cpm-hb-role-modal.cpm-hb-role-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100060;
+	background: rgba(3, 8, 18, 0.92);
+	backdrop-filter: blur(6px);
+	display: none;
+	align-items: center;
+	justify-content: center;
+	padding: 18px;
+	font-family: var(--cpm-hb-role-font);
+}
+
+#cpm-hb-role-modal.cpm-hb-role-overlay.active {
+	display: flex;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-container {
+	background: var(--cpm-hb-role-panel);
+	width: min(500px, 100%);
+	padding: 22px 20px 20px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 0 25px 50px rgba(0, 0, 0, 0.55);
+	position: relative;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-close {
+	position: absolute;
+	top: 14px;
+	right: 14px;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	margin: 0;
+	border: none;
+	border-radius: 8px;
+	background: rgba(148, 163, 184, 0.35);
+	color: var(--cpm-hb-role-panel);
+	font-size: 22px;
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-close:hover {
+	background: rgba(148, 163, 184, 0.55);
+	color: #0f172a;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-content h2 {
+	color: var(--cpm-hb-role-text);
+	margin: 0 0 20px;
+	font-size: 22px;
+	font-weight: 700;
+	text-align: center;
+	padding: 0 40px;
+	line-height: 1.25;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-selection {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 8px 0 20px;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 16px 18px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	background: rgba(255, 255, 255, 0.06);
+	color: var(--cpm-hb-role-text);
+	font-weight: 500;
+	font-size: 16px;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option:hover {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: rgba(255, 255, 255, 0.2);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option input[type="radio"] {
+	width: 22px;
+	height: 22px;
+	margin: 0;
+	cursor: pointer;
+	flex-shrink: 0;
+	-webkit-appearance: none;
+	appearance: none;
+	border: 2px solid rgba(255, 255, 255, 0.35);
+	border-radius: 50%;
+	background: transparent;
+	position: relative;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option input[type="radio"]:checked {
+	border-color: var(--cpm-hb-role-accent);
+	background: var(--cpm-hb-role-accent);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option input[type="radio"]:checked::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: rgba(7, 16, 36, 0.92);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option span {
+	font-size: 16px;
+	color: var(--cpm-hb-role-text);
+	font-weight: 500;
+	flex: 1;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option:has(input[type="radio"]:checked) {
+	background: rgba(125, 211, 252, 0.12);
+	border-color: rgba(125, 211, 252, 0.35);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-option:has(input[type="radio"]:checked) span {
+	font-weight: 700;
+	color: var(--cpm-hb-role-accent);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-actions {
+	margin-top: 4px;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-continue {
+	width: 100%;
+	padding: 14px 20px;
+	font-size: 18px;
+	font-weight: 700;
+	background: var(--cpm-hb-role-continue-bg);
+	color: var(--cpm-hb-role-continue-text);
+	border: none;
+	border-radius: 14px;
+	cursor: pointer;
+	transition: filter 0.12s ease, transform 0.08s ease;
+}
+
+#cpm-hb-role-modal .cpm-hb-role-continue:hover {
+	filter: brightness(1.03);
+}
+
+#cpm-hb-role-modal .cpm-hb-role-continue:active {
+	transform: scale(0.99);
+}
+
+@media (max-width: 480px) {
+	#cpm-hb-role-modal .cpm-hb-role-content h2 {
+		font-size: 20px;
+		padding: 0 36px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-option {
+		padding: 14px 16px;
+	}
+}
