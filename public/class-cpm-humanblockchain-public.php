@@ -107,6 +107,11 @@ class Cpm_Humanblockchain_Public {
 	 * @return   string          Modified menu items with NWP button appended.
 	 */
 	public function add_register_device_button_to_menu( $items, $args ) {
+		$get_started = sprintf(
+			'<li class="cpm-hb-get-started-wrap menu-item"><a href="#" class="cpm-hb-get-started-btn cpm-hb-open-membership-modal btn ghost">%1$s</a></li>',
+			esc_html__( 'Get started', 'cpm-humanblockchain' )
+		);
+
 		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::current_user_has_activated_device() ) {
 			$label = apply_filters(
 				'cpm_nwp_active_badge_text',
@@ -122,7 +127,7 @@ class Cpm_Humanblockchain_Public {
 				esc_html__( 'Register device NWP', 'cpm-humanblockchain' )
 			);
 		}
-		return $items . $button;
+		return $items . $button . $get_started;
 	}
 
 	/**
@@ -141,6 +146,7 @@ class Cpm_Humanblockchain_Public {
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-activate-device-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-verify-otp-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-discord-invite-modal.php';
+		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-membership-modal.php';
 	}
 
 	/**
@@ -180,6 +186,13 @@ class Cpm_Humanblockchain_Public {
 		 */
 
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/cpm-humanblockchain-public.css', array(), $this->version, 'all' );
+		wp_enqueue_style(
+			$this->plugin_name . '-membership-modal',
+			plugin_dir_url( __FILE__ ) . 'css/cpm-hb-membership-modal.css',
+			array(),
+			$this->version,
+			'all'
+		);
 
 	}
 
@@ -203,6 +216,22 @@ class Cpm_Humanblockchain_Public {
 		 */
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/cpm-humanblockchain-public.js', array( 'jquery' ), $this->version, false );
+		wp_enqueue_script(
+			$this->plugin_name . '-membership-modal',
+			plugin_dir_url( __FILE__ ) . 'js/cpm-hb-membership-modal.js',
+			array( 'jquery', $this->plugin_name ),
+			$this->version,
+			true
+		);
+
+		$membership_continue = apply_filters( 'cpm_hb_membership_continue_url', home_url( '/nwp-gateway/' ) );
+		wp_localize_script(
+			$this->plugin_name . '-membership-modal',
+			'cpmHbMembership',
+			array(
+				'continueUrl' => esc_url_raw( $membership_continue ),
+			)
+		);
 
 		if ( $this->should_show_landing_entry_modal() ) {
 			wp_enqueue_script(
