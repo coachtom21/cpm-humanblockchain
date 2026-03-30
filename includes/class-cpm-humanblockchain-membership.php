@@ -127,66 +127,22 @@ class Cpm_Humanblockchain_Membership {
 	}
 
 	/**
-	 * Load email, phone, and profile fields from a WordPress user ID for membership API (same shape as guest payload).
+	 * Whether the resolved membership POST URL is on this WordPress site (same host as home_url).
+	 * External URLs must not receive local {@see wp_get_current_user()} IDs — the remote service returns user_not_found.
 	 *
-	 * @param int $user_id User ID.
-	 * @return array{ email: string, phone: string, username: string, first_name: string, last_name: string }
+	 * @return bool
 	 */
-	private static function get_identity_from_user_for_membership( $user_id ) {
-		$user_id = (int) $user_id;
-		$out     = array(
-			'email'      => '',
-			'phone'      => '',
-			'username'   => '',
-			'first_name' => '',
-			'last_name'  => '',
-		);
-		if ( $user_id <= 0 ) {
-			return $out;
+	private static function membership_endpoint_is_same_site() {
+		$custom = trim( (string) get_option( self::OPTION_ENDPOINT, '' ) );
+		if ( $custom === '' ) {
+			return true;
 		}
-		$user = get_userdata( $user_id );
-		if ( ! $user ) {
-			return $out;
+		$endpoint_host = wp_parse_url( $custom, PHP_URL_HOST );
+		$site_host     = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( ! $endpoint_host || ! $site_host ) {
+			return false;
 		}
-		$out['email']    = (string) $user->user_email;
-		$out['username'] = (string) $user->user_login;
-		$out['first_name'] = (string) get_user_meta( $user_id, 'first_name', true );
-		$out['last_name']  = (string) get_user_meta( $user_id, 'last_name', true );
-		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) ) {
-			$out['phone'] = (string) Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $user_id );
-		}
-		if ( $out['phone'] === '' ) {
-			$out['phone'] = (string) get_user_meta( $user_id, 'phone', true );
-		}
-		return $out;
-	}
-
-	/**
-	 * Append optional membership fields: POST overrides; for logged-in users $identity_defaults fills gaps.
-	 *
-	 * @param array<string,mixed> $body              Request body (modified).
-	 * @param array<string,string>|null $identity_defaults Optional profile values (username, first_name, last_name).
-	 */
-	private static function append_optional_membership_fields( array &$body, $identity_defaults = null ) {
-		$optional = array( 'password', 'username', 'first_name', 'last_name' );
-		foreach ( $optional as $field ) {
-			$raw = '';
-			if ( ! empty( $_POST[ $field ] ) ) {
-				$raw = wp_unslash( $_POST[ $field ] );
-			} elseif ( is_array( $identity_defaults ) && isset( $identity_defaults[ $field ] ) && (string) $identity_defaults[ $field ] !== '' ) {
-				$raw = (string) $identity_defaults[ $field ];
-			}
-			if ( $raw === '' ) {
-				continue;
-			}
-			if ( 'password' === $field ) {
-				$body['password'] = (string) $raw;
-			} elseif ( 'username' === $field ) {
-				$body['username'] = sanitize_user( (string) $raw, true );
-			} else {
-				$body[ $field ] = sanitize_text_field( (string) $raw );
-			}
-		}
+		return strtolower( (string) $endpoint_host ) === strtolower( (string) $site_host );
 	}
 
 	/**
@@ -229,33 +185,33 @@ class Cpm_Humanblockchain_Membership {
 		}
 
 		if ( is_user_logged_in() ) {
-			$user_id  = get_current_user_id();
-			$identity = self::get_identity_from_user_for_membership( $user_id );
+			$user = wp_get_current_user();
+			$body['email'] = $user->user_email;
 
-			$email = sanitize_email( $identity['email'] );
-			if ( ! is_email( $email ) ) {
-				wp_send_json_error(
-					array(
-						'code'    => 'invalid_email',
-						'message' => __( 'Your account does not have a valid email address.', 'cpm-humanblockchain' ),
-					),
-					400
-				);
+			$include_uid = (bool) apply_filters(
+				'cpm_hb_membership_include_user_id',
+				self::membership_endpoint_is_same_site(),
+				$user->ID,
+				self::get_api_endpoint_url()
+			);
+			if ( $include_uid ) {
+				$body['user_id'] = (int) $user->ID;
 			}
 
 			$phone_from_post = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
 			if ( $phone_from_post === '' && isset( $_POST['mobile'] ) ) {
 				$phone_from_post = sanitize_text_field( wp_unslash( $_POST['mobile'] ) );
 			}
-			$phone = $phone_from_post !== '' ? $phone_from_post : $identity['phone'];
+
+			$phone = $phone_from_post !== '' ? $phone_from_post : Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $user->ID );
 
 			if ( $phone === '' || ! self::phone_has_enough_digits( $phone ) ) {
 				wp_send_json(
 					array(
-						'success'     => false,
-						'needs_phone' => true,
-						'message'     => __( 'Please enter a valid phone number (at least 8 digits).', 'cpm-humanblockchain' ),
-						'data'        => array(
+						'success'      => false,
+						'needs_phone'  => true,
+						'message'      => __( 'Please enter a valid phone number (at least 8 digits).', 'cpm-humanblockchain' ),
+						'data'         => array(
 							'code' => 'needs_phone',
 						),
 					),
@@ -263,15 +219,7 @@ class Cpm_Humanblockchain_Membership {
 				);
 			}
 
-			$body['email'] = $email;
 			$body['phone'] = self::normalize_phone_for_api( $phone );
-
-			$identity_optional = array(
-				'username'   => $identity['username'],
-				'first_name' => $identity['first_name'],
-				'last_name'  => $identity['last_name'],
-			);
-			self::append_optional_membership_fields( $body, $identity_optional );
 		} else {
 			$email = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 			$phone = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
@@ -302,7 +250,20 @@ class Cpm_Humanblockchain_Membership {
 			$body['email'] = $email;
 			$body['phone'] = self::normalize_phone_for_api( $phone );
 
-			self::append_optional_membership_fields( $body, null );
+			$optional = array( 'password', 'username', 'first_name', 'last_name' );
+			foreach ( $optional as $field ) {
+				if ( empty( $_POST[ $field ] ) ) {
+					continue;
+				}
+				$val = wp_unslash( $_POST[ $field ] );
+				if ( 'password' === $field ) {
+					$body['password'] = (string) $val;
+				} elseif ( 'username' === $field ) {
+					$body['username'] = sanitize_user( (string) $val, true );
+				} else {
+					$body[ $field ] = sanitize_text_field( (string) $val );
+				}
+			}
 		}
 
 		$url  = self::get_api_endpoint_url();
