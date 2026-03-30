@@ -127,6 +127,25 @@ class Cpm_Humanblockchain_Membership {
 	}
 
 	/**
+	 * Whether the resolved membership POST URL is on this WordPress site (same host as home_url).
+	 * External URLs must not receive local {@see wp_get_current_user()} IDs — the remote service returns user_not_found.
+	 *
+	 * @return bool
+	 */
+	private static function membership_endpoint_is_same_site() {
+		$custom = trim( (string) get_option( self::OPTION_ENDPOINT, '' ) );
+		if ( $custom === '' ) {
+			return true;
+		}
+		$endpoint_host = wp_parse_url( $custom, PHP_URL_HOST );
+		$site_host     = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( ! $endpoint_host || ! $site_host ) {
+			return false;
+		}
+		return strtolower( (string) $endpoint_host ) === strtolower( (string) $site_host );
+	}
+
+	/**
 	 * AJAX: submit membership selection.
 	 */
 	public static function handle_submit() {
@@ -167,8 +186,17 @@ class Cpm_Humanblockchain_Membership {
 
 		if ( is_user_logged_in() ) {
 			$user = wp_get_current_user();
-			$body['email']   = $user->user_email;
-			$body['user_id'] = (int) $user->ID;
+			$body['email'] = $user->user_email;
+
+			$include_uid = (bool) apply_filters(
+				'cpm_hb_membership_include_user_id',
+				self::membership_endpoint_is_same_site(),
+				$user->ID,
+				self::get_api_endpoint_url()
+			);
+			if ( $include_uid ) {
+				$body['user_id'] = (int) $user->ID;
+			}
 
 			$phone_from_post = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
 			if ( $phone_from_post === '' && isset( $_POST['mobile'] ) ) {
