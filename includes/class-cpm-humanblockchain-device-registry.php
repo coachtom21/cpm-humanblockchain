@@ -215,15 +215,18 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_send_otp', array( __CLASS__, 'handle_send_otp' ) );
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
-		add_action( 'deleted_user', array( __CLASS__, 'delete_devices_for_deleted_user' ), 10, 1 );
+		add_action( 'delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 3 );
 	}
 
 	/**
-	 * Remove all NWP device rows when a WordPress user is deleted.
+	 * Remove all NWP device rows when a WordPress user is deleted (clears stored device_hash so the browser can register again).
+	 * Runs on {@see 'delete_user'} while the user object still exists; deletes by user_id and by email to cover orphan rows.
 	 *
-	 * @param int $user_id Deleted user ID.
+	 * @param int           $user_id  User ID being deleted.
+	 * @param int|null      $reassign User ID to reassign content to, or null.
+	 * @param \WP_User|null $user     User object (WP 5.5+); used for email when present.
 	 */
-	public static function delete_devices_for_deleted_user( $user_id ) {
+	public static function delete_devices_on_user_delete( $user_id, $reassign = null, $user = null ) {
 		$user_id = (int) $user_id;
 		if ( $user_id <= 0 ) {
 			return;
@@ -233,7 +236,26 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 		global $wpdb;
 		$table = $wpdb->prefix . self::TABLE_NAME;
+
 		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
+
+		$email = '';
+		if ( $user instanceof \WP_User ) {
+			$email = $user->user_email;
+		} elseif ( $user_id > 0 ) {
+			$ud = get_userdata( $user_id );
+			if ( $ud ) {
+				$email = $ud->user_email;
+			}
+		}
+		if ( $email !== '' ) {
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM {$table} WHERE LOWER(TRIM(email)) = %s",
+					strtolower( trim( $email ) )
+				)
+			);
+		}
 	}
 
 	/**
@@ -263,29 +285,6 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		global $wpdb;
 		$table_name = $wpdb->prefix . self::TABLE_NAME;
-
-		// Repeat scan: same device_hash — only short-circuit if the linked WP user still exists.
-		// Otherwise remove orphan rows (user deleted, failed run, or stale live data) and continue registration.
-		$existing = $wpdb->get_row(
-			$wpdb->prepare(
-				"SELECT id, user_id FROM $table_name WHERE device_hash = %s LIMIT 1",
-				$device_hash
-			)
-		);
-
-		if ( $existing ) {
-			$linked_uid = isset( $existing->user_id ) ? (int) $existing->user_id : 0;
-			if ( $linked_uid > 0 && get_userdata( $linked_uid ) ) {
-				wp_send_json_success(
-					array(
-						'message'   => __( 'This device is already registered. You can proceed to the next steps.', 'cpm-humanblockchain' ),
-						'repeated'  => true,
-						'device_id' => (int) $existing->id,
-					)
-				);
-			}
-			$wpdb->delete( $table_name, array( 'device_hash' => $device_hash ), array( '%s' ) );
-		}
 
 		// Email already registered (another device or prior registration)
 		$email_normalized = strtolower( trim( $email ) );
