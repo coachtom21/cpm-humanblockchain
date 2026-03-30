@@ -216,12 +216,15 @@ class Cpm_Humanblockchain_Register_User_Api {
 	}
 
 	/**
-	 * POST /myapi/v1/register-user for guest device registration.
+	 * POST /myapi/v1/register-user (sync after local device registration).
+	 *
+	 * Called from device registration after `wp_nwp_devices` insert. Local WP user already exists.
+	 * Remote `user_id` in the response is informational (may differ on another site).
 	 *
 	 * @param array $args Keys: email, mobile, geo_lat, geo_lng, device_hash, referral (int), qrtiger (string URL).
 	 * @return array|\WP_Error {
-	 *   @type int  $user_id     WordPress user ID.
-	 *   @type bool $created_new True if the API reported a newly created user (for rollback hints).
+	 *   @type int  $user_id     User ID reported by the API (remote).
+	 *   @type bool $created_new True if the API reported a newly created user.
 	 * }
 	 */
 	public static function register_user_for_device( array $args ) {

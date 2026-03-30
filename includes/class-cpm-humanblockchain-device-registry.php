@@ -215,6 +215,25 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_send_otp', array( __CLASS__, 'handle_send_otp' ) );
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
+		add_action( 'deleted_user', array( __CLASS__, 'delete_devices_for_deleted_user' ), 10, 1 );
+	}
+
+	/**
+	 * Remove all NWP device rows when a WordPress user is deleted.
+	 *
+	 * @param int $user_id Deleted user ID.
+	 */
+	public static function delete_devices_for_deleted_user( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return;
+		}
+		if ( ! apply_filters( 'cpm_nwp_delete_devices_on_user_delete', true, $user_id ) ) {
+			return;
+		}
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE_NAME;
+		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
 	}
 
 	/**
@@ -281,51 +300,17 @@ class Cpm_Humanblockchain_Device_Registry {
 			}
 		}
 
-		$created_new_wp_user      = false;
-		$user_from_register_api   = false;
-		$wp_user_id               = 0;
+		$created_new_wp_user = false;
+		$wp_user_id          = 0;
 
+		// 1) Resolve WordPress user: logged-in → existing by email → create new.
 		$current_uid = get_current_user_id();
 		if ( $current_uid > 0 ) {
 			$wp_user_id = (int) $current_uid;
-		} elseif ( class_exists( 'Cpm_Humanblockchain_Register_User_Api' ) && Cpm_Humanblockchain_Register_User_Api::is_configured() ) {
-			$try_api = Cpm_Humanblockchain_Register_User_Api::phone_has_enough_digits_for_api( $mobile );
-			if ( $try_api ) {
-				$api_result = Cpm_Humanblockchain_Register_User_Api::register_user_for_device(
-					array(
-						'email'       => $email,
-						'mobile'      => $mobile,
-						'geo_lat'     => $geo_lat,
-						'geo_lng'     => $geo_lng,
-						'device_hash' => $device_hash,
-						'referral'    => $referral,
-						'qrtiger'     => $qrtiger,
-					)
-				);
-				if ( is_wp_error( $api_result ) ) {
-					$fallback = apply_filters( 'cpm_hb_register_user_fallback_to_legacy_on_failure', true, $api_result, $email );
-					if ( $fallback ) {
-						$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
-						if ( is_wp_error( $wp_user_id ) ) {
-							wp_send_json_error(
-								array(
-									'message' => sprintf(
-										/* translators: 1: Register User error, 2: local account error */
-										__( 'Register User API failed (%1$s). Could not create a local account either: %2$s', 'cpm-humanblockchain' ),
-										$api_result->get_error_message(),
-										$wp_user_id->get_error_message()
-									),
-								)
-							);
-						}
-					} else {
-						wp_send_json_error( array( 'message' => $api_result->get_error_message() ) );
-					}
-				} else {
-					$user_from_register_api = true;
-					$wp_user_id              = $api_result['user_id'];
-					$created_new_wp_user     = ! empty( $api_result['created_new'] );
-				}
+		} else {
+			$existing_uid = email_exists( $email );
+			if ( $existing_uid ) {
+				$wp_user_id = (int) $existing_uid;
 			} else {
 				$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
 				if ( is_wp_error( $wp_user_id ) ) {
@@ -339,19 +324,6 @@ class Cpm_Humanblockchain_Device_Registry {
 						)
 					);
 				}
-			}
-		} else {
-			$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
-			if ( is_wp_error( $wp_user_id ) ) {
-				wp_send_json_error(
-					array(
-						'message' => sprintf(
-							/* translators: %s: WordPress error message */
-							__( 'Could not create your account: %s', 'cpm-humanblockchain' ),
-							$wp_user_id->get_error_message()
-						),
-					)
-				);
 			}
 		}
 
@@ -384,7 +356,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		);
 
 		if ( ! $inserted ) {
-			if ( $created_new_wp_user && ! $user_from_register_api ) {
+			if ( $created_new_wp_user ) {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
 				wp_delete_user( $wp_user_id );
 			}
@@ -393,11 +365,45 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$device_id = (int) $wpdb->insert_id;
 
-		wp_send_json_success( array(
+		// 3) Sync to register-user REST API (Smallstreet / remote) after local row exists — failure does not roll back device registration.
+		$register_user_sync = null;
+		if ( apply_filters( 'cpm_hb_register_user_sync_after_device', true, $device_id, $wp_user_id, $email )
+			&& class_exists( 'Cpm_Humanblockchain_Register_User_Api' )
+			&& Cpm_Humanblockchain_Register_User_Api::is_configured()
+			&& Cpm_Humanblockchain_Register_User_Api::phone_has_enough_digits_for_api( $mobile ) ) {
+			$sync_result = Cpm_Humanblockchain_Register_User_Api::register_user_for_device(
+				array(
+					'email'       => $email,
+					'mobile'      => $mobile,
+					'geo_lat'     => $geo_lat,
+					'geo_lng'     => $geo_lng,
+					'device_hash' => $device_hash,
+					'referral'    => $referral,
+					'qrtiger'     => $qrtiger,
+				)
+			);
+			if ( is_wp_error( $sync_result ) ) {
+				$register_user_sync = array(
+					'ok'      => false,
+					'message' => $sync_result->get_error_message(),
+				);
+			} else {
+				$register_user_sync = array(
+					'ok' => true,
+				);
+			}
+		}
+
+		$response = array(
 			'message'   => __( 'Device registered successfully. You are ready for the next steps.', 'cpm-humanblockchain' ),
 			'device_id' => $device_id,
 			'repeated'  => false,
-		) );
+		);
+		if ( null !== $register_user_sync ) {
+			$response['register_user_sync'] = $register_user_sync;
+		}
+
+		wp_send_json_success( $response );
 	}
 
 	/**
