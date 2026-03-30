@@ -30,7 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 					</ul>
 				</button>
 				<button type="button" class="cpm-hb-membership-card" data-tier="megavoter" role="radio" aria-checked="false" id="cpm-hb-tier-megavoter">
-					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Seller / Sponsor (MEGAvoter)', 'cpm-humanblockchain' ); ?></span>
+					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Seller / Sponsor (Megavoter)', 'cpm-humanblockchain' ); ?></span>
 					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( '$12 annual pledge • Seller path', 'cpm-humanblockchain' ); ?></span>
 					<ul class="cpm-hb-membership-card-list">
 						<li><?php esc_html_e( 'Requires QRtiger v-card', 'cpm-humanblockchain' ); ?></li>

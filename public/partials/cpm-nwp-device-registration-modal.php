@@ -41,6 +41,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<div class="cpm-nwp-form-field">
 					<label for="cpm-nwp-mobile"><?php esc_html_e( 'Mobile number', 'cpm-humanblockchain' ); ?></label>
 					<input type="tel" id="cpm-nwp-mobile" name="mobile" autocomplete="tel">
+					<p class="cpm-nwp-field-note"><?php esc_html_e( 'Required (8+ digits) when the Register User API key is saved under Settings → NWP Gateway.', 'cpm-humanblockchain' ); ?></p>
 				</div>
 			</div>
 

@@ -99,6 +99,32 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Best-effort phone for a WordPress user: latest NWP device row, then user meta `phone`.
+	 *
+	 * @param int $user_id User ID.
+	 * @return string Phone string or empty.
+	 */
+	public static function get_phone_for_user( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return '';
+		}
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE_NAME;
+		$phone = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT phone FROM {$table} WHERE user_id = %d AND phone IS NOT NULL AND phone != '' ORDER BY updated_at DESC, id DESC LIMIT 1",
+				$user_id
+			)
+		);
+		if ( is_string( $phone ) && $phone !== '' ) {
+			return $phone;
+		}
+		$meta = get_user_meta( $user_id, 'phone', true );
+		return is_string( $meta ) ? $meta : '';
+	}
+
+	/**
 	 * URL for the site “backorder” page (slug `backorder`, or /backorder/ fallback).
 	 * Used after OTP verify from the landing PoD flow and for localized redirects.
 	 *
@@ -255,18 +281,44 @@ class Cpm_Humanblockchain_Device_Registry {
 			}
 		}
 
-		$created_new_wp_user = false;
-		$wp_user_id         = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
-		if ( is_wp_error( $wp_user_id ) ) {
-			wp_send_json_error(
+		$created_new_wp_user      = false;
+		$user_from_register_api   = false;
+		$wp_user_id               = 0;
+
+		$current_uid = get_current_user_id();
+		if ( $current_uid > 0 ) {
+			$wp_user_id = (int) $current_uid;
+		} elseif ( class_exists( 'Cpm_Humanblockchain_Register_User_Api' ) && Cpm_Humanblockchain_Register_User_Api::is_configured() ) {
+			$user_from_register_api = true;
+			$api_result             = Cpm_Humanblockchain_Register_User_Api::register_user_for_device(
 				array(
-					'message' => sprintf(
-						/* translators: %s: WordPress error message */
-						__( 'Could not create your account: %s', 'cpm-humanblockchain' ),
-						$wp_user_id->get_error_message()
-					),
+					'email'       => $email,
+					'mobile'      => $mobile,
+					'geo_lat'     => $geo_lat,
+					'geo_lng'     => $geo_lng,
+					'device_hash' => $device_hash,
+					'referral'    => $referral,
+					'qrtiger'     => $qrtiger,
 				)
 			);
+			if ( is_wp_error( $api_result ) ) {
+				wp_send_json_error( array( 'message' => $api_result->get_error_message() ) );
+			}
+			$wp_user_id            = $api_result['user_id'];
+			$created_new_wp_user   = ! empty( $api_result['created_new'] );
+		} else {
+			$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
+			if ( is_wp_error( $wp_user_id ) ) {
+				wp_send_json_error(
+					array(
+						'message' => sprintf(
+							/* translators: %s: WordPress error message */
+							__( 'Could not create your account: %s', 'cpm-humanblockchain' ),
+							$wp_user_id->get_error_message()
+						),
+					)
+				);
+			}
 		}
 
 		if ( ! empty( $mobile ) ) {
@@ -298,7 +350,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		);
 
 		if ( ! $inserted ) {
-			if ( $created_new_wp_user ) {
+			if ( $created_new_wp_user && ! $user_from_register_api ) {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
 				wp_delete_user( $wp_user_id );
 			}

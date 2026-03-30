@@ -236,3 +236,243 @@ body.cpm-hb-membership-modal-open {
 	cursor: not-allowed;
 	filter: grayscale(0.2);
 }
+
+/* Contact / guest details (stacked above tier modal) */
+#cpm-hb-membership-contact-modal {
+	--cpm-hb-m-accent: #7dd3fc;
+	--cpm-hb-m-accent2: #a78bfa;
+	--cpm-hb-m-panel: #1e293b;
+	--cpm-hb-m-card: #2a3548;
+	--cpm-hb-m-text: #f1f5f9;
+	--cpm-hb-m-muted: #94a3b8;
+	--cpm-hb-m-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+#cpm-hb-membership-contact-modal.cpm-hb-membership-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100071;
+	background: rgba(5, 7, 10, 0.94);
+	backdrop-filter: blur(10px);
+	display: none;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	font-family: var(--cpm-hb-m-font);
+}
+
+#cpm-hb-membership-contact-modal.cpm-hb-membership-overlay.is-open {
+	display: flex;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-container.cpm-hb-membership-contact-wrap {
+	background: var(--cpm-hb-m-panel);
+	width: min(600px, calc(100vw - 40px));
+	max-width: 100%;
+	min-height: min(520px, 85vh);
+	max-height: min(92vh, 880px);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	border-radius: 16px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+	position: relative;
+	padding: 26px 28px 24px;
+	box-sizing: border-box;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-close {
+	position: absolute;
+	top: 14px;
+	right: 14px;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 1px solid rgba(248, 113, 113, 0.45);
+	border-radius: 8px;
+	background: rgba(30, 41, 59, 0.9);
+	color: #fecaca;
+	font-size: 22px;
+	line-height: 1;
+	cursor: pointer;
+	z-index: 2;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-close:hover {
+	background: rgba(248, 113, 113, 0.15);
+	border-color: rgba(248, 113, 113, 0.65);
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-title {
+	margin: 0 0 10px;
+	padding-right: 48px;
+	font-size: clamp(1.35rem, 4vw, 1.6rem);
+	font-weight: 800;
+	color: var(--cpm-hb-m-text);
+	text-align: center;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-intro {
+	margin: 0 0 18px;
+	font-size: 0.92rem;
+	color: var(--cpm-hb-m-muted);
+	text-align: center;
+	line-height: 1.5;
+	max-width: 42em;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-inner {
+	min-width: 0;
+	width: 100%;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-contact-form {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin-top: 4px;
+	text-align: left;
+	flex: 1;
+	min-height: 0;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-contact-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding-right: 6px;
+	margin-bottom: 4px;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-field {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	min-width: 0;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-label {
+	font-size: 0.82rem;
+	font-weight: 600;
+	color: var(--cpm-hb-m-muted);
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 12px 14px;
+	border-radius: 10px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: #242f3f;
+	color: var(--cpm-hb-m-text);
+	font: inherit;
+	font-size: 0.95rem;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-input:focus {
+	outline: none;
+	border-color: rgba(125, 211, 252, 0.55);
+	box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.15);
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-contact-error {
+	margin: 0 0 4px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	background: rgba(248, 113, 113, 0.12);
+	border: 1px solid rgba(248, 113, 113, 0.35);
+	color: #fecaca;
+	font-size: 0.85rem;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-contact-optional {
+	margin-top: 4px;
+	padding: 18px 16px 4px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: rgba(15, 23, 42, 0.55);
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-optional-heading {
+	margin: 0 0 6px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--cpm-hb-m-text);
+	letter-spacing: 0.02em;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-optional-intro {
+	margin: 0 0 14px;
+	font-size: 0.8rem;
+	color: var(--cpm-hb-m-muted);
+	line-height: 1.45;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-optional-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px 16px;
+}
+
+@media (max-width: 520px) {
+	#cpm-hb-membership-contact-modal .cpm-hb-membership-optional-grid {
+		grid-template-columns: 1fr;
+	}
+
+	#cpm-hb-membership-contact-modal .cpm-hb-membership-field-span-2 {
+		grid-column: auto;
+	}
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-field-span-2 {
+	grid-column: 1 / -1;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-actions {
+	display: flex;
+	justify-content: center;
+	margin-top: 8px;
+	padding-top: 8px;
+	flex-shrink: 0;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-continue {
+	min-width: 220px;
+	padding: 14px 28px;
+	font-size: 1rem;
+	font-weight: 800;
+	border: none;
+	border-radius: 14px;
+	cursor: pointer;
+	background: linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(167, 139, 250, 0.95));
+	color: #0f172a;
+	transition: filter 0.12s ease, opacity 0.12s ease;
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-continue:hover:not(:disabled) {
+	filter: brightness(1.05);
+}
+
+#cpm-hb-membership-contact-modal .cpm-hb-membership-continue:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	filter: grayscale(0.2);
+}
+
+#cpm-hb-membership-contact-modal.cpm-hb-membership-contact--phone-only .cpm-hb-membership-email-row {
+	display: none !important;
+}

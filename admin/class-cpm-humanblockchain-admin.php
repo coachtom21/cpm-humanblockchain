@@ -91,6 +91,123 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_default_country' ),
 		) );
+
+		register_setting( 'cpm_hb_membership', 'cpm_hb_membership_api_endpoint', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_membership_api_endpoint' ),
+		) );
+		register_setting( 'cpm_hb_membership', 'smallstreet_api_key', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_membership_api_key' ),
+		) );
+		register_setting( 'cpm_hb_membership', 'cpm_hb_register_user_api_endpoint', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_register_user_api_endpoint' ),
+		) );
+		register_setting( 'cpm_hb_membership', 'cpm_hb_register_user_api_key', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_register_user_api_key' ),
+		) );
+	}
+
+	/**
+	 * Sanitize membership API URL (https). Empty = use default route on this site.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_membership_api_endpoint( $value ) {
+		$value = is_string( $value ) ? trim( $value ) : '';
+		$prev  = get_option( 'cpm_hb_membership_api_endpoint', '' );
+		if ( $value === '' ) {
+			return '';
+		}
+		if ( ! filter_var( $value, FILTER_VALIDATE_URL ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_endpoint',
+				__( 'Membership API URL must be a valid http(s) URL.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : '';
+		}
+		$parsed = wp_parse_url( $value );
+		if ( empty( $parsed['scheme'] ) || ! in_array( strtolower( $parsed['scheme'] ), array( 'http', 'https' ), true ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_endpoint_scheme',
+				__( 'Membership API URL must start with http:// or https://.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : '';
+		}
+		return esc_url_raw( $value );
+	}
+
+	/**
+	 * Sanitize API key; empty input keeps the previously saved key.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_membership_api_key( $value ) {
+		if ( isset( $_POST['cpm_hb_membership_clear_key'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_membership_clear_key'] ) ) ) {
+			return '';
+		}
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			$prev = get_option( 'smallstreet_api_key', '' );
+			return is_string( $prev ) ? $prev : '';
+		}
+		return $value;
+	}
+
+	/**
+	 * Sanitize Register User API URL. Empty = use default route on this site.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_register_user_api_endpoint( $value ) {
+		$value = is_string( $value ) ? trim( $value ) : '';
+		$prev  = get_option( 'cpm_hb_register_user_api_endpoint', '' );
+		if ( $value === '' ) {
+			return '';
+		}
+		if ( ! filter_var( $value, FILTER_VALIDATE_URL ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_register_user_endpoint',
+				__( 'Register User API URL must be a valid http(s) URL.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : '';
+		}
+		$parsed = wp_parse_url( $value );
+		if ( empty( $parsed['scheme'] ) || ! in_array( strtolower( $parsed['scheme'] ), array( 'http', 'https' ), true ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_register_user_endpoint_scheme',
+				__( 'Register User API URL must start with http:// or https://.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : '';
+		}
+		return esc_url_raw( $value );
+	}
+
+	/**
+	 * Optional Register User Bearer key; empty keeps previous; clear checkbox empties option.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_register_user_api_key( $value ) {
+		if ( isset( $_POST['cpm_hb_register_user_clear_key'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_register_user_clear_key'] ) ) ) {
+			return '';
+		}
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			$prev = get_option( 'cpm_hb_register_user_api_key', '' );
+			return is_string( $prev ) ? $prev : '';
+		}
+		return $value;
 	}
 
 	/**
@@ -120,9 +237,17 @@ class Cpm_Humanblockchain_Admin {
 
 		$using_constants = defined( 'CPM_NWP_TWILIO_SID' ) && defined( 'CPM_NWP_TWILIO_TOKEN' ) && defined( 'CPM_NWP_TWILIO_FROM' );
 		$twilio_ready    = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) && Cpm_Humanblockchain_Otp_Service::is_configured();
+
+		$default_membership_url   = rest_url( 'myapi/v1/membership' );
+		$default_register_user_url = rest_url( 'myapi/v1/register-user' );
+		$membership_endpoint      = get_option( 'cpm_hb_membership_api_endpoint', '' );
+		$register_user_endpoint   = get_option( 'cpm_hb_register_user_api_endpoint', '' );
+		$membership_key_set       = (bool) strlen( (string) get_option( 'smallstreet_api_key', '' ) );
+		$register_user_key_set    = (bool) strlen( (string) get_option( 'cpm_hb_register_user_api_key', '' ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'NWP Gateway Settings', 'cpm-humanblockchain' ); ?></h1>
+			<?php settings_errors(); ?>
 
 			<div class="notice notice-info inline" style="margin: 12px 0;">
 				<p>
@@ -176,6 +301,130 @@ class Cpm_Humanblockchain_Admin {
 					</tr>
 				</table>
 				<?php submit_button(); ?>
+			</form>
+
+			<hr style="margin: 32px 0;" />
+
+			<h2><?php esc_html_e( 'Membership & Register User APIs', 'cpm-humanblockchain' ); ?></h2>
+			<p>
+				<?php esc_html_e( 'Bearer-authenticated myapi routes. Values are stored server-side only.', 'cpm-humanblockchain' ); ?>
+			</p>
+			<div class="notice notice-info inline" style="margin: 12px 0;">
+				<p>
+					<strong><?php esc_html_e( 'Status:', 'cpm-humanblockchain' ); ?></strong>
+					<?php if ( $membership_key_set ) : ?>
+						<span style="color:#00a32a;"><?php esc_html_e( 'API key is saved.', 'cpm-humanblockchain' ); ?></span>
+					<?php else : ?>
+						<span style="color:#d63638;"><?php esc_html_e( 'No API key — add the Bearer token below.', 'cpm-humanblockchain' ); ?></span>
+					<?php endif; ?>
+				</p>
+				<p class="description">
+					<?php esc_html_e( 'Default membership URL if empty:', 'cpm-humanblockchain' ); ?>
+					<code><?php echo esc_html( $default_membership_url ); ?></code>
+				</p>
+				<p class="description">
+					<?php esc_html_e( 'Default register-user URL if empty:', 'cpm-humanblockchain' ); ?>
+					<code><?php echo esc_html( $default_register_user_url ); ?></code>
+				</p>
+			</div>
+
+			<form method="post" action="options.php">
+				<?php settings_fields( 'cpm_hb_membership' ); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_membership_api_endpoint"><?php esc_html_e( 'API endpoint URL', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="url"
+								id="cpm_hb_membership_api_endpoint"
+								name="cpm_hb_membership_api_endpoint"
+								value="<?php echo esc_attr( is_string( $membership_endpoint ) ? $membership_endpoint : '' ); ?>"
+								class="large-text code"
+								placeholder="<?php echo esc_attr( $default_membership_url ); ?>"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'Full URL for POST JSON (e.g. https://yoursite.com/wp-json/myapi/v1/membership). Leave empty to use this site’s default route.', 'cpm-humanblockchain' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="smallstreet_api_key"><?php esc_html_e( 'API key (Bearer)', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="password"
+								id="smallstreet_api_key"
+								name="smallstreet_api_key"
+								value=""
+								class="regular-text"
+								autocomplete="new-password"
+							/>
+							<p class="description">
+								<?php if ( $membership_key_set ) : ?>
+									<?php esc_html_e( 'Leave blank to keep the current key. Enter a new value to replace it.', 'cpm-humanblockchain' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'Must match the WordPress option the REST route checks (same as get_option( \'smallstreet_api_key\' )).', 'cpm-humanblockchain' ); ?>
+								<?php endif; ?>
+							</p>
+							<p style="margin-top:10px;">
+								<label>
+									<input type="checkbox" name="cpm_hb_membership_clear_key" value="1" />
+									<?php esc_html_e( 'Clear saved API key', 'cpm-humanblockchain' ); ?>
+								</label>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_register_user_api_endpoint"><?php esc_html_e( 'Register User — API endpoint URL', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="url"
+								id="cpm_hb_register_user_api_endpoint"
+								name="cpm_hb_register_user_api_endpoint"
+								value="<?php echo esc_attr( is_string( $register_user_endpoint ) ? $register_user_endpoint : '' ); ?>"
+								class="large-text code"
+								placeholder="<?php echo esc_attr( $default_register_user_url ); ?>"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'POST JSON to this URL (e.g. https://yoursite.com/wp-json/myapi/v1/register-user). Leave empty to use this site’s default route.', 'cpm-humanblockchain' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_register_user_api_key"><?php esc_html_e( 'Register User — API key (optional)', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="password"
+								id="cpm_hb_register_user_api_key"
+								name="cpm_hb_register_user_api_key"
+								value=""
+								class="regular-text"
+								autocomplete="new-password"
+							/>
+							<p class="description">
+								<?php if ( $register_user_key_set ) : ?>
+									<?php esc_html_e( 'A dedicated Bearer token for register-user only. Leave blank to keep the current value.', 'cpm-humanblockchain' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'Leave empty to use the same key as “API key (Bearer)” above (smallstreet_api_key). Set a value only if register-user must use a different secret.', 'cpm-humanblockchain' ); ?>
+								<?php endif; ?>
+							</p>
+							<p style="margin-top:10px;">
+								<label>
+									<input type="checkbox" name="cpm_hb_register_user_clear_key" value="1" />
+									<?php esc_html_e( 'Clear dedicated Register User key (then the shared Membership API key is used)', 'cpm-humanblockchain' ); ?>
+								</label>
+							</p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( __( 'Save membership settings', 'cpm-humanblockchain' ) ); ?>
 			</form>
 		</div>
 		<?php

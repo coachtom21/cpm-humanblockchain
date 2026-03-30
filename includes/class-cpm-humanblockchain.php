@@ -132,6 +132,10 @@ class Cpm_Humanblockchain {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-otp-service.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-membership.php';
+
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-register-user-api.php';
+
 		/**
 		 * Device Registry - handles device registration.
 		 */
@@ -140,6 +144,7 @@ class Cpm_Humanblockchain {
 		$this->loader = new Cpm_Humanblockchain_Loader();
 
 		Cpm_Humanblockchain_Device_Registry::init();
+		Cpm_Humanblockchain_Membership::init();
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_nwp_devices', 5 );
 
 	}

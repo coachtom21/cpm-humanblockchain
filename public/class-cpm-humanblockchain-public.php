@@ -147,6 +147,7 @@ class Cpm_Humanblockchain_Public {
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-verify-otp-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-discord-invite-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-membership-modal.php';
+		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-membership-contact-modal.php';
 	}
 
 	/**
@@ -225,11 +226,36 @@ class Cpm_Humanblockchain_Public {
 		);
 
 		$membership_continue = apply_filters( 'cpm_hb_membership_continue_url', home_url( '/nwp-gateway/' ) );
+		$uid                 = get_current_user_id();
+		$user_phone          = ( $uid && class_exists( 'Cpm_Humanblockchain_Device_Registry' ) )
+			? Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid )
+			: '';
+		$user_email          = '';
+		if ( $uid ) {
+			$u = wp_get_current_user();
+			if ( $u && $u->ID ) {
+				$user_email = $u->user_email;
+			}
+		}
 		wp_localize_script(
 			$this->plugin_name . '-membership-modal',
 			'cpmHbMembership',
 			array(
+				'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+				'action'      => 'cpm_hb_membership_submit',
+				'nonce'       => wp_create_nonce( 'cpm_hb_membership' ),
+				'isLoggedIn'  => (bool) $uid,
+				'userEmail'   => $user_email,
+				'userPhone'   => $user_phone,
 				'continueUrl' => esc_url_raw( $membership_continue ),
+				'strings'     => array(
+					'submitting'     => __( 'Submitting…', 'cpm-humanblockchain' ),
+					'continue'       => __( 'Continue', 'cpm-humanblockchain' ),
+					'submit'         => __( 'Submit', 'cpm-humanblockchain' ),
+					'genericErr'     => __( 'Something went wrong. Please try again.', 'cpm-humanblockchain' ),
+					'successNext'    => __( 'Membership updated. Continuing…', 'cpm-humanblockchain' ),
+					'accountCreated' => __( 'Your account was created. Save this password:', 'cpm-humanblockchain' ),
+				),
 			)
 		);
 
