@@ -18,6 +18,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<h2 id="cpm-hb-membership-title" class="cpm-hb-membership-title"><?php esc_html_e( 'Select membership', 'cpm-humanblockchain' ); ?></h2>
 			<p class="cpm-hb-membership-intro"><?php esc_html_e( 'Choose the path that fits you. You can change details later in onboarding.', 'cpm-humanblockchain' ); ?></p>
 
+			<div id="cpm-hb-membership-success" class="cpm-hb-membership-success" hidden role="status" aria-live="polite" tabindex="-1">
+				<p class="cpm-hb-membership-success-icon" aria-hidden="true">✓</p>
+				<p class="cpm-hb-membership-success-msg" id="cpm-hb-membership-success-msg"></p>
+			</div>
+
 			<div class="cpm-hb-membership-grid" role="radiogroup" aria-labelledby="cpm-hb-membership-title">
 				<button type="button" class="cpm-hb-membership-card" data-tier="yamer" role="radio" aria-checked="false" id="cpm-hb-tier-yamer">
 					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Buyer (YAM’er)', 'cpm-humanblockchain' ); ?></span>

@@ -18,7 +18,15 @@
 			$( 'body' ).addClass( 'cpm-hb-membership-modal-open' );
 		}
 
+		function resetMembershipFormView() {
+			var $success = $( '#cpm-hb-membership-success' );
+			$success.prop( 'hidden', true ).attr( 'aria-hidden', 'true' );
+			$( '#cpm-hb-membership-success-msg' ).empty();
+			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).show();
+		}
+
 		function closeModal() {
+			resetMembershipFormView();
 			$modal.removeClass( 'is-open' ).attr( 'aria-hidden', 'true' );
 			if ( ! $contact.hasClass( 'is-open' ) ) {
 				$( 'body' ).removeClass( 'cpm-hb-membership-modal-open' );
@@ -69,7 +77,24 @@
 			}
 		}
 
-		function redirectAfterSuccess() {
+		function showMembershipSuccessMessage( data ) {
+			var str = cfg.strings || {};
+			var msg = '';
+			if ( data && typeof data.message === 'string' && data.message.trim() !== '' ) {
+				msg = data.message.trim();
+			} else {
+				msg = str.membershipSuccess || str.successNext || 'Membership updated.';
+			}
+			$( '#cpm-hb-membership-success-msg' ).text( msg );
+			var $ok = $( '#cpm-hb-membership-success' );
+			$ok.prop( 'hidden', false ).attr( 'aria-hidden', 'false' );
+			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).hide();
+			setTimeout( function() {
+				$ok.trigger( 'focus' );
+			}, 50 );
+		}
+
+		function finishMembershipSuccess( data ) {
 			try {
 				sessionStorage.setItem(
 					'cpm_hb_selected_membership_tier',
@@ -81,12 +106,9 @@
 			} catch ( err ) {
 				// ignore
 			}
-			var url = cfg.continueUrl || '/';
 			closeContactModal();
-			closeModal();
-			var u = url.split( '#' )[ 0 ];
-			var sep = u.indexOf( '?' ) >= 0 ? '&' : '?';
-			window.location.href = u + sep + 'membership=' + encodeURIComponent( selectedTier ) + '&membership_granted=1';
+			openModal();
+			showMembershipSuccessMessage( data || {} );
 		}
 
 		function showApiSuccess( data ) {
@@ -94,7 +116,7 @@
 				var pre = ( cfg.strings && cfg.strings.accountCreated ) || 'Save this password:';
 				window.alert( pre + '\n\n' + data.password );
 			}
-			redirectAfterSuccess();
+			finishMembershipSuccess( data );
 		}
 
 		function submitMembership( extra ) {
@@ -168,6 +190,7 @@
 
 		$( document ).on( 'click', '.cpm-hb-open-membership-modal', function( e ) {
 			e.preventDefault();
+			resetMembershipFormView();
 			openModal();
 		} );
 

@@ -225,8 +225,7 @@ class Cpm_Humanblockchain_Public {
 			true
 		);
 
-		$membership_continue = apply_filters( 'cpm_hb_membership_continue_url', home_url( '/nwp-gateway/' ) );
-		$uid                 = get_current_user_id();
+		$uid = get_current_user_id();
 		$user_phone          = ( $uid && class_exists( 'Cpm_Humanblockchain_Device_Registry' ) )
 			? Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid )
 			: '';
@@ -247,14 +246,14 @@ class Cpm_Humanblockchain_Public {
 				'isLoggedIn'  => (bool) $uid,
 				'userEmail'   => $user_email,
 				'userPhone'   => $user_phone,
-				'continueUrl' => esc_url_raw( $membership_continue ),
 				'strings'     => array(
-					'submitting'     => __( 'Submitting…', 'cpm-humanblockchain' ),
-					'continue'       => __( 'Continue', 'cpm-humanblockchain' ),
-					'submit'         => __( 'Submit', 'cpm-humanblockchain' ),
-					'genericErr'     => __( 'Something went wrong. Please try again.', 'cpm-humanblockchain' ),
-					'successNext'    => __( 'Membership updated. Continuing…', 'cpm-humanblockchain' ),
-					'accountCreated' => __( 'Your account was created. Save this password:', 'cpm-humanblockchain' ),
+					'submitting'        => __( 'Submitting…', 'cpm-humanblockchain' ),
+					'continue'          => __( 'Continue', 'cpm-humanblockchain' ),
+					'submit'            => __( 'Submit', 'cpm-humanblockchain' ),
+					'genericErr'        => __( 'Something went wrong. Please try again.', 'cpm-humanblockchain' ),
+					'membershipSuccess' => __( 'Your membership selection was saved.', 'cpm-humanblockchain' ),
+					'successNext'       => __( 'Membership updated.', 'cpm-humanblockchain' ),
+					'accountCreated'    => __( 'Your account was created. Save this password:', 'cpm-humanblockchain' ),
 				),
 			)
 		);
