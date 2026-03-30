@@ -59,6 +59,23 @@
 			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 		}
 
+		function showActivateModalAfterRegistration( $form ) {
+			var mobileVal = $( '#cpm-nwp-mobile' ).val() || '';
+			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $verifyFeedback );
+			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $registerFeedback );
+			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$form[0].reset();
+			clearInlineFeedback( $activateFeedback );
+			$( '#cpm-nwp-activate-mobile' ).val( mobileVal );
+			window.cpmNwpActivateFromRegisterSuccess = true;
+			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+			showInlineFeedback( $activateFeedback, 'Device registered. Send OTP to verify your phone.', 'success' );
+			$( '#cpm-nwp-activate-mobile' ).trigger( 'focus' );
+		}
+
 		$( document ).on( 'click', '.cpm-nwp-modal-close, #cpm-nwp-register-modal .cpm-nwp-modal-overlay', function( e ) {
 			var $clickedModal = $( e.target ).closest( '.cpm-nwp-modal' );
 			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -75,6 +92,13 @@
 			}
 			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-verify-otp-modal' ) {
 				closeVerifyShowActivate();
+				return;
+			}
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' && window.cpmNwpActivateFromRegisterSuccess ) {
+				$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearInlineFeedback( $activateFeedback );
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				window.cpmNwpActivateFromRegisterSuccess = false;
 				return;
 			}
 			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' && window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
@@ -96,6 +120,13 @@
 		} );
 
 		$( document ).on( 'click', '#cpm-nwp-activate-modal .cpm-nwp-modal-overlay', function() {
+			if ( window.cpmNwpActivateFromRegisterSuccess ) {
+				$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearInlineFeedback( $activateFeedback );
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				window.cpmNwpActivateFromRegisterSuccess = false;
+				return;
+			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
 				$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 				clearInlineFeedback( $activateFeedback );
@@ -137,7 +168,11 @@
 			if ( $visibleModal.length ) {
 				$visibleModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 				if ( $visibleModal.attr( 'id' ) === 'cpm-nwp-activate-modal' ) {
-					if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+					if ( window.cpmNwpActivateFromRegisterSuccess ) {
+						clearInlineFeedback( $activateFeedback );
+						$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+						window.cpmNwpActivateFromRegisterSuccess = false;
+					} else if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
 						clearInlineFeedback( $activateFeedback );
 						$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 						window.cpmHbLanding.phoneModalFromLanding = false;
@@ -348,19 +383,13 @@
 						if ( res.success && res.data && res.data.message ) {
 							showInlineFeedback( $registerFeedback, res.data.message, 'success' );
 							setTimeout( function() {
-								$( '.cpm-nwp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-								$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
-								$form[0].reset();
-								clearInlineFeedback( $registerFeedback );
-							}, 2200 );
+								showActivateModalAfterRegistration( $form );
+							}, 700 );
 						} else if ( res.success ) {
 							showInlineFeedback( $registerFeedback, 'Registration complete.', 'success' );
 							setTimeout( function() {
-								$( '.cpm-nwp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-								$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
-								$form[0].reset();
-								clearInlineFeedback( $registerFeedback );
-							}, 2200 );
+								showActivateModalAfterRegistration( $form );
+							}, 700 );
 						} else {
 							showInlineFeedback( $registerFeedback, ( res.data && res.data.message ) ? res.data.message : 'Registration failed. Please try again.', 'error' );
 						}
