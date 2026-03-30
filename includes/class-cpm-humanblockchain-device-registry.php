@@ -264,20 +264,27 @@ class Cpm_Humanblockchain_Device_Registry {
 		global $wpdb;
 		$table_name = $wpdb->prefix . self::TABLE_NAME;
 
-		// Check for repeat scan (same device_hash already registered)
+		// Repeat scan: same device_hash — only short-circuit if the linked WP user still exists.
+		// Otherwise remove orphan rows (user deleted, failed run, or stale live data) and continue registration.
 		$existing = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT id FROM $table_name WHERE device_hash = %s LIMIT 1",
+				"SELECT id, user_id FROM $table_name WHERE device_hash = %s LIMIT 1",
 				$device_hash
 			)
 		);
 
 		if ( $existing ) {
-			wp_send_json_success( array(
-				'message'   => __( 'This device is already registered. You can proceed to the next steps.', 'cpm-humanblockchain' ),
-				'repeated'  => true,
-				'device_id' => (int) $existing->id,
-			) );
+			$linked_uid = isset( $existing->user_id ) ? (int) $existing->user_id : 0;
+			if ( $linked_uid > 0 && get_userdata( $linked_uid ) ) {
+				wp_send_json_success(
+					array(
+						'message'   => __( 'This device is already registered. You can proceed to the next steps.', 'cpm-humanblockchain' ),
+						'repeated'  => true,
+						'device_id' => (int) $existing->id,
+					)
+				);
+			}
+			$wpdb->delete( $table_name, array( 'device_hash' => $device_hash ), array( '%s' ) );
 		}
 
 		// Email already registered (another device or prior registration)
