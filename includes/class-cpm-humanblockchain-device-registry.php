@@ -289,23 +289,57 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( $current_uid > 0 ) {
 			$wp_user_id = (int) $current_uid;
 		} elseif ( class_exists( 'Cpm_Humanblockchain_Register_User_Api' ) && Cpm_Humanblockchain_Register_User_Api::is_configured() ) {
-			$user_from_register_api = true;
-			$api_result             = Cpm_Humanblockchain_Register_User_Api::register_user_for_device(
-				array(
-					'email'       => $email,
-					'mobile'      => $mobile,
-					'geo_lat'     => $geo_lat,
-					'geo_lng'     => $geo_lng,
-					'device_hash' => $device_hash,
-					'referral'    => $referral,
-					'qrtiger'     => $qrtiger,
-				)
-			);
-			if ( is_wp_error( $api_result ) ) {
-				wp_send_json_error( array( 'message' => $api_result->get_error_message() ) );
+			$try_api = Cpm_Humanblockchain_Register_User_Api::phone_has_enough_digits_for_api( $mobile );
+			if ( $try_api ) {
+				$api_result = Cpm_Humanblockchain_Register_User_Api::register_user_for_device(
+					array(
+						'email'       => $email,
+						'mobile'      => $mobile,
+						'geo_lat'     => $geo_lat,
+						'geo_lng'     => $geo_lng,
+						'device_hash' => $device_hash,
+						'referral'    => $referral,
+						'qrtiger'     => $qrtiger,
+					)
+				);
+				if ( is_wp_error( $api_result ) ) {
+					$fallback = apply_filters( 'cpm_hb_register_user_fallback_to_legacy_on_failure', true, $api_result, $email );
+					if ( $fallback ) {
+						$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
+						if ( is_wp_error( $wp_user_id ) ) {
+							wp_send_json_error(
+								array(
+									'message' => sprintf(
+										/* translators: 1: Register User error, 2: local account error */
+										__( 'Register User API failed (%1$s). Could not create a local account either: %2$s', 'cpm-humanblockchain' ),
+										$api_result->get_error_message(),
+										$wp_user_id->get_error_message()
+									),
+								)
+							);
+						}
+					} else {
+						wp_send_json_error( array( 'message' => $api_result->get_error_message() ) );
+					}
+				} else {
+					$user_from_register_api = true;
+					$wp_user_id              = $api_result['user_id'];
+					$created_new_wp_user     = ! empty( $api_result['created_new'] );
+				}
+			} else {
+				$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
+				if ( is_wp_error( $wp_user_id ) ) {
+					wp_send_json_error(
+						array(
+							'message' => sprintf(
+								/* translators: %s: WordPress error message */
+								__( 'Could not create your account: %s', 'cpm-humanblockchain' ),
+								$wp_user_id->get_error_message()
+							),
+						)
+					);
+				}
 			}
-			$wp_user_id            = $api_result['user_id'];
-			$created_new_wp_user   = ! empty( $api_result['created_new'] );
 		} else {
 			$wp_user_id = self::get_or_create_wp_user_for_device( $email, $created_new_wp_user );
 			if ( is_wp_error( $wp_user_id ) ) {
