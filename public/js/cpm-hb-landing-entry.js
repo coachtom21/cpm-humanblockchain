@@ -41,9 +41,13 @@
 			$( 'body' ).removeClass( 'cpm-hb-landing-entry-active' );
 		}
 
-		function showRoleModal() {
+		function showRoleModal( opts ) {
+			opts = opts || {};
 			if ( ! $roleModal.length ) {
 				return;
+			}
+			if ( opts.preferSeller ) {
+				$( '#cpm-hb-role-seller' ).prop( 'checked', true );
 			}
 			$roleModal.addClass( 'active' ).attr( 'aria-hidden', 'false' );
 			$( 'body' ).addClass( 'cpm-hb-role-modal-active' );
@@ -89,8 +93,13 @@
 			}
 		}
 
-		function bothPromptsYes() {
-			return state.proof === 'yes' && state.final === 'yes';
+		/**
+		 * PoD flows that need buyer/seller + OTP before the Proof-of-Delivery (backorder) URL:
+		 * - Yes + Yes — delivery proof at final destination
+		 * - Yes + No — intermediate/helper delivery (e.g. 1 NWP for helping); not “just enter website”
+		 */
+		function shouldShowRoleModalForPod() {
+			return state.proof === 'yes' && ( state.final === 'yes' || state.final === 'no' );
 		}
 
 		function clearNwpFeedback( $el ) {
@@ -135,8 +144,10 @@
 				return;
 			}
 			dismissLandingModal();
-			if ( bothPromptsYes() ) {
-				showRoleModal();
+			if ( shouldShowRoleModalForPod() ) {
+				// Intermediate delivery (not final stop): steer to Seller — paid for helping deliver.
+				var preferSeller = state.proof === 'yes' && state.final === 'no';
+				showRoleModal( { preferSeller: preferSeller } );
 				return;
 			}
 			persistScanBasic();

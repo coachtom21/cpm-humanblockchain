@@ -142,7 +142,7 @@ $logo_inner = apply_filters( 'cpm_hb_landing_entry_logo_inner_html', $logo_inner
 				<code>hb_last_scan</code>.
 			</p>
 			<p class="cpm-hb-entry-note">
-				<?php esc_html_e( 'If Proof of Delivery = Yes, you’ll be routed to the WooCommerce Backorder routine. If No, you’ll be routed into the onboarding funnel (device registration → membership → Discord).', 'cpm-humanblockchain' ); ?>
+				<?php esc_html_e( 'If Proof of Delivery = Yes (whether or not this is the final destination), Continue opens buyer/seller, then phone verification, then the delivery / backorder flow. If Proof of Delivery = No, your answers are saved and you enter the site.', 'cpm-humanblockchain' ); ?>
 			</p>
 		</div>
 	</div>
