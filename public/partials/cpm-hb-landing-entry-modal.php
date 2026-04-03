@@ -134,7 +134,7 @@ $logo_inner = apply_filters( 'cpm_hb_landing_entry_logo_inner_html', $logo_inner
 
 			<div class="cpm-hb-entry-cta-row">
 				<button type="button" class="cpm-hb-entry-btn cpm-hb-entry-btn--primary" id="cpm-hb-enter-website"><?php esc_html_e( 'Enter Website', 'cpm-humanblockchain' ); ?></button>
-				<a class="cpm-hb-entry-btn cpm-hb-entry-btn--ghost" id="cpm-hb-how-it-works" href="<?php echo esc_url( $how_url ); ?>"><?php esc_html_e( 'How it works', 'cpm-humanblockchain' ); ?></a>
+				<a class="cpm-hb-entry-btn cpm-hb-entry-btn--ghost" id="cpm-hb-how-it-works" href="<?php echo esc_url( $what_url ); ?>"><?php esc_html_e( 'How it works', 'cpm-humanblockchain' ); ?></a>
 			</div>
 
 			<p class="cpm-hb-entry-fine">

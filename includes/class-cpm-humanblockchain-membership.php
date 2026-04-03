@@ -127,6 +127,34 @@ class Cpm_Humanblockchain_Membership {
 	}
 
 	/**
+	 * Store successful membership API fields on the WordPress user as JSON in `_membership_level`.
+	 *
+	 * @param int                  $user_id  Local WordPress user ID.
+	 * @param array<string,mixed> $api_data Decoded JSON body from the membership API.
+	 */
+	private static function save_membership_response_to_user_meta( $user_id, array $api_data ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return;
+		}
+		$payload = array(
+			'success'      => ! empty( $api_data['success'] ),
+			'unchanged'    => ! empty( $api_data['unchanged'] ),
+			'user_id'      => isset( $api_data['user_id'] ) ? (int) $api_data['user_id'] : 0,
+			'level_id'     => isset( $api_data['level_id'] ) ? (int) $api_data['level_id'] : 0,
+			'level_name'   => isset( $api_data['level_name'] ) ? sanitize_text_field( (string) $api_data['level_name'] ) : '',
+			'action'       => isset( $api_data['action'] ) ? sanitize_key( (string) $api_data['action'] ) : '',
+			'user_created' => ! empty( $api_data['user_created'] ),
+			'saved_at'     => current_time( 'mysql' ),
+		);
+		$payload = apply_filters( 'cpm_hb_membership_user_meta_payload', $payload, $user_id, $api_data );
+		if ( ! is_array( $payload ) || empty( $payload ) ) {
+			return;
+		}
+		update_user_meta( $user_id, '_membership_level', wp_json_encode( $payload ) );
+	}
+
+	/**
 	 * Whether the resolved membership POST URL is on this WordPress site (same host as home_url).
 	 * External URLs must not receive local {@see wp_get_current_user()} IDs — the remote service returns user_not_found.
 	 *
@@ -301,6 +329,10 @@ class Cpm_Humanblockchain_Membership {
 		}
 
 		if ( $code >= 200 && $code < 300 && ! empty( $data['success'] ) ) {
+			$wp_uid = get_current_user_id();
+			if ( $wp_uid > 0 ) {
+				self::save_membership_response_to_user_meta( $wp_uid, $data );
+			}
 			wp_send_json_success( $data );
 		}
 
