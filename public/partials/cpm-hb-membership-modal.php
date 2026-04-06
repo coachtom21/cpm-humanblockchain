@@ -47,7 +47,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</button>
 				<button type="button" class="cpm-hb-membership-card" data-tier="patron" role="radio" aria-checked="false" id="cpm-hb-tier-patron">
 					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Patron / Stakeholder', 'cpm-humanblockchain' ); ?></span>
-					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( 'Honor / leaderboard award', 'cpm-humanblockchain' ); ?></span>
+					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( '$30 mo / leaderboard award', 'cpm-humanblockchain' ); ?></span>
 					<ul class="cpm-hb-membership-card-list">
 						<li><?php esc_html_e( 'Recognition for reliability and participation', 'cpm-humanblockchain' ); ?></li>
 						<li><?php esc_html_e( 'Supports Detente 2030 build-out', 'cpm-humanblockchain' ); ?></li>
