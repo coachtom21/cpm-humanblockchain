@@ -4,8 +4,13 @@
 	$( function() {
 		var $modal = $( '#cpm-hb-landing-entry-modal' );
 		var $roleModal = $( '#cpm-hb-role-modal' );
-		if ( ! $modal.length || ! window.cpmHbLanding ) {
+		if ( ! $modal.length ) {
 			return;
+		}
+
+		/* Localized URLs; script must still run if wp_localize_script fails (mobile cache / conflicts). */
+		if ( ! window.cpmHbLanding ) {
+			window.cpmHbLanding = {};
 		}
 
 		var state = {
@@ -37,7 +42,7 @@
 		} );
 
 		function dismissLandingModal() {
-			$modal.removeClass( 'active' );
+			$modal.removeClass( 'active' ).attr( 'aria-hidden', 'true' );
 			$( 'body' ).removeClass( 'cpm-hb-landing-entry-active' );
 		}
 
@@ -114,15 +119,16 @@
 		 * pendingOtpRedirect sends the user to PoD URL after successful verification when the server does not return redirect_url.
 		 */
 		function showPhoneOtpModal() {
+			var H = window.cpmHbLanding || {};
 			var $activate = $( '#cpm-nwp-activate-modal' );
 			if ( ! $activate.length ) {
-				if ( window.cpmHbLanding.proofOfDeliveryUrl ) {
-					window.location.href = window.cpmHbLanding.proofOfDeliveryUrl;
+				if ( H.proofOfDeliveryUrl ) {
+					window.location.href = H.proofOfDeliveryUrl;
 				}
 				return;
 			}
-			window.cpmHbLanding.pendingOtpRedirect = window.cpmHbLanding.proofOfDeliveryUrl || '';
-			window.cpmHbLanding.phoneModalFromLanding = true;
+			H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
+			H.phoneModalFromLanding = true;
 
 			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -175,12 +181,53 @@
 			}
 			if ( $roleModal.hasClass( 'active' ) ) {
 				hideRoleModal();
+				return;
+			}
+			if ( $modal.hasClass( 'active' ) ) {
+				dismissLandingModal();
 			}
 		} );
 
-		$( '#cpm-hb-landing-home' ).on( 'click', function() {
+		/* Tap dimmed overlay (outside the card) to close — works when overlay has padding around the shell */
+		$modal.on( 'click', function( e ) {
+			if ( e.target === $modal.get( 0 ) ) {
+				dismissLandingModal();
+			}
+		} );
+
+		$( '#cpm-hb-landing-entry-modal .cpm-hb-entry-overlay-shell' ).on( 'click', function( e ) {
+			if ( e.target === this ) {
+				dismissLandingModal();
+			}
+		} );
+
+		$( '#cpm-hb-landing-dismiss' ).on( 'click', function( e ) {
+			e.preventDefault();
 			dismissLandingModal();
 		} );
+
+		/* Delegated handler + real <a href> in markup (progressive enhancement for mobile WebViews). */
+		function appendSkipGateParam( href ) {
+			try {
+				var u = new URL( href, window.location.href );
+				u.searchParams.set( 'cpm_hb_skip_gate', '1' );
+				return u.toString();
+			} catch ( err ) {
+				var join = href.indexOf( '?' ) >= 0 ? '&' : '?';
+				return href + join + 'cpm_hb_skip_gate=1';
+			}
+		}
+
+		function goLandingHome( e ) {
+			if ( e && e.preventDefault ) {
+				e.preventDefault();
+			}
+			dismissLandingModal();
+			var $a = $( '#cpm-hb-landing-home' );
+			var u = ( window.cpmHbLanding && window.cpmHbLanding.homeUrl ) ? window.cpmHbLanding.homeUrl : ( $a.attr( 'href' ) || '/' );
+			window.location.assign( appendSkipGateParam( u ) );
+		}
+		$( document ).on( 'click', '#cpm-hb-landing-home', goLandingHome );
 
 		syncUiFromState();
 	} );

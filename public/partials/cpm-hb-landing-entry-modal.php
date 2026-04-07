@@ -23,6 +23,8 @@ if ( $hiw_page instanceof WP_Post ) {
 }
 $what_url = apply_filters( 'cpm_hb_what_is_this_url', $what_default );
 
+$landing_home_url = apply_filters( 'cpm_hb_landing_home_url', home_url( '/' ) );
+
 $logo_inner   = '';
 $logo_has_img = false;
 
@@ -96,6 +98,9 @@ $logo_inner = apply_filters( 'cpm_hb_landing_entry_logo_inner_html', $logo_inner
 <div id="cpm-hb-landing-entry-modal" class="cpm-hb-entry-overlay active" role="dialog" aria-modal="true" aria-labelledby="cpm-hb-entry-title">
 	<div class="cpm-hb-entry-overlay-shell">
 		<div class="cpm-hb-entry-modal">
+			<button type="button" class="cpm-hb-entry-close" id="cpm-hb-landing-dismiss" aria-label="<?php esc_attr_e( 'Close dialog', 'cpm-humanblockchain' ); ?>">
+				<span class="cpm-hb-entry-close-icon" aria-hidden="true">&times;</span>
+			</button>
 			<div class="cpm-hb-entry-top">
 				<div class="cpm-hb-entry-brand">
 					<div class="cpm-hb-entry-logo<?php echo $logo_has_img ? ' cpm-hb-entry-logo--has-image' : ''; ?>" aria-hidden="true">
@@ -107,7 +112,7 @@ $logo_inner = apply_filters( 'cpm_hb_landing_entry_logo_inner_html', $logo_inner
 					</div>
 				</div>
 				<div class="cpm-hb-entry-header-cta">
-					<button type="button" class="cpm-hb-entry-btn" id="cpm-hb-landing-home"><?php esc_html_e( 'Home', 'cpm-humanblockchain' ); ?></button>
+					<a class="cpm-hb-entry-btn" id="cpm-hb-landing-home" href="<?php echo esc_url( $landing_home_url ); ?>"><?php esc_html_e( 'Home', 'cpm-humanblockchain' ); ?></a>
 					<a class="cpm-hb-entry-btn" id="cpm-hb-landing-what" href="<?php echo esc_url( $what_url ); ?>"><?php esc_html_e( 'What is this?', 'cpm-humanblockchain' ); ?></a>
 				</div>
 			</div>

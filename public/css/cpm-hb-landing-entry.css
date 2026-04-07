@@ -37,7 +37,12 @@ body.cpm-hb-landing-entry-active {
 	font-family: var(--cpm-hb-font);
 }
 
-#cpm-hb-landing-entry-modal:not(.active) {
+/*
+ * Must beat #cpm-hb-landing-entry-modal.cpm-hb-entry-overlay (1 id + 2 classes), otherwise
+ * display:grid / mobile display:flex overrides this and the modal stays visible after dismiss
+ * or reappears when crossing the ~768px breakpoint.
+ */
+#cpm-hb-landing-entry-modal.cpm-hb-entry-overlay:not(.active) {
 	display: none;
 }
 
@@ -57,16 +62,51 @@ body.cpm-hb-landing-entry-active {
 }
 
 #cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
+	position: relative;
 	background: var(--cpm-hb-panel);
 	border: 1px solid var(--cpm-hb-line);
 	border-radius: var(--cpm-hb-radius);
 	padding: 20px;
+	padding-top: 48px;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
 	max-height: 100%;
 	display: flex;
 	flex-direction: column;
 	color: var(--cpm-hb-text);
+}
+
+/* Touch-friendly close — always dismisses without relying on keyboard */
+#cpm-hb-landing-entry-modal .cpm-hb-entry-close {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 5;
+	min-width: 44px;
+	min-height: 44px;
+	padding: 0;
+	margin: 0;
+	border: none;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--cpm-hb-text);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: rgba(232, 238, 252, 0.15);
+	line-height: 1;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-close:hover {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-close-icon {
+	font-size: 28px;
+	font-weight: 300;
+	line-height: 1;
 }
 
 #cpm-hb-landing-entry-modal .cpm-hb-entry-top {
@@ -152,6 +192,15 @@ body.cpm-hb-landing-entry-active {
 	flex-wrap: wrap;
 	align-items: center;
 	margin-top: 0;
+	position: relative;
+	z-index: 6;
+}
+
+/* Home is an anchor — keep taps above close button hit area on small screens */
+#cpm-hb-landing-entry-modal #cpm-hb-landing-home {
+	position: relative;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: rgba(232, 238, 252, 0.18);
 }
 
 #cpm-hb-landing-entry-modal .cpm-hb-entry-q {
@@ -286,7 +335,7 @@ body.cpm-hb-landing-entry-active {
 }
 
 @media (max-width: 768px) {
-	#cpm-hb-landing-entry-modal.cpm-hb-entry-overlay {
+	#cpm-hb-landing-entry-modal.cpm-hb-entry-overlay.active {
 		padding: 0;
 		align-items: stretch;
 		display: flex;
@@ -304,7 +353,7 @@ body.cpm-hb-landing-entry-active {
 	}
 
 	#cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
-		padding: 20px 16px;
+		padding: 48px 16px 20px;
 		max-height: 100vh;
 		border-radius: 0;
 		flex: 1;
@@ -336,7 +385,7 @@ body.cpm-hb-landing-entry-active {
 
 @media (max-width: 480px) {
 	#cpm-hb-landing-entry-modal .cpm-hb-entry-modal {
-		padding: 16px 12px;
+		padding: 48px 12px 16px;
 	}
 
 	#cpm-hb-landing-entry-modal .cpm-hb-entry-h1 {

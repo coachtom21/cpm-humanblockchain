@@ -37,6 +37,10 @@ body.cpm-hb-role-modal-active {
 #cpm-hb-role-modal .cpm-hb-role-container {
 	background: var(--cpm-hb-role-panel);
 	width: min(500px, 100%);
+	max-height: min(90vh, 100%);
+	max-height: min(90dvh, 100%);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
 	padding: 22px 20px 20px;
 	border-radius: 14px;
 	border: 1px solid rgba(255, 255, 255, 0.1);
@@ -109,9 +113,14 @@ body.cpm-hb-role-modal-active {
 }
 
 #cpm-hb-role-modal .cpm-hb-role-option input[type="radio"] {
-	width: 22px;
-	height: 22px;
+	box-sizing: border-box;
+	width: 20px;
+	height: 20px;
+	min-width: 20px;
+	min-height: 20px;
+	aspect-ratio: 1;
 	margin: 0;
+	align-self: center;
 	cursor: pointer;
 	flex-shrink: 0;
 	-webkit-appearance: none;
@@ -133,8 +142,8 @@ body.cpm-hb-role-modal-active {
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	width: 8px;
-	height: 8px;
+	width: 7px;
+	height: 7px;
 	border-radius: 50%;
 	background: rgba(7, 16, 36, 0.92);
 }
@@ -182,12 +191,87 @@ body.cpm-hb-role-modal-active {
 }
 
 @media (max-width: 480px) {
-	#cpm-hb-role-modal .cpm-hb-role-content h2 {
+	#cpm-hb-role-modal.cpm-hb-role-overlay {
+		padding: 10px 12px;
+		align-items: center;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-container {
+		padding: 14px 14px 14px;
+		border-radius: 12px;
+		max-height: min(92vh, 100%);
+		max-height: min(92dvh, 100%);
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-close {
+		top: 10px;
+		right: 10px;
+		width: 32px;
+		height: 32px;
 		font-size: 20px;
-		padding: 0 36px;
+		border-radius: 10px;
+		background: rgba(148, 163, 184, 0.22);
+		color: var(--cpm-hb-role-text);
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-close:hover {
+		background: rgba(148, 163, 184, 0.38);
+		color: #f8fafc;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-content h2 {
+		font-size: 18px;
+		margin: 0 0 12px;
+		padding: 0 38px 0 4px;
+		line-height: 1.2;
+		text-align: left;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-selection {
+		gap: 8px;
+		margin: 4px 0 12px;
 	}
 
 	#cpm-hb-role-modal .cpm-hb-role-option {
-		padding: 14px 16px;
+		padding: 10px 12px;
+		gap: 10px;
+		border-radius: 12px;
+		font-size: 15px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-option span {
+		font-size: 15px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-actions {
+		margin-top: 0;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-continue {
+		padding: 11px 16px;
+		font-size: 16px;
+		border-radius: 12px;
+		min-height: 0;
+	}
+}
+
+/* Short viewports: avoid overflow without relying on scroll when possible */
+@media (max-width: 480px) and (max-height: 640px) {
+	#cpm-hb-role-modal .cpm-hb-role-content h2 {
+		font-size: 17px;
+		margin-bottom: 8px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-selection {
+		gap: 6px;
+		margin-bottom: 10px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-option {
+		padding: 8px 10px;
+	}
+
+	#cpm-hb-role-modal .cpm-hb-role-continue {
+		padding: 10px 14px;
 	}
 }

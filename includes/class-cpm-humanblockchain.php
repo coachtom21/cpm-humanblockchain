@@ -200,7 +200,8 @@ class Cpm_Humanblockchain {
 		$this->loader->add_filter( 'body_class', $plugin_public, 'body_class_landing_entry', 10, 1 );
 		$this->loader->add_filter( 'wp_nav_menu_items', $plugin_public, 'add_register_device_button_to_menu', 10, 2 );
 		$this->loader->add_action( 'wp_footer', $plugin_public, 'render_landing_entry_modal', 4 );
-		$this->loader->add_action( 'wp_footer', $plugin_public, 'render_device_registration_modal', 5 );
+		$this->loader->add_action( 'wp_footer', $plugin_public, 'strip_landing_skip_gate_query_param', 5 );
+		$this->loader->add_action( 'wp_footer', $plugin_public, 'render_device_registration_modal', 6 );
 
 	}
 

@@ -63,8 +63,41 @@ class Cpm_Humanblockchain_Public {
 		if ( is_user_logged_in() ) {
 			return false;
 		}
+		// After "Home" we navigate with ?cpm_hb_skip_gate=1 so the gate is not rendered on that load (avoids flash; works when navigation is reported as reload).
+		if ( isset( $_GET['cpm_hb_skip_gate'] ) && '1' === (string) $_GET['cpm_hb_skip_gate'] ) {
+			return false;
+		}
 		$default = is_front_page();
 		return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', $default );
+	}
+
+	/**
+	 * Remove one-time skip query param so a full reload (F5) can show the gate again.
+	 *
+	 * @since 1.0.0
+	 */
+	public function strip_landing_skip_gate_query_param() {
+		if ( is_user_logged_in() || ! is_front_page() ) {
+			return;
+		}
+		if ( ! isset( $_GET['cpm_hb_skip_gate'] ) || '1' !== (string) $_GET['cpm_hb_skip_gate'] ) {
+			return;
+		}
+		?>
+		<script>
+		(function() {
+			try {
+				var u = new URL( window.location.href );
+				if ( u.searchParams.get( 'cpm_hb_skip_gate' ) === '1' ) {
+					u.searchParams.delete( 'cpm_hb_skip_gate' );
+					var q = u.searchParams.toString();
+					u.search = q ? '?' + q : '';
+					history.replaceState( {}, '', u.pathname + u.search + u.hash );
+				}
+			} catch ( e ) {}
+		})();
+		</script>
+		<?php
 	}
 
 	/**
@@ -286,11 +319,13 @@ class Cpm_Humanblockchain_Public {
 			}
 			$what_default = apply_filters( 'cpm_hb_what_is_this_url', $what_default );
 
+			$landing_home_url = apply_filters( 'cpm_hb_landing_home_url', home_url( '/' ) );
+
 			wp_localize_script(
 				$this->plugin_name . '-landing-entry',
 				'cpmHbLanding',
 				array(
-					'homeUrl'             => home_url( '/' ),
+					'homeUrl'             => esc_url_raw( $landing_home_url ),
 					'proofOfDeliveryUrl'  => esc_url_raw( $proof_url ),
 					'onboardingFunnelUrl' => esc_url_raw( $funnel_url ),
 					'whatIsThisUrl'       => esc_url_raw( $what_default ),
