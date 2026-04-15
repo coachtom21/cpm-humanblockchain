@@ -547,6 +547,7 @@ class Cpm_Humanblockchain_Device_Registry {
 	/**
 	 * Handle Send OTP AJAX request.
 	 * Checks wp_nwp_devices for phone; only sends OTP if found.
+	 * Buyer + proof=scan: also requires Smallstreet user-by-mobile.
 	 *
 	 * @since 1.0.0
 	 */
@@ -579,6 +580,16 @@ class Cpm_Humanblockchain_Device_Registry {
 				wp_send_json_error(
 					array(
 						'message' => __( 'This number is not registered in HumanBlockchain (wp_nwp_devices). Register your device first.', 'cpm-humanblockchain' ),
+					)
+				);
+			}
+			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+				wp_send_json_error( array( 'message' => __( 'Smallstreet API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
+			}
+			if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::user_exists_by_mobile( $mobile_raw ) ) {
+				wp_send_json_error(
+					array(
+						'message' => __( 'This number was not found on Smallstreet for your account. Use the mobile linked to your Smallstreet / WooCommerce profile.', 'cpm-humanblockchain' ),
 					)
 				);
 			}

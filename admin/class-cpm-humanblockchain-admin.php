@@ -116,6 +116,10 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_smallstreet_backorders_api_key' ),
 		) );
+		register_setting( 'cpm_hb_membership', 'cpm_hb_smallstreet_user_by_mobile_url', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_smallstreet_user_by_mobile_url' ),
+		) );
 	}
 
 	/**
@@ -261,6 +265,30 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Smallstreet user-by-mobile URL.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_smallstreet_user_by_mobile_url( $value ) {
+		$default = 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/user-by-mobile';
+		$value   = is_string( $value ) ? trim( $value ) : '';
+		$prev    = get_option( 'cpm_hb_smallstreet_user_by_mobile_url', $default );
+		if ( $value === '' ) {
+			return is_string( $prev ) && $prev !== '' ? $prev : $default;
+		}
+		if ( ! filter_var( $value, FILTER_VALIDATE_URL ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_smallstreet_user_by_mobile_url',
+				__( 'Smallstreet user-by-mobile URL must be a valid http(s) URL.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : $default;
+		}
+		return esc_url_raw( $value );
+	}
+
+	/**
 	 * Sanitize default country option (NP or US).
 	 *
 	 * @param mixed $value Raw value.
@@ -294,8 +322,9 @@ class Cpm_Humanblockchain_Admin {
 		$register_user_endpoint   = get_option( 'cpm_hb_register_user_api_endpoint', '' );
 		$membership_key_set       = (bool) strlen( (string) get_option( 'smallstreet_api_key', '' ) );
 		$register_user_key_set    = (bool) strlen( (string) get_option( 'cpm_hb_register_user_api_key', '' ) );
-		$smallstreet_backorders_url = get_option( 'cpm_hb_smallstreet_backorders_url', 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile' );
-		$smallstreet_bo_key_set     = class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured();
+		$smallstreet_backorders_url   = get_option( 'cpm_hb_smallstreet_backorders_url', 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile' );
+		$smallstreet_user_by_mobile_url = get_option( 'cpm_hb_smallstreet_user_by_mobile_url', 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/user-by-mobile' );
+		$smallstreet_bo_key_set       = class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'NWP Gateway Settings', 'cpm-humanblockchain' ); ?></h1>
@@ -489,7 +518,25 @@ class Cpm_Humanblockchain_Admin {
 								placeholder="https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile"
 							/>
 							<p class="description">
-								<?php esc_html_e( 'POST JSON { "mobile": "5551234567" } with header X-Dongtrader-Backorders-Key. Used for buyer + proof=scan PoD flow (local + Smallstreet check, then OTP).', 'cpm-humanblockchain' ); ?>
+								<?php esc_html_e( 'POST JSON { "mobile": "5551234567" } with header X-Dongtrader-Backorders-Key. Used to load backorder list data after buyer verify when enabled.', 'cpm-humanblockchain' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_smallstreet_user_by_mobile_url"><?php esc_html_e( 'Smallstreet — user by mobile (URL)', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="url"
+								id="cpm_hb_smallstreet_user_by_mobile_url"
+								name="cpm_hb_smallstreet_user_by_mobile_url"
+								value="<?php echo esc_attr( is_string( $smallstreet_user_by_mobile_url ) ? $smallstreet_user_by_mobile_url : '' ); ?>"
+								class="large-text code"
+								placeholder="https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/user-by-mobile"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'POST JSON or GET ?mobile= for buyer + proof=scan: must resolve to a Smallstreet user before OTP. Uses the backorders API key below.', 'cpm-humanblockchain' ); ?>
 							</p>
 						</td>
 					</tr>
