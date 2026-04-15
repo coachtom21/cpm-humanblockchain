@@ -31,6 +31,8 @@ class Cpm_Humanblockchain_Activator {
 	public static function activate() {
 		self::create_nwp_devices_table();
 		self::upgrade_nwp_devices_table();
+		self::create_xp_ledger_table();
+		self::upgrade_xp_ledger_columns();
 	}
 
 	/**
@@ -86,6 +88,16 @@ class Cpm_Humanblockchain_Activator {
 	}
 
 	/**
+	 * Ensure xp_ledger exists on existing installs (no reactivation required).
+	 *
+	 * @since 1.0.0
+	 */
+	public static function maybe_upgrade_xp_ledger() {
+		self::create_xp_ledger_table();
+		self::upgrade_xp_ledger_columns();
+	}
+
+	/**
 	 * Add columns to wp_nwp_devices if they don't exist (for upgrades).
 	 *
 	 * @since    1.0.0
@@ -119,6 +131,59 @@ class Cpm_Humanblockchain_Activator {
 
 		foreach ( $updates as $alter ) {
 			$wpdb->query( "ALTER TABLE $table_name $alter" );
+		}
+	}
+
+	/**
+	 * Local mirror of seller/buyer scan payloads; optional Smallstreet sync metadata.
+	 *
+	 * @since 1.0.0
+	 */
+	private static function create_xp_ledger_table() {
+		global $wpdb;
+
+		$table_name      = $wpdb->prefix . 'xp_ledger';
+		$charset_collate = $wpdb->get_charset_collate();
+
+		$sql = "CREATE TABLE IF NOT EXISTS $table_name (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			wp_user_id BIGINT UNSIGNED NOT NULL,
+			scan_type VARCHAR(32) NOT NULL DEFAULT 'seller_scan',
+			transaction_id VARCHAR(64) NOT NULL,
+			xp_units VARCHAR(64) NOT NULL DEFAULT '0',
+			scan_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+			entry_json LONGTEXT NULL,
+			remote_ledger_id VARCHAR(64) DEFAULT NULL,
+			remote_sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+			remote_last_error TEXT NULL,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME DEFAULT NULL,
+			PRIMARY KEY (id),
+			KEY wp_user_id (wp_user_id),
+			KEY scan_type (scan_type),
+			KEY transaction_id (transaction_id),
+			KEY remote_sync_status (remote_sync_status)
+		) $charset_collate;";
+
+		$wpdb->query( $sql );
+	}
+
+	/**
+	 * Migrate xp_units to VARCHAR (large XP strings) and align defaults for existing installs.
+	 *
+	 * @since 1.0.0
+	 */
+	private static function upgrade_xp_ledger_columns() {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'xp_ledger';
+
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
+			return;
+		}
+
+		$row = $wpdb->get_row( "SHOW COLUMNS FROM `{$table_name}` WHERE Field = 'xp_units'" );
+		if ( $row && isset( $row->Type ) && false !== stripos( (string) $row->Type, 'int' ) ) {
+			$wpdb->query( "ALTER TABLE `{$table_name}` MODIFY xp_units VARCHAR(64) NOT NULL DEFAULT '0'" );
 		}
 	}
 }

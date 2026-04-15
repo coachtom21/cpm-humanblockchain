@@ -749,6 +749,9 @@ class Cpm_Humanblockchain_Device_Registry {
 		$seller_transaction_code = '';
 		if ( $seller_pod_complete ) {
 			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
+			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+				Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
+			}
 		}
 
 		if ( $landing_backorder ) {
