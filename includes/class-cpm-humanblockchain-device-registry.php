@@ -559,20 +559,10 @@ class Cpm_Humanblockchain_Device_Registry {
 			if ( ! $proof_scan_url ) {
 				wp_send_json_error( array( 'message' => __( 'Open this flow from a link that includes ?proof=scan in the URL.', 'cpm-humanblockchain' ) ) );
 			}
-			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-				wp_send_json_error( array( 'message' => __( 'Smallstreet backorders API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
-			}
 			if ( ! $local_device ) {
 				wp_send_json_error(
 					array(
 						'message' => __( 'This number is not registered in HumanBlockchain (wp_nwp_devices). Register your device first.', 'cpm-humanblockchain' ),
-					)
-				);
-			}
-			if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::mobile_recognized_for_backorders( $mobile_raw ) ) {
-				wp_send_json_error(
-					array(
-						'message' => __( 'This number was not found on Smallstreet for backorders.', 'cpm-humanblockchain' ),
 					)
 				);
 			}
@@ -692,13 +682,8 @@ class Cpm_Humanblockchain_Device_Registry {
 			$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 		}
 
+		// Smallstreet backorders-by-mobile is optional; redirect still goes to the backorder page.
 		$smallstreet_backorders = array();
-		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-			$ss_res = Cpm_Humanblockchain_Smallstreet_Backorders::request_backorders_by_mobile( $mobile_raw );
-			if ( ! is_wp_error( $ss_res ) && isset( $ss_res['data'] ) ) {
-				$smallstreet_backorders = is_array( $ss_res['data'] ) ? $ss_res['data'] : array( 'value' => $ss_res['data'] );
-			}
-		}
 
 		$payload = array(
 			'message'            => $check['message'],

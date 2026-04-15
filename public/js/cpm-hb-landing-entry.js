@@ -150,7 +150,7 @@
 
 		/**
 		 * After role selection: open the same “Your Phone Number” modal used by NWP, then Send OTP → verify OTP (public.js).
-		 * Buyer + ?proof=scan: server checks wp_nwp_devices and Smallstreet backorders-by-mobile before OTP.
+		 * Buyer + ?proof=scan: server checks wp_nwp_devices before OTP; after verify, redirect to backorder page (no Smallstreet fetch for now).
 		 * pendingOtpRedirect sends the user to PoD URL after successful verification when the server does not return redirect_url.
 		 *
 		 * @param {{ buyerProofScan?: boolean }} opts
@@ -211,7 +211,7 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
-			// Always show “Your phone number” → Send OTP → verify (buyer + ?proof=scan uses Smallstreet + backorders redirect).
+			// Always show “Your phone number” → Send OTP → verify (buyer + ?proof=scan → backorder page redirect).
 			showPhoneOtpModal( {
 				landingRole: role,
 				buyerProofScan: role === 'buyer' && urlHasProofScan()
