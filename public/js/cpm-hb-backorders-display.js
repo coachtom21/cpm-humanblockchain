@@ -71,6 +71,12 @@
 		if ( data == null ) {
 			return;
 		}
+		var $panel = renderBackorders( data );
+		var $mount = $( '#cpm-hb-backorders-root' );
+		if ( $mount.length ) {
+			$mount.append( $panel );
+			return;
+		}
 		var $target = $( '.wp-block-post-content' ).first();
 		if ( ! $target.length ) {
 			$target = $( 'main .entry-content' ).first();
@@ -87,6 +93,6 @@
 		if ( ! $target.length ) {
 			$target = $( 'body' );
 		}
-		$target.prepend( renderBackorders( data ) );
+		$target.prepend( $panel );
 	} );
 })( jQuery );

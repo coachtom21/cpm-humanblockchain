@@ -1,6 +1,10 @@
 /**
- * Backorders payload shown after buyer + ?proof=scan OTP redirect.
+ * Backorders payload: shortcode mount + after buyer + ?proof=scan OTP redirect.
  */
+.cpm-hb-backorders-root {
+	margin: 0 0 1.5rem;
+}
+
 .cpm-hb-backorders-panel {
 	margin: 0 0 1.5rem;
 	padding: 1rem 1.25rem;

@@ -55,6 +55,55 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
+	 * Register public shortcodes (backorders list mount point).
+	 *
+	 * @since 1.0.0
+	 */
+	public function register_shortcodes() {
+		add_shortcode( 'cpm_hb_backorders', array( $this, 'shortcode_backorders' ) );
+	}
+
+	/**
+	 * Outputs a container the backorders script fills (sessionStorage + server initialRows).
+	 * Place in the page editor as [cpm_hb_backorders] or in a template: echo do_shortcode( '[cpm_hb_backorders]' );
+	 *
+	 * @param array<string, string> $atts Shortcode attributes (unused).
+	 * @return string
+	 */
+	public function shortcode_backorders( $atts ) {
+		return '<div id="cpm-hb-backorders-root" class="cpm-hb-backorders-root"></div>';
+	}
+
+	/**
+	 * Load backorders CSS/JS when viewing the backorder page, a page with the shortcode, or a backorder* page template.
+	 *
+	 * @return bool
+	 */
+	private function should_enqueue_backorders_assets() {
+		if ( ! class_exists( 'Cpm_Humanblockchain_Device_Registry' ) ) {
+			return false;
+		}
+		if ( Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			return true;
+		}
+		if ( ! is_singular() ) {
+			return (bool) apply_filters( 'cpm_hb_enqueue_backorders_assets', false, null );
+		}
+		$post = get_queried_object();
+		if ( ! $post instanceof WP_Post ) {
+			return (bool) apply_filters( 'cpm_hb_enqueue_backorders_assets', false, null );
+		}
+		if ( has_shortcode( (string) $post->post_content, 'cpm_hb_backorders' ) ) {
+			return true;
+		}
+		$tpl = get_page_template_slug( $post->ID );
+		if ( is_string( $tpl ) && $tpl !== '' && false !== stripos( $tpl, 'backorder' ) ) {
+			return true;
+		}
+		return (bool) apply_filters( 'cpm_hb_enqueue_backorders_assets', false, $post );
+	}
+
+	/**
 	 * Whether the current request URL includes ?proof=scan (buyer PoD / backorders flow).
 	 *
 	 * @return bool
@@ -239,7 +288,7 @@ class Cpm_Humanblockchain_Public {
 			'all'
 		);
 
-		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+		if ( $this->should_enqueue_backorders_assets() ) {
 			wp_enqueue_style(
 				$this->plugin_name . '-backorders-display',
 				plugin_dir_url( __FILE__ ) . 'css/cpm-hb-backorders-display.css',
@@ -380,7 +429,7 @@ class Cpm_Humanblockchain_Public {
 			),
 		) );
 
-		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+		if ( $this->should_enqueue_backorders_assets() ) {
 			wp_enqueue_script(
 				$this->plugin_name . '-backorders-display',
 				plugin_dir_url( __FILE__ ) . 'js/cpm-hb-backorders-display.js',
