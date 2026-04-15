@@ -315,7 +315,9 @@ class Cpm_Humanblockchain_Register_User_Api {
 		}
 
 		if ( 409 === $code && isset( $data['code'] ) && 'user_already_exists' === $data['code'] ) {
-			$matched = isset( $data['matched_by'] ) ? (string) $data['matched_by'] : '';
+			$matched    = isset( $data['matched_by'] ) ? (string) $data['matched_by'] : '';
+			$remote_uid = self::extract_user_id_from_payload( $data );
+
 			if ( 'email' === $matched ) {
 				$exists = email_exists( $email );
 				if ( $exists ) {
@@ -324,6 +326,14 @@ class Cpm_Humanblockchain_Register_User_Api {
 						'created_new' => false,
 					);
 				}
+				/*
+				 * Remote still has this email (e.g. membership / register-user DB) but the local WP user
+				 * was deleted. Device registration already created a new local user — treat as synced.
+				 */
+				return array(
+					'user_id'     => $remote_uid > 0 ? $remote_uid : 0,
+					'created_new' => false,
+				);
 			}
 			if ( 'phone' === $matched ) {
 				$puid = self::find_user_id_by_phone_meta( $mobile );
@@ -333,6 +343,11 @@ class Cpm_Humanblockchain_Register_User_Api {
 						'created_new' => false,
 					);
 				}
+				// Same as email: remote has phone, local user/meta was removed.
+				return array(
+					'user_id'     => $remote_uid > 0 ? $remote_uid : 0,
+					'created_new' => false,
+				);
 			}
 			return new WP_Error(
 				'user_conflict',

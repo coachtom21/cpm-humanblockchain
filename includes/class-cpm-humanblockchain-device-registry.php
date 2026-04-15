@@ -215,12 +215,90 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_send_otp', array( __CLASS__, 'handle_send_otp' ) );
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
+		// Remove NWP device rows when the WP user is removed (same user_id / email in wp_nwp_devices).
 		add_action( 'delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 3 );
+		add_action( 'wpmu_delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 1 );
+		add_action( 'deleted_user', array( __CLASS__, 'delete_devices_after_user_deleted' ), 10, 3 );
+	}
+
+	/**
+	 * Whether NWP device rows should be removed for this user (same filter for all deletion hooks).
+	 *
+	 * @param int $user_id User ID.
+	 * @return bool
+	 */
+	private static function should_delete_nwp_devices_for_user( $user_id ) {
+		return (bool) apply_filters( 'cpm_nwp_delete_devices_on_user_delete', true, (int) $user_id );
+	}
+
+	/**
+	 * Whether the NWP devices table exists for the current blog prefix.
+	 *
+	 * @param string $table Full table name (e.g. wp_nwp_devices).
+	 * @return bool
+	 */
+	private static function nwp_devices_table_exists( $table ) {
+		global $wpdb;
+		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) );
+		return ( $found === $table );
+	}
+
+	/**
+	 * Delete rows in wp_*_nwp_devices for this user everywhere the table exists (current site or all subsites).
+	 *
+	 * @param int         $user_id          WordPress user ID.
+	 * @param string|null $email_normalized Lowercased trimmed email, or null to skip email-based delete.
+	 */
+	private static function purge_nwp_devices_for_user( $user_id, $email_normalized = null ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return;
+		}
+
+		$site_ids = array( (int) get_current_blog_id() );
+		if ( is_multisite() && function_exists( 'get_sites' ) ) {
+			$site_ids = get_sites(
+				array(
+					'fields' => 'ids',
+					'number' => 0,
+				)
+			);
+			if ( ! is_array( $site_ids ) ) {
+				$site_ids = array( (int) get_current_blog_id() );
+			}
+		}
+
+		foreach ( $site_ids as $blog_id ) {
+			$switched = false;
+			if ( is_multisite() ) {
+				switch_to_blog( (int) $blog_id );
+				$switched = true;
+			}
+
+			global $wpdb;
+			$table = $wpdb->prefix . self::TABLE_NAME;
+			if ( self::nwp_devices_table_exists( $table ) ) {
+				$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
+				if ( is_string( $email_normalized ) && $email_normalized !== '' ) {
+					$wpdb->query(
+						$wpdb->prepare(
+							"DELETE FROM {$table} WHERE LOWER(TRIM(email)) = %s",
+							$email_normalized
+						)
+					);
+				}
+			}
+
+			if ( $switched ) {
+				restore_current_blog();
+			}
+		}
 	}
 
 	/**
 	 * Remove all NWP device rows when a WordPress user is deleted (clears stored device_hash so the browser can register again).
-	 * Runs on {@see 'delete_user'} while the user object still exists; deletes by user_id and by email to cover orphan rows.
+	 * Runs on {@see 'delete_user'} (before row removal from wp_users) and {@see 'wpmu_delete_user'} (multisite network delete).
+	 * Deletes by user_id and by normalized email to cover orphan rows.
 	 *
 	 * @param int           $user_id  User ID being deleted.
 	 * @param int|null      $reassign User ID to reassign content to, or null.
@@ -231,13 +309,9 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( $user_id <= 0 ) {
 			return;
 		}
-		if ( ! apply_filters( 'cpm_nwp_delete_devices_on_user_delete', true, $user_id ) ) {
+		if ( ! self::should_delete_nwp_devices_for_user( $user_id ) ) {
 			return;
 		}
-		global $wpdb;
-		$table = $wpdb->prefix . self::TABLE_NAME;
-
-		$wpdb->delete( $table, array( 'user_id' => $user_id ), array( '%d' ) );
 
 		$email = '';
 		if ( $user instanceof \WP_User ) {
@@ -248,14 +322,27 @@ class Cpm_Humanblockchain_Device_Registry {
 				$email = $ud->user_email;
 			}
 		}
-		if ( $email !== '' ) {
-			$wpdb->query(
-				$wpdb->prepare(
-					"DELETE FROM {$table} WHERE LOWER(TRIM(email)) = %s",
-					strtolower( trim( $email ) )
-				)
-			);
+
+		$email_norm = ( $email !== '' ) ? strtolower( trim( $email ) ) : null;
+		self::purge_nwp_devices_for_user( $user_id, $email_norm );
+	}
+
+	/**
+	 * Safety net: delete any remaining rows by user_id after wp_users row is gone ({@see 'deleted_user'}).
+	 *
+	 * @param int           $user_id  User ID that was deleted.
+	 * @param int|null      $reassign Unused.
+	 * @param \WP_User|null $user     Unused (user no longer in DB).
+	 */
+	public static function delete_devices_after_user_deleted( $user_id, $reassign = null, $user = null ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return;
 		}
+		if ( ! self::should_delete_nwp_devices_for_user( $user_id ) ) {
+			return;
+		}
+		self::purge_nwp_devices_for_user( $user_id, null );
 	}
 
 	/**
