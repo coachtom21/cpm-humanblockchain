@@ -747,10 +747,11 @@ class Cpm_Humanblockchain_Device_Registry {
 		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && $proof_scan_url;
 
 		$seller_transaction_code = '';
+		$xp_ledger_api             = null;
 		if ( $seller_pod_complete ) {
 			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
 			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
-				Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
+				$xp_ledger_api = Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
 			}
 		}
 
@@ -789,6 +790,9 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( $seller_pod_complete ) {
 			$payload['seller_scan_success']     = true;
 			$payload['seller_transaction_code'] = $seller_transaction_code;
+			if ( is_array( $xp_ledger_api ) ) {
+				$payload['xp_ledger_api'] = $xp_ledger_api;
+			}
 		}
 
 		wp_send_json_success( $payload );

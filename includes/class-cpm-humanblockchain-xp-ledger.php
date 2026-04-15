@@ -121,6 +121,43 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Truncate raw API body for display in browser (avoid huge JSON in AJAX).
+	 *
+	 * @param string $raw Raw body.
+	 * @param int    $max Max bytes.
+	 * @return string
+	 */
+	private static function truncate_api_body_for_display( $raw, $max = 8000 ) {
+		$raw = (string) $raw;
+		if ( strlen( $raw ) > $max ) {
+			return substr( $raw, 0, $max ) . "\n…";
+		}
+		return $raw;
+	}
+
+	/**
+	 * Shape returned to verify-OTP JSON for the seller success modal.
+	 *
+	 * @param string               $remote   synced|skipped|failed|transport_error|db_failed|invalid.
+	 * @param string               $summary  Short human-readable line.
+	 * @param int|null             $http_code HTTP status if applicable.
+	 * @param string               $body     Raw response (truncated in output).
+	 * @param array<string,mixed>|null $json Decoded JSON if valid.
+	 * @param bool                 $success  True when Smallstreet returned 2xx.
+	 * @return array<string,mixed>
+	 */
+	private static function xp_ledger_api_result( $remote, $summary, $http_code, $body, $json, $success ) {
+		return array(
+			'remote'    => $remote,
+			'summary'   => $summary,
+			'http_code' => $http_code,
+			'body'      => self::truncate_api_body_for_display( $body ),
+			'json'      => is_array( $json ) ? $json : null,
+			'success'   => (bool) $success,
+		);
+	}
+
+	/**
 	 * XP string (cents × 10^21): e.g. seller 30 → "30000000000000000000000" (3×10²²).
 	 *
 	 * @param string $scan_type seller_scan|buyer_scan.
@@ -221,12 +258,20 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 *
 	 * @param int    $wp_user_id        WordPress user ID.
 	 * @param string $transaction_code  HB-… code shown in the modal.
+	 * @return array<string,mixed> Summary for AJAX modal: remote, summary, http_code, body, json, success.
 	 */
 	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code ) {
-		$wp_user_id = (int) $wp_user_id;
+		$wp_user_id       = (int) $wp_user_id;
 		$transaction_code = trim( (string) $transaction_code );
 		if ( $wp_user_id <= 0 || $transaction_code === '' ) {
-			return;
+			return self::xp_ledger_api_result(
+				'invalid',
+				__( 'Missing user or transaction code.', 'cpm-humanblockchain' ),
+				null,
+				'',
+				null,
+				false
+			);
 		}
 
 		$scan_type = 'seller_scan';
@@ -258,12 +303,26 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		);
 
 		if ( false === $inserted ) {
-			return;
+			return self::xp_ledger_api_result(
+				'db_failed',
+				__( 'Could not save the XP ledger row locally.', 'cpm-humanblockchain' ),
+				null,
+				'',
+				null,
+				false
+			);
 		}
 
 		$row_id = (int) $wpdb->insert_id;
 		if ( $row_id <= 0 ) {
-			return;
+			return self::xp_ledger_api_result(
+				'db_failed',
+				__( 'Could not save the XP ledger row locally.', 'cpm-humanblockchain' ),
+				null,
+				'',
+				null,
+				false
+			);
 		}
 
 		$key = self::api_key();
@@ -279,7 +338,14 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%s', '%s', '%s' ),
 				array( '%d' )
 			);
-			return;
+			return self::xp_ledger_api_result(
+				'skipped',
+				__( 'Smallstreet API key is not configured. Local ledger row saved; remote sync skipped.', 'cpm-humanblockchain' ),
+				null,
+				'',
+				null,
+				false
+			);
 		}
 
 		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry );
@@ -301,18 +367,26 @@ class Cpm_Humanblockchain_Xp_Ledger {
 
 		$response = wp_remote_post( $url, $args );
 		if ( is_wp_error( $response ) ) {
+			$msg = $response->get_error_message();
 			$wpdb->update(
 				$table,
 				array(
 					'remote_sync_status' => 'failed',
-					'remote_last_error'  => $response->get_error_message(),
+					'remote_last_error'  => $msg,
 					'updated_at'         => current_time( 'mysql' ),
 				),
 				array( 'id' => $row_id ),
 				array( '%s', '%s', '%s' ),
 				array( '%d' )
 			);
-			return;
+			return self::xp_ledger_api_result(
+				'transport_error',
+				__( 'Request to Smallstreet failed.', 'cpm-humanblockchain' ),
+				null,
+				$msg,
+				null,
+				false
+			);
 		}
 
 		$code = (int) wp_remote_retrieve_response_code( $response );
@@ -333,7 +407,14 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%s', '%s', '%s', '%s' ),
 				array( '%d' )
 			);
-			return;
+			return self::xp_ledger_api_result(
+				'synced',
+				__( 'Smallstreet accepted the XP ledger scan.', 'cpm-humanblockchain' ),
+				$code,
+				$raw,
+				is_array( $data ) ? $data : null,
+				true
+			);
 		}
 
 		$err = $raw !== '' ? substr( $raw, 0, 500 ) : (string) $code;
@@ -347,6 +428,19 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			array( 'id' => $row_id ),
 			array( '%s', '%s', '%s' ),
 			array( '%d' )
+		);
+
+		return self::xp_ledger_api_result(
+			'failed',
+			sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'Smallstreet returned an error (HTTP %d).', 'cpm-humanblockchain' ),
+				$code
+			),
+			$code,
+			$raw,
+			is_array( $data ) ? $data : null,
+			false
 		);
 	}
 }

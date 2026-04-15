@@ -16,17 +16,51 @@
 			}
 			$sellerScanSuccessModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-hb-seller-tx-copy-feedback' ).empty();
+			var $apiBlock = $( '#cpm-hb-seller-xp-api-block' );
+			if ( $apiBlock.length ) {
+				$apiBlock.addClass( 'cpm-nwp-modal--hidden' ).attr( 'hidden', 'hidden' );
+				$( '#cpm-hb-seller-xp-api-summary' ).empty();
+				$( '#cpm-hb-seller-xp-api-body' ).empty();
+			}
 			if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).length === 0 ) {
 				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 			}
 		}
 
-		function showSellerScanSuccessModal( transactionCode ) {
+		function showSellerScanSuccessModal( transactionCode, xpApi ) {
 			if ( ! $sellerScanSuccessModal.length ) {
 				return;
 			}
 			var code = transactionCode || '';
 			$( '#cpm-hb-seller-tx-code-display' ).text( code );
+			var $apiBlock = $( '#cpm-hb-seller-xp-api-block' );
+			var $summary = $( '#cpm-hb-seller-xp-api-summary' );
+			var $bodyPre = $( '#cpm-hb-seller-xp-api-body' );
+			if ( $apiBlock.length && $summary.length && $bodyPre.length ) {
+				if ( xpApi && typeof xpApi === 'object' ) {
+					var ok = xpApi.success === true;
+					var http = xpApi.http_code != null && xpApi.http_code !== '' ? ' · HTTP ' + xpApi.http_code : '';
+					var statusWord = ok ? 'Success' : 'Failed';
+					var line = ( xpApi.summary || '' ) + http + ' · ' + statusWord;
+					$summary.text( line );
+					var display = '';
+					if ( xpApi.json && typeof xpApi.json === 'object' ) {
+						try {
+							display = JSON.stringify( xpApi.json, null, 2 );
+						} catch ( err ) {
+							display = xpApi.body || '';
+						}
+					} else {
+						display = typeof xpApi.body === 'string' ? xpApi.body : '';
+					}
+					$bodyPre.text( display || '—' );
+					$apiBlock.removeClass( 'cpm-nwp-modal--hidden' ).removeAttr( 'hidden' );
+				} else {
+					$apiBlock.addClass( 'cpm-nwp-modal--hidden' ).attr( 'hidden', 'hidden' );
+					$summary.empty();
+					$bodyPre.empty();
+				}
+			}
 			$sellerScanSuccessModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 		}
@@ -426,7 +460,7 @@
 								window.cpmHbLanding.pendingOtpRedirect = '';
 								window.cpmHbLanding.landingRole = '';
 							}
-							showSellerScanSuccessModal( res.data.seller_transaction_code );
+							showSellerScanSuccessModal( res.data.seller_transaction_code, res.data.xp_ledger_api );
 							return;
 						}
 						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
