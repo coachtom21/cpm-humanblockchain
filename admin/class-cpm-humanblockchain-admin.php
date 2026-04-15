@@ -81,7 +81,7 @@ class Cpm_Humanblockchain_Admin {
 		) );
 		register_setting( 'cpm_nwp_twilio', 'cpm_nwp_twilio_token', array(
 			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
+			'sanitize_callback' => array( $this, 'sanitize_twilio_token' ),
 		) );
 		register_setting( 'cpm_nwp_twilio', 'cpm_nwp_twilio_from', array(
 			'type'              => 'string',
@@ -289,6 +289,23 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Sanitize Twilio Auth Token; empty input keeps the previously saved key.
+	 * Password fields often submit blank on “Save” even when the admin did not intend to change the token,
+	 * which would otherwise wipe the option and break OTP on this site (while Twilio still works elsewhere).
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_twilio_token( $value ) {
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			$prev = get_option( 'cpm_nwp_twilio_token', '' );
+			return is_string( $prev ) ? $prev : '';
+		}
+		return sanitize_text_field( $value );
+	}
+
+	/**
 	 * Sanitize default country option (NP or US).
 	 *
 	 * @param mixed $value Raw value.
@@ -350,6 +367,9 @@ class Cpm_Humanblockchain_Admin {
 				<p class="description">
 					<?php esc_html_e( 'Sending to Nepal (+977) or other countries: in Twilio, enable outbound SMS for that country under Messaging → Settings → SMS geographic permissions. Otherwise Twilio returns a “permission … region” error.', 'cpm-humanblockchain' ); ?>
 				</p>
+				<p class="description">
+					<?php esc_html_e( 'OTP on this WordPress site uses the credentials saved here — not the Smallstreet app’s environment. If SMS works on Smallstreet but not here, paste the same Twilio SID, token, and From number (or matching wp-config.php constants) and save.', 'cpm-humanblockchain' ); ?>
+				</p>
 			</div>
 
 			<form method="post" action="options.php">
@@ -373,7 +393,10 @@ class Cpm_Humanblockchain_Admin {
 					</tr>
 					<tr>
 						<th><label for="cpm_nwp_twilio_token"><?php esc_html_e( 'Auth Token', 'cpm-humanblockchain' ); ?></label></th>
-						<td><input type="password" id="cpm_nwp_twilio_token" name="cpm_nwp_twilio_token" value="<?php echo esc_attr( $token ); ?>" class="regular-text"></td>
+						<td>
+							<input type="password" id="cpm_nwp_twilio_token" name="cpm_nwp_twilio_token" value="" autocomplete="new-password" class="regular-text" placeholder="<?php echo esc_attr( $token !== '' ? __( 'Leave blank to keep saved token', 'cpm-humanblockchain' ) : __( 'Paste Auth Token from Twilio Console', 'cpm-humanblockchain' ) ); ?>">
+							<p class="description"><?php esc_html_e( 'Must match the credentials from Twilio Console (same account as Smallstreet if you use one). Leave blank when saving other settings to keep the current token.', 'cpm-humanblockchain' ); ?></p>
+						</td>
 					</tr>
 					<tr>
 						<th><label for="cpm_nwp_twilio_from"><?php esc_html_e( 'From (Twilio number)', 'cpm-humanblockchain' ); ?></label></th>

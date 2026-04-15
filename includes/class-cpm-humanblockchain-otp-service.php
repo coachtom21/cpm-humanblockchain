@@ -307,27 +307,33 @@ class Cpm_Humanblockchain_Otp_Service {
 		$url  = 'https://api.twilio.com/2010-04-01/Accounts/' . $sid . '/Messages.json';
 		$auth = base64_encode( $sid . ':' . $token );
 
-		$response = wp_remote_post(
-			$url,
-			array(
-				'headers' => array(
-					'Authorization' => 'Basic ' . $auth,
-					'Content-Type'  => 'application/x-www-form-urlencoded',
-				),
-				'body'    => array(
-					'To'   => $to,
-					'From' => $from,
-					'Body' => $body,
-				),
-				'timeout' => 15,
-			)
+		$post_args = array(
+			'headers' => array(
+				'Authorization' => 'Basic ' . $auth,
+				'Content-Type'  => 'application/x-www-form-urlencoded',
+			),
+			'body'    => array(
+				'To'   => $to,
+				'From' => $from,
+				'Body' => $body,
+			),
+			'timeout'   => 15,
+			'sslverify' => true,
 		);
+		$post_args = apply_filters( 'cpm_nwp_twilio_http_request_args', $post_args, $to, $body );
+
+		$response = wp_remote_post( $url, $post_args );
 
 		if ( is_wp_error( $response ) ) {
+			$err = $response->get_error_message();
 			return array(
 				'success' => false,
-				'message' => __( 'Failed to send SMS.', 'cpm-humanblockchain' ),
-				'error'   => $response->get_error_message(),
+				'message' => sprintf(
+					/* translators: %s: underlying error from WordPress HTTP API (e.g. SSL or connection). */
+					__( 'Failed to send SMS: %s', 'cpm-humanblockchain' ),
+					$err
+				),
+				'error'   => $err,
 			);
 		}
 
