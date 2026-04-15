@@ -61,11 +61,30 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 
 	/**
 	 * API key (stored in options; not exposed to frontend).
+	 * Optional: define CPM_HB_SMALLSTREET_BACKORDERS_API_KEY in wp-config (same key as Smallstreet).
+	 * If the option was never saved, uses the built-in default. If explicitly cleared (empty string in DB), returns ''.
 	 *
 	 * @return string
 	 */
 	public static function get_api_key() {
-		return trim( (string) get_option( self::OPTION_KEY, self::default_api_key() ) );
+		if ( defined( 'CPM_HB_SMALLSTREET_BACKORDERS_API_KEY' ) && is_string( CPM_HB_SMALLSTREET_BACKORDERS_API_KEY ) && self::trim_key( CPM_HB_SMALLSTREET_BACKORDERS_API_KEY ) !== '' ) {
+			return self::trim_key( CPM_HB_SMALLSTREET_BACKORDERS_API_KEY );
+		}
+		$stored = get_option( self::OPTION_KEY, null );
+		if ( null === $stored ) {
+			$key = self::default_api_key();
+		} else {
+			$key = self::trim_key( (string) $stored );
+		}
+		return apply_filters( 'cpm_hb_smallstreet_backorders_api_key', $key );
+	}
+
+	/**
+	 * @param string $k Raw key.
+	 * @return string
+	 */
+	private static function trim_key( $k ) {
+		return trim( (string) $k );
 	}
 
 	/**

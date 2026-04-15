@@ -291,6 +291,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_send_otp', array( __CLASS__, 'handle_send_otp' ) );
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
+		add_action( 'wp_ajax_cpm_hb_buyer_confirm_delivery', array( __CLASS__, 'handle_buyer_confirm_delivery' ) );
 		// Remove NWP device rows when the WP user is removed (same user_id / email in wp_nwp_devices).
 		add_action( 'delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 3 );
 		add_action( 'wpmu_delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 1 );
@@ -622,7 +623,11 @@ class Cpm_Humanblockchain_Device_Registry {
 				);
 			}
 			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-				wp_send_json_error( array( 'message' => __( 'Smallstreet API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
+				wp_send_json_error(
+					array(
+						'message' => __( 'Smallstreet API is not configured for the buyer proof-of-delivery flow. Add the backorders API key under Settings → NWP Gateway (Membership & APIs), or use Register → Activate device for normal OTP without this check.', 'cpm-humanblockchain' ),
+					)
+				);
 			}
 			if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::user_exists_by_mobile( $mobile_raw ) ) {
 				wp_send_json_error(
@@ -781,5 +786,83 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		wp_send_json_success( $payload );
+	}
+
+	/**
+	 * Buyer confirms delivery on the backorders page using the seller’s PoD transaction code (HB-…).
+	 *
+	 * @since 1.0.0
+	 */
+	public static function handle_buyer_confirm_delivery() {
+		if ( ! check_ajax_referer( 'cpm_hb_backorders_confirm', 'nonce', false ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Session expired. Reload the page and try again.', 'cpm-humanblockchain' ) ),
+				403
+			);
+		}
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'cpm-humanblockchain' ) ) );
+		}
+
+		$code = isset( $_POST['transaction_code'] ) ? sanitize_text_field( wp_unslash( $_POST['transaction_code'] ) ) : '';
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', $code ) ) );
+
+		$order_ids_raw = isset( $_POST['order_ids'] ) ? wp_unslash( $_POST['order_ids'] ) : '[]';
+		$order_ids     = json_decode( $order_ids_raw, true );
+		if ( ! is_array( $order_ids ) ) {
+			$order_ids = array();
+		}
+		$order_ids = array_values( array_unique( array_map( 'intval', array_filter( $order_ids ) ) ) );
+
+		if ( $code === '' || empty( $order_ids ) ) {
+			wp_send_json_error( array( 'message' => __( 'Enter the transaction code and select at least one order.', 'cpm-humanblockchain' ) ) );
+		}
+		if ( ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid transaction code format.', 'cpm-humanblockchain' ) ) );
+		}
+
+		global $wpdb;
+		$seller_id = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = %s LIMIT 1",
+				'cpm_hb_last_seller_pod_tx_code',
+				$code
+			)
+		);
+		$seller_id = (int) $seller_id;
+		if ( $seller_id <= 0 ) {
+			wp_send_json_error( array( 'message' => __( 'That transaction code was not found. Ask the seller for the code shown after they verify their phone.', 'cpm-humanblockchain' ) ) );
+		}
+
+		$at      = (int) get_user_meta( $seller_id, 'cpm_hb_last_seller_pod_tx_at', true );
+		$max_age = (int) apply_filters( 'cpm_hb_seller_pod_transaction_code_ttl', 7 * DAY_IN_SECONDS );
+		if ( $at > 0 && $max_age > 0 && ( time() - $at ) > $max_age ) {
+			wp_send_json_error( array( 'message' => __( 'This transaction code has expired. Ask the seller to complete the delivery verification flow again.', 'cpm-humanblockchain' ) ) );
+		}
+
+		$buyer_id = (int) get_current_user_id();
+
+		/**
+		 * After buyer confirms with a valid seller transaction code (extend to call Smallstreet / Woo, etc.).
+		 *
+		 * @param int    $buyer_id  Current user.
+		 * @param int    $seller_id Matched seller user ID.
+		 * @param int[]  $order_ids Woo / Smallstreet order IDs from the table.
+		 * @param string $code      Transaction code.
+		 */
+		do_action( 'cpm_hb_buyer_confirmed_delivery', $buyer_id, $seller_id, $order_ids, $code );
+
+		update_user_meta( $buyer_id, 'cpm_hb_last_buyer_pod_confirm_at', time() );
+		update_user_meta(
+			$buyer_id,
+			'cpm_hb_last_buyer_pod_confirm_payload',
+			array(
+				'order_ids' => $order_ids,
+				'seller_id' => $seller_id,
+				'code'      => $code,
+			)
+		);
+
+		wp_send_json_success( array( 'message' => __( 'Delivery confirmation recorded.', 'cpm-humanblockchain' ) ) );
 	}
 }
