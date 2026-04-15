@@ -64,6 +64,20 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
+	 * Tracks whether #cpm-hb-backorders-root was already printed (shortcode, the_content, or footer).
+	 *
+	 * @var bool
+	 */
+	private $backorders_mount_printed = false;
+
+	/**
+	 * Prevent duplicate append if the_content runs more than once.
+	 *
+	 * @var bool
+	 */
+	private static $backorders_content_append_done = false;
+
+	/**
 	 * Outputs a container the backorders script fills (sessionStorage + server initialRows).
 	 * Place in the page editor as [cpm_hb_backorders] or in a template: echo do_shortcode( '[cpm_hb_backorders]' );
 	 *
@@ -71,7 +85,51 @@ class Cpm_Humanblockchain_Public {
 	 * @return string
 	 */
 	public function shortcode_backorders( $atts ) {
+		$this->backorders_mount_printed = true;
 		return '<div id="cpm-hb-backorders-root" class="cpm-hb-backorders-root"></div>';
+	}
+
+	/**
+	 * Append the backorders mount to the Backorders page content if the theme outputs the_content() and nothing added yet.
+	 *
+	 * @param string $content Post content.
+	 * @return string
+	 */
+	public function append_backorders_to_page_content( $content ) {
+		if ( is_admin() || ! is_singular() ) {
+			return $content;
+		}
+		if ( ! class_exists( 'Cpm_Humanblockchain_Device_Registry' ) || ! Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			return $content;
+		}
+		if ( self::$backorders_content_append_done ) {
+			return $content;
+		}
+		if ( false !== strpos( $content, 'cpm-hb-backorders-root' ) ) {
+			$this->backorders_mount_printed = true;
+			self::$backorders_content_append_done = true;
+			return $content;
+		}
+		$this->backorders_mount_printed = true;
+		self::$backorders_content_append_done = true;
+		return $content . "\n\n" . do_shortcode( '[cpm_hb_backorders]' );
+	}
+
+	/**
+	 * If the theme never called the_content() (custom template), print the mount once before </body>.
+	 */
+	public function maybe_print_backorders_mount_footer() {
+		if ( ! $this->should_enqueue_backorders_assets() ) {
+			return;
+		}
+		if ( ! class_exists( 'Cpm_Humanblockchain_Device_Registry' ) || ! Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			return;
+		}
+		if ( $this->backorders_mount_printed ) {
+			return;
+		}
+		$this->backorders_mount_printed = true;
+		echo '<div id="cpm-hb-backorders-root" class="cpm-hb-backorders-root cpm-hb-backorders-root--footer"></div>';
 	}
 
 	/**
@@ -437,17 +495,23 @@ class Cpm_Humanblockchain_Public {
 				$this->version,
 				true
 			);
+			$api_ok = class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
+				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured();
+
 			$backorders_localize = array(
 				'strings' => array(
-					'title'   => __( 'Your backorders', 'cpm-humanblockchain' ),
-					'empty'   => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
-					'noPhone' => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
+					'title'       => __( 'Your backorders', 'cpm-humanblockchain' ),
+					'empty'       => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+					'noPhone'     => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
+					'loginPrompt' => __( 'Log in to load your backorders from Smallstreet (same phone as your shop account).', 'cpm-humanblockchain' ),
+					'apiMissing'  => __( 'Backorders cannot load until the Smallstreet API key is saved under Settings → NWP Gateway in WordPress.', 'cpm-humanblockchain' ),
 				),
+				'loginUrl'        => wp_login_url( get_permalink() ),
+				'isVisitor'       => ! is_user_logged_in(),
+				'apiConfigured'   => $api_ok,
 			);
-			// Logged-in users: load Smallstreet backorders by resolved phone (device → user meta → Woo billing). sessionStorage still overrides after fresh OTP redirect.
-			if ( is_user_logged_in()
-				&& class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
-				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+			// Logged-in + API: load rows by phone (device → user meta → Woo billing). sessionStorage still overrides after OTP redirect.
+			if ( is_user_logged_in() && $api_ok ) {
 				$uid   = (int) get_current_user_id();
 				$phone = apply_filters(
 					'cpm_hb_phone_for_backorders_lookup',

@@ -44,14 +44,53 @@
 		return $box;
 	}
 
+	function renderVisitorPanel( S, loginUrl ) {
+		var title = S.title || 'Your backorders';
+		var $box = $( '<section class="cpm-hb-backorders-panel" />' );
+		$box.append( $( '<h2 class="cpm-hb-backorders-title" />' ).text( title ) );
+		var $p = $( '<p class="cpm-hb-backorders-empty" />' );
+		$p.append( document.createTextNode( ( S.loginPrompt || '' ) + ' ' ) );
+		if ( loginUrl ) {
+			$p.append(
+				$( '<a class="cpm-hb-backorders-login-link" />' )
+					.attr( 'href', loginUrl )
+					.text( 'Log in' )
+			);
+		}
+		$box.append( $p );
+		return $box;
+	}
+
+	function renderApiMissingPanel( S ) {
+		var $box = $( '<section class="cpm-hb-backorders-panel" />' );
+		$box.append( $( '<h2 class="cpm-hb-backorders-title" />' ).text( S.title || 'Your backorders' ) );
+		$box.append(
+			$( '<p class="cpm-hb-backorders-empty cpm-hb-backorders-api-missing" />' ).text( S.apiMissing || '' )
+		);
+		return $box;
+	}
+
 	$( function() {
+		var H = window.cpmHbBackorders;
+		if ( ! H ) {
+			return;
+		}
+
+		var $mount = $( '#cpm-hb-backorders-root' );
+		if ( ! $mount.length ) {
+			return;
+		}
+
+		var S = H.strings || {};
 		var data = null;
-		var raw;
+		var raw = null;
+
 		try {
 			raw = sessionStorage.getItem( 'cpm_hb_smallstreet_backorders' );
 		} catch ( err ) {
 			raw = null;
 		}
+
 		if ( raw ) {
 			try {
 				sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
@@ -64,35 +103,27 @@
 				data = null;
 			}
 		}
-		if ( data == null && window.cpmHbBackorders && Object.prototype.hasOwnProperty.call( window.cpmHbBackorders, 'initialRows' ) ) {
-			data = window.cpmHbBackorders.initialRows;
-		}
-		// Logged-in users always get server-side initialRows when Smallstreet is configured (array, possibly empty).
-		if ( data == null ) {
+
+		if ( data !== null ) {
+			$mount.append( renderBackorders( data ) );
 			return;
 		}
-		var $panel = renderBackorders( data );
-		var $mount = $( '#cpm-hb-backorders-root' );
-		if ( $mount.length ) {
-			$mount.append( $panel );
+
+		if ( H.isVisitor ) {
+			$mount.append( renderVisitorPanel( S, H.loginUrl || '' ) );
 			return;
 		}
-		var $target = $( '.wp-block-post-content' ).first();
-		if ( ! $target.length ) {
-			$target = $( 'main .entry-content' ).first();
+
+		if ( ! H.apiConfigured ) {
+			$mount.append( renderApiMissingPanel( S ) );
+			return;
 		}
-		if ( ! $target.length ) {
-			$target = $( '.entry-content' ).first();
+
+		if ( Object.prototype.hasOwnProperty.call( H, 'initialRows' ) ) {
+			$mount.append( renderBackorders( H.initialRows ) );
+			return;
 		}
-		if ( ! $target.length ) {
-			$target = $( 'article' ).first();
-		}
-		if ( ! $target.length ) {
-			$target = $( 'main' ).first();
-		}
-		if ( ! $target.length ) {
-			$target = $( 'body' );
-		}
-		$target.prepend( $panel );
+
+		$mount.append( renderBackorders( [] ) );
 	} );
 })( jQuery );
