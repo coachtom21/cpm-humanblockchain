@@ -243,7 +243,7 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
-	 * Bearer key for backorders-by-mobile; empty keeps previous; clear checkbox removes.
+	 * API key for backorders-by-mobile (X-Dongtrader-Backorders-Key); empty keeps previous; clear checkbox removes.
 	 *
 	 * @param mixed $value Raw value.
 	 * @return string
@@ -489,13 +489,13 @@ class Cpm_Humanblockchain_Admin {
 								placeholder="https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile"
 							/>
 							<p class="description">
-								<?php esc_html_e( 'POST JSON { "mobile": "5551234567" } with Bearer auth. Used for buyer + proof=scan PoD flow (local + Smallstreet check, then OTP).', 'cpm-humanblockchain' ); ?>
+								<?php esc_html_e( 'POST JSON { "mobile": "5551234567" } with header X-Dongtrader-Backorders-Key. Used for buyer + proof=scan PoD flow (local + Smallstreet check, then OTP).', 'cpm-humanblockchain' ); ?>
 							</p>
 						</td>
 					</tr>
 					<tr>
 						<th scope="row">
-							<label for="cpm_hb_smallstreet_backorders_api_key"><?php esc_html_e( 'Smallstreet — backorders API key (Bearer)', 'cpm-humanblockchain' ); ?></label>
+							<label for="cpm_hb_smallstreet_backorders_api_key"><?php esc_html_e( 'Smallstreet — backorders API key (X-Dongtrader-Backorders-Key)', 'cpm-humanblockchain' ); ?></label>
 						</th>
 						<td>
 							<input

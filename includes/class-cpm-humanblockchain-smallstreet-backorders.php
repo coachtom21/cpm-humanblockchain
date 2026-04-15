@@ -33,7 +33,8 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	}
 
 	/**
-	 * Default Bearer key (override or clear in Settings → NWP Gateway).
+	 * Default key (override or clear in Settings → NWP Gateway).
+	 * Remote endpoint expects header X-Dongtrader-Backorders-Key (see backorders-by-mobile).
 	 *
 	 * @return string
 	 */
@@ -42,7 +43,7 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	}
 
 	/**
-	 * Bearer token (stored in options; not exposed to frontend).
+	 * API key (stored in options; not exposed to frontend).
 	 *
 	 * @return string
 	 */
@@ -94,12 +95,14 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 		$args = apply_filters(
 			'cpm_hb_smallstreet_backorders_request_args',
 			array(
-				'timeout' => 20,
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $key,
+				'timeout'   => 20,
+				'headers'   => array(
+					'Content-Type'                  => 'application/json',
+					'X-Dongtrader-Backorders-Key'   => $key,
+					// Legacy / alternate auth some stacks accept.
+					'Authorization'                 => 'Bearer ' . $key,
 				),
-				'body'    => $body,
+				'body'      => $body,
 				'sslverify' => true,
 			),
 			$url,
@@ -123,7 +126,7 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	}
 
 	/**
-	 * True if Smallstreet recognizes this mobile for backorders (HTTP 2xx).
+	 * True if Smallstreet recognizes this mobile for backorders (HTTP 2xx and JSON success when present).
 	 *
 	 * @param string $mobile_raw Raw phone.
 	 * @return bool
@@ -133,6 +136,13 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 		if ( is_wp_error( $res ) ) {
 			return false;
 		}
-		return $res['code'] >= 200 && $res['code'] < 300;
+		if ( $res['code'] < 200 || $res['code'] >= 300 ) {
+			return false;
+		}
+		$data = $res['data'];
+		if ( is_array( $data ) && array_key_exists( 'success', $data ) ) {
+			return (bool) $data['success'];
+		}
+		return true;
 	}
 }
