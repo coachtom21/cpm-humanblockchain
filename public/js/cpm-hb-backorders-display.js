@@ -41,32 +41,43 @@
 	}
 
 	$( function() {
+		var data = null;
 		var raw;
 		try {
 			raw = sessionStorage.getItem( 'cpm_hb_smallstreet_backorders' );
 		} catch ( err ) {
+			raw = null;
+		}
+		if ( raw ) {
+			try {
+				sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
+			} catch ( err2 ) {
+				// ignore
+			}
+			try {
+				data = JSON.parse( raw );
+			} catch ( err3 ) {
+				data = null;
+			}
+		}
+		if ( data == null && window.cpmHbBackorders && Object.prototype.hasOwnProperty.call( window.cpmHbBackorders, 'initialRows' ) ) {
+			data = window.cpmHbBackorders.initialRows;
+		}
+		if ( data == null ) {
 			return;
 		}
-		if ( ! raw ) {
-			return;
+		var $target = $( '.wp-block-post-content' ).first();
+		if ( ! $target.length ) {
+			$target = $( 'main .entry-content' ).first();
 		}
-		try {
-			sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
-		} catch ( err2 ) {
-			// ignore
-		}
-		var data;
-		try {
-			data = JSON.parse( raw );
-		} catch ( err3 ) {
-			return;
-		}
-		var $target = $( 'main .entry-content' ).first();
 		if ( ! $target.length ) {
 			$target = $( '.entry-content' ).first();
 		}
 		if ( ! $target.length ) {
 			$target = $( 'article' ).first();
+		}
+		if ( ! $target.length ) {
+			$target = $( 'main' ).first();
 		}
 		if ( ! $target.length ) {
 			$target = $( 'body' );

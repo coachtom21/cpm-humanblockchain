@@ -388,15 +388,25 @@ class Cpm_Humanblockchain_Public {
 				$this->version,
 				true
 			);
+			$backorders_localize = array(
+				'strings' => array(
+					'title' => __( 'Your backorders', 'cpm-humanblockchain' ),
+					'empty' => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+				),
+			);
+			// Reload / direct visits: fetch from Smallstreet when we have a device phone (sessionStorage may be empty).
+			if ( is_user_logged_in()
+				&& class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
+				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+				$phone = Cpm_Humanblockchain_Device_Registry::get_phone_for_user( (int) get_current_user_id() );
+				if ( is_string( $phone ) && $phone !== '' ) {
+					$backorders_localize['initialRows'] = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
+				}
+			}
 			wp_localize_script(
 				$this->plugin_name . '-backorders-display',
 				'cpmHbBackorders',
-				array(
-					'strings' => array(
-						'title' => __( 'Your backorders', 'cpm-humanblockchain' ),
-						'empty' => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
-					),
-				)
+				$backorders_localize
 			);
 		}
 	}

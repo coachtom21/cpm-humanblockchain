@@ -154,21 +154,35 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
-	 * URL for the site “backorder” page (slug `backorder`, or /backorder/ fallback).
+	 * Page slugs that qualify as the public backorders landing page (first match wins for permalinks).
+	 *
+	 * @return string[]
+	 */
+	public static function get_backorder_page_slugs() {
+		return apply_filters(
+			'cpm_hb_backorder_page_slugs',
+			array( 'backorder', 'backorders' )
+		);
+	}
+
+	/**
+	 * URL for the site “backorder” page (slug `backorder` or `backorders`, or /backorder/ fallback).
 	 * Used after OTP verify from the landing PoD flow and for localized redirects.
 	 *
 	 * @return string
 	 */
 	public static function get_backorder_page_url() {
-		$page = get_page_by_path( 'backorder' );
-		if ( $page instanceof WP_Post ) {
-			return get_permalink( $page );
+		foreach ( self::get_backorder_page_slugs() as $slug ) {
+			$page = get_page_by_path( $slug );
+			if ( $page instanceof WP_Post ) {
+				return get_permalink( $page );
+			}
 		}
 		return home_url( '/backorder/' );
 	}
 
 	/**
-	 * Whether the current request is the backorder page (slug `backorder`).
+	 * Whether the current request is the backorder page.
 	 *
 	 * @return bool
 	 */
@@ -176,11 +190,16 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( ! is_singular() ) {
 			return false;
 		}
-		if ( function_exists( 'is_page' ) && is_page( 'backorder' ) ) {
-			return true;
+		$slugs = self::get_backorder_page_slugs();
+		if ( function_exists( 'is_page' ) ) {
+			foreach ( $slugs as $slug ) {
+				if ( is_page( $slug ) ) {
+					return true;
+				}
+			}
 		}
 		global $post;
-		return $post instanceof WP_Post && 'backorder' === $post->post_name;
+		return $post instanceof WP_Post && in_array( $post->post_name, $slugs, true );
 	}
 
 	/**
