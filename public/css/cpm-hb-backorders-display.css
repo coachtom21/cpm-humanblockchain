@@ -1,0 +1,50 @@
+/**
+ * Backorders payload shown after buyer + ?proof=scan OTP redirect.
+ */
+.cpm-hb-backorders-panel {
+	margin: 0 0 1.5rem;
+	padding: 1rem 1.25rem;
+	border-radius: 12px;
+	border: 1px solid rgba( 15, 23, 42, 0.12 );
+	background: rgba( 248, 250, 252, 0.95 );
+}
+
+.cpm-hb-backorders-title {
+	margin: 0 0 0.75rem;
+	font-size: 1.25rem;
+	font-weight: 700;
+}
+
+.cpm-hb-backorders-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.9rem;
+}
+
+.cpm-hb-backorders-table th,
+.cpm-hb-backorders-table td {
+	padding: 0.5rem 0.65rem;
+	border: 1px solid rgba( 15, 23, 42, 0.1 );
+	text-align: left;
+	vertical-align: top;
+}
+
+.cpm-hb-backorders-table thead th {
+	background: rgba( 15, 23, 42, 0.06 );
+	font-weight: 600;
+}
+
+.cpm-hb-backorders-json {
+	margin: 0;
+	overflow: auto;
+	max-height: 60vh;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.cpm-hb-backorders-empty {
+	margin: 0;
+	color: #64748b;
+}

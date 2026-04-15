@@ -139,6 +139,22 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Whether the current request is the backorder page (slug `backorder`).
+	 *
+	 * @return bool
+	 */
+	public static function is_backorder_page_view() {
+		if ( ! is_singular() ) {
+			return false;
+		}
+		if ( function_exists( 'is_page' ) && is_page( 'backorder' ) ) {
+			return true;
+		}
+		global $post;
+		return $post instanceof WP_Post && 'backorder' === $post->post_name;
+	}
+
+	/**
 	 * Build a unique username from an email local-part.
 	 *
 	 * @param string $email Email address.
@@ -160,76 +176,6 @@ class Cpm_Humanblockchain_Device_Registry {
 			$username = substr( $base, 0, max( 1, 60 - strlen( $suffix ) ) ) . $suffix;
 		}
 		return $username;
-	}
-
-	/**
-	 * Create wp_nwp_devices + WP user when buyer PoD scan flow: phone exists on Smallstreet but not locally.
-	 *
-	 * @param string $phone_e164 Normalized E.164.
-	 * @param string $mobile_raw Raw input for matching.
-	 * @return int|\WP_Error Device row id.
-	 */
-	private static function ensure_buyer_proof_scan_device( $phone_e164, $mobile_raw ) {
-		$existing = self::find_device_id_by_phone( $mobile_raw );
-		if ( $existing ) {
-			return (int) $existing;
-		}
-
-		$stable_email = 'buyer-pod-' . md5( $phone_e164 ) . '@placeholder.invalid';
-		$created_new  = false;
-		$wp_uid       = self::get_or_create_wp_user_for_device( $stable_email, $created_new );
-		if ( is_wp_error( $wp_uid ) ) {
-			return $wp_uid;
-		}
-
-		update_user_meta( (int) $wp_uid, 'phone', $phone_e164 );
-
-		global $wpdb;
-		$table_name = $wpdb->prefix . self::TABLE_NAME;
-
-		$ip_address = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : null;
-		$user_agent = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : null;
-
-		$hash = '';
-		if ( function_exists( 'random_bytes' ) ) {
-			try {
-				$hash = bin2hex( random_bytes( 32 ) );
-			} catch ( Exception $e ) {
-				$hash = wp_generate_password( 64, false, false );
-			}
-		} else {
-			$hash = wp_generate_password( 64, false, false );
-		}
-		$hash = substr( $hash, 0, 64 );
-
-		$inserted = $wpdb->insert(
-			$table_name,
-			array(
-				'user_id'                => (int) $wp_uid,
-				'device_hash'            => $hash,
-				'email'                  => $stable_email,
-				'phone'                  => $phone_e164,
-				'geo_lat'                => null,
-				'geo_lng'                => null,
-				'registered_at'          => current_time( 'mysql' ),
-				'registration_status'    => 'registered',
-				'referral_source_nwp_id' => null,
-				'qrtiger_vcard_link'     => null,
-				'ip_address'             => $ip_address,
-				'user_agent'             => $user_agent ? substr( $user_agent, 0, 512 ) : null,
-			),
-			array( '%d', '%s', '%s', '%s', '%f', '%f', '%s', '%s', '%d', '%s', '%s', '%s' )
-		);
-
-		if ( ! $inserted ) {
-			if ( $created_new ) {
-				require_once ABSPATH . 'wp-admin/includes/user.php';
-				wp_delete_user( (int) $wp_uid );
-			}
-			return new WP_Error( 'device_insert', __( 'Could not save device for verification.', 'cpm-humanblockchain' ) );
-		}
-
-		return (int) $wpdb->insert_id;
 	}
 
 	/**
@@ -596,29 +542,26 @@ class Cpm_Humanblockchain_Device_Registry {
 			if ( 'buyer' !== $landing_role ) {
 				wp_send_json_error( array( 'message' => __( 'Buyer role is required for this verification path.', 'cpm-humanblockchain' ) ) );
 			}
+			$proof_scan_url = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
+			if ( ! $proof_scan_url ) {
+				wp_send_json_error( array( 'message' => __( 'Open this flow from a link that includes ?proof=scan in the URL.', 'cpm-humanblockchain' ) ) );
+			}
 			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
 				wp_send_json_error( array( 'message' => __( 'Smallstreet backorders API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
 			}
-			$smallstreet_ok = Cpm_Humanblockchain_Smallstreet_Backorders::mobile_recognized_for_backorders( $mobile_raw );
-			if ( ! $local_device && ! $smallstreet_ok ) {
+			if ( ! $local_device ) {
 				wp_send_json_error(
 					array(
-						'message' => __( 'This number is not registered on this site or on Smallstreet.', 'cpm-humanblockchain' ),
+						'message' => __( 'This number is not registered in HumanBlockchain (wp_nwp_devices). Register your device first.', 'cpm-humanblockchain' ),
 					)
 				);
 			}
-			if ( $local_device && ! $smallstreet_ok ) {
+			if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::mobile_recognized_for_backorders( $mobile_raw ) ) {
 				wp_send_json_error(
 					array(
-						'message' => __( 'This number is not recognized on Smallstreet for backorders.', 'cpm-humanblockchain' ),
+						'message' => __( 'This number was not found on Smallstreet for backorders.', 'cpm-humanblockchain' ),
 					)
 				);
-			}
-			if ( ! $local_device && $smallstreet_ok ) {
-				$ensured = self::ensure_buyer_proof_scan_device( $phone_e164, $mobile_raw );
-				if ( is_wp_error( $ensured ) ) {
-					wp_send_json_error( array( 'message' => $ensured->get_error_message() ) );
-				}
 			}
 		} elseif ( ! $local_device ) {
 			wp_send_json_error( array( 'message' => __( 'This phone number is not registered. Please register your device first.', 'cpm-humanblockchain' ) ) );
@@ -718,8 +661,9 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
 		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$proof_scan_url    = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
 		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
-		$redirect_backorders = $landing_backorder && $buyer_proof_scan && 'buyer' === $landing_role;
+		$redirect_backorders = $landing_backorder && $buyer_proof_scan && $proof_scan_url && 'buyer' === $landing_role;
 
 		if ( $landing_backorder ) {
 			// Backorders only for buyer + ?proof=scan flow (client sends cpm_hb_buyer_proof_scan + role=buyer); seller → home.
@@ -735,11 +679,11 @@ class Cpm_Humanblockchain_Device_Registry {
 			$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 		}
 
-		$smallstreet_backorders = null;
+		$smallstreet_backorders = array();
 		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
 			$ss_res = Cpm_Humanblockchain_Smallstreet_Backorders::request_backorders_by_mobile( $mobile_raw );
 			if ( ! is_wp_error( $ss_res ) && isset( $ss_res['data'] ) ) {
-				$smallstreet_backorders = $ss_res['data'];
+				$smallstreet_backorders = is_array( $ss_res['data'] ) ? $ss_res['data'] : array( 'value' => $ss_res['data'] );
 			}
 		}
 
@@ -748,7 +692,7 @@ class Cpm_Humanblockchain_Device_Registry {
 			'redirect_url'       => $redirect ? esc_url_raw( $redirect ) : '',
 			'show_discord_modal' => (bool) $show_discord,
 		);
-		if ( null !== $smallstreet_backorders ) {
+		if ( $redirect_backorders ) {
 			$payload['smallstreet_backorders'] = $smallstreet_backorders;
 		}
 

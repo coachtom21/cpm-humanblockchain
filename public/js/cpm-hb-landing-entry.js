@@ -139,6 +139,9 @@
 				}
 				return;
 			}
+			var role = typeof opts.landingRole === 'string' && opts.landingRole !== ''
+				? opts.landingRole
+				: ( opts.buyerProofScan ? 'buyer' : 'seller' );
 			// Fallback if AJAX omits redirect_url: backorders only for ?proof=scan buyer flow; else home.
 			if ( opts.buyerProofScan ) {
 				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
@@ -147,7 +150,7 @@
 			}
 			H.phoneModalFromLanding = true;
 			H.buyerProofScan = !! opts.buyerProofScan;
-			H.landingRole = opts.buyerProofScan ? 'buyer' : 'seller';
+			H.landingRole = role;
 
 			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -182,16 +185,11 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
-			if ( role === 'buyer' && urlHasProofScan() ) {
-				showPhoneOtpModal( { buyerProofScan: true } );
-				return;
-			}
-			if ( role === 'buyer' ) {
-				var H = window.cpmHbLanding || {};
-				window.location.href = H.proofOfDeliveryUrl || '/';
-				return;
-			}
-			showPhoneOtpModal();
+			// Always show “Your phone number” → Send OTP → verify (buyer + ?proof=scan uses Smallstreet + backorders redirect).
+			showPhoneOtpModal( {
+				landingRole: role,
+				buyerProofScan: role === 'buyer' && urlHasProofScan()
+			} );
 		} );
 
 		$( '#cpm-hb-role-close' ).on( 'click', function() {

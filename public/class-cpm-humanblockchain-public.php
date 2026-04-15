@@ -228,6 +228,16 @@ class Cpm_Humanblockchain_Public {
 			'all'
 		);
 
+		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			wp_enqueue_style(
+				$this->plugin_name . '-backorders-display',
+				plugin_dir_url( __FILE__ ) . 'css/cpm-hb-backorders-display.css',
+				array(),
+				$this->version,
+				'all'
+			);
+		}
+
 	}
 
 	/**
@@ -348,6 +358,26 @@ class Cpm_Humanblockchain_Public {
 			'homeUrl'       => home_url( '/' ),
 			'discordInviteUrl' => esc_url_raw( $discord_invite ),
 		) );
+
+		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			wp_enqueue_script(
+				$this->plugin_name . '-backorders-display',
+				plugin_dir_url( __FILE__ ) . 'js/cpm-hb-backorders-display.js',
+				array( 'jquery' ),
+				$this->version,
+				true
+			);
+			wp_localize_script(
+				$this->plugin_name . '-backorders-display',
+				'cpmHbBackorders',
+				array(
+					'strings' => array(
+						'title' => __( 'Your backorders', 'cpm-humanblockchain' ),
+						'empty' => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+					),
+				)
+			);
+		}
 	}
 
 }

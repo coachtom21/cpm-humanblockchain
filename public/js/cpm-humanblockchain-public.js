@@ -219,7 +219,7 @@
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				formData += '&cpm_hb_buyer_proof_scan=1';
+				formData += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
@@ -265,7 +265,7 @@
 				payload += '&cpm_hb_verify_redirect=1';
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				payload += '&cpm_hb_buyer_proof_scan=1';
+				payload += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
@@ -275,6 +275,16 @@
 				.done( function( res ) {
 					if ( res.success && res.data ) {
 						if ( res.data.redirect_url ) {
+							if ( res.data.smallstreet_backorders != null ) {
+								try {
+									sessionStorage.setItem(
+										'cpm_hb_smallstreet_backorders',
+										JSON.stringify( res.data.smallstreet_backorders )
+									);
+								} catch ( err ) {
+									// ignore
+								}
+							}
 							if ( window.cpmHbLanding ) {
 								window.cpmHbLanding.buyerProofScan = false;
 								window.cpmHbLanding.landingRole = '';
