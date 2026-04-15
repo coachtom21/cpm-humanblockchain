@@ -7,7 +7,7 @@
  * 1) Twilio Verify API — optional Verify Service SID (VA…) via CPM_TWILIO_VERIFY_SERVICE_SID or
  *    cpm_nwp_twilio_verify_service_sid (matches Smallstreet / cpm-twilio). No "From" number required.
  * 2) Classic Messages API — wp_options cpm_nwp_twilio_sid, cpm_nwp_twilio_token, cpm_nwp_twilio_from
- *    (or CPM_NWP_TWILIO_* constants) plus local OTP in transients.
+ *    (or CPM_NWP_TWILIO_* / CPM_TWILIO_ACCOUNT_SID + CPM_TWILIO_AUTH_TOKEN aliases) plus local OTP in transients.
  *
  * @package    Cpm_Humanblockchain
  * @subpackage Cpm_Humanblockchain/includes
@@ -263,19 +263,53 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * First non-empty constant wins, else wp_options. Empty defines in wp-config no longer override the database.
+	 * Aliases match common Smallstreet / cpm-twilio naming (CPM_TWILIO_ACCOUNT_SID, CPM_TWILIO_AUTH_TOKEN).
+	 *
+	 * @param string   $option_name Option key.
+	 * @param string[] $constant_names In priority order.
+	 * @return string Raw value (trimmed in get_credentials).
+	 */
+	private static function pick_twilio_constant_or_option( $option_name, array $constant_names ) {
+		foreach ( $constant_names as $name ) {
+			if ( ! defined( $name ) ) {
+				continue;
+			}
+			$raw = constant( $name );
+			if ( ! is_string( $raw ) && ! is_numeric( $raw ) ) {
+				continue;
+			}
+			if ( self::trim_twilio_secret( (string) $raw ) !== '' ) {
+				return (string) $raw;
+			}
+		}
+		$opt = get_option( $option_name, '' );
+		return is_string( $opt ) ? $opt : '';
+	}
+
+	/**
 	 * Get Twilio credentials (from constants or options).
 	 *
 	 * @return array{ sid: string, token: string, from: string }
 	 */
 	private static function get_credentials() {
-		$sid   = defined( 'CPM_NWP_TWILIO_SID' ) ? CPM_NWP_TWILIO_SID : get_option( 'cpm_nwp_twilio_sid', '' );
-		$token = defined( 'CPM_NWP_TWILIO_TOKEN' ) ? CPM_NWP_TWILIO_TOKEN : get_option( 'cpm_nwp_twilio_token', '' );
-		$from  = defined( 'CPM_NWP_TWILIO_FROM' ) ? CPM_NWP_TWILIO_FROM : get_option( 'cpm_nwp_twilio_from', '' );
+		$sid = self::pick_twilio_constant_or_option(
+			'cpm_nwp_twilio_sid',
+			array( 'CPM_NWP_TWILIO_SID', 'CPM_TWILIO_ACCOUNT_SID' )
+		);
+		$token = self::pick_twilio_constant_or_option(
+			'cpm_nwp_twilio_token',
+			array( 'CPM_NWP_TWILIO_TOKEN', 'CPM_TWILIO_AUTH_TOKEN' )
+		);
+		$from = self::pick_twilio_constant_or_option(
+			'cpm_nwp_twilio_from',
+			array( 'CPM_NWP_TWILIO_FROM', 'CPM_TWILIO_FROM' )
+		);
 
 		$creds = array(
-			'sid'   => self::trim_twilio_secret( is_string( $sid ) ? $sid : '' ),
-			'token' => self::trim_twilio_secret( is_string( $token ) ? $token : '' ),
-			'from'  => self::trim_twilio_secret( is_string( $from ) ? $from : '' ),
+			'sid'   => self::trim_twilio_secret( $sid ),
+			'token' => self::trim_twilio_secret( $token ),
+			'from'  => self::trim_twilio_secret( $from ),
 		);
 
 		/**
