@@ -390,17 +390,26 @@ class Cpm_Humanblockchain_Public {
 			);
 			$backorders_localize = array(
 				'strings' => array(
-					'title' => __( 'Your backorders', 'cpm-humanblockchain' ),
-					'empty' => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+					'title'   => __( 'Your backorders', 'cpm-humanblockchain' ),
+					'empty'   => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+					'noPhone' => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
 				),
 			);
-			// Reload / direct visits: fetch from Smallstreet when we have a device phone (sessionStorage may be empty).
+			// Logged-in users: load Smallstreet backorders by resolved phone (device → user meta → Woo billing). sessionStorage still overrides after fresh OTP redirect.
 			if ( is_user_logged_in()
 				&& class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
 				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-				$phone = Cpm_Humanblockchain_Device_Registry::get_phone_for_user( (int) get_current_user_id() );
+				$uid   = (int) get_current_user_id();
+				$phone = apply_filters(
+					'cpm_hb_phone_for_backorders_lookup',
+					Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid ),
+					$uid
+				);
 				if ( is_string( $phone ) && $phone !== '' ) {
 					$backorders_localize['initialRows'] = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
+				} else {
+					$backorders_localize['initialRows'] = array();
+					$backorders_localize['showNoPhone'] = true;
 				}
 			}
 			wp_localize_script(

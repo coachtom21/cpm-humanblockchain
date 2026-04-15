@@ -8,7 +8,11 @@
 		$box.append( $( '<h2 class="cpm-hb-backorders-title" />' ).text( title ) );
 
 		if ( Array.isArray( data ) && data.length === 0 ) {
-			$box.append( $( '<p class="cpm-hb-backorders-empty" />' ).text( S.empty || '' ) );
+			var emptyText = S.empty || '';
+			if ( window.cpmHbBackorders && window.cpmHbBackorders.showNoPhone && S.noPhone ) {
+				emptyText = S.noPhone;
+			}
+			$box.append( $( '<p class="cpm-hb-backorders-empty" />' ).text( emptyText ) );
 			return $box;
 		}
 		if ( Array.isArray( data ) && data.length && typeof data[0] === 'object' && data[0] !== null ) {
@@ -63,6 +67,7 @@
 		if ( data == null && window.cpmHbBackorders && Object.prototype.hasOwnProperty.call( window.cpmHbBackorders, 'initialRows' ) ) {
 			data = window.cpmHbBackorders.initialRows;
 		}
+		// Logged-in users always get server-side initialRows when Smallstreet is configured (array, possibly empty).
 		if ( data == null ) {
 			return;
 		}

@@ -150,7 +150,14 @@ class Cpm_Humanblockchain_Device_Registry {
 			return $phone;
 		}
 		$meta = get_user_meta( $user_id, 'phone', true );
-		return is_string( $meta ) ? $meta : '';
+		if ( is_string( $meta ) && trim( $meta ) !== '' ) {
+			return $meta;
+		}
+		$billing = get_user_meta( $user_id, 'billing_phone', true );
+		if ( is_string( $billing ) && trim( $billing ) !== '' ) {
+			return $billing;
+		}
+		return '';
 	}
 
 	/**
