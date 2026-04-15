@@ -518,7 +518,7 @@ class Cpm_Humanblockchain_Public {
 				'confirmAction'        => 'cpm_hb_buyer_confirm_delivery',
 				'confirmNonce'         => wp_create_nonce( 'cpm_hb_backorders_confirm' ),
 			);
-			// Logged-in + API: load rows by phone (device → user meta → Woo billing). sessionStorage still overrides after OTP redirect.
+			// Logged-in + API: load rows by phone; persist successful responses in user meta so refresh still shows data if API is empty.
 			if ( is_user_logged_in() && $api_ok ) {
 				$uid   = (int) get_current_user_id();
 				$phone = apply_filters(
@@ -526,10 +526,19 @@ class Cpm_Humanblockchain_Public {
 					Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid ),
 					$uid
 				);
+				$rows = array();
 				if ( is_string( $phone ) && $phone !== '' ) {
-					$backorders_localize['initialRows'] = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
-				} else {
-					$backorders_localize['initialRows'] = array();
+					$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
+					if ( ! empty( $rows ) ) {
+						Cpm_Humanblockchain_Smallstreet_Backorders::save_user_backorders_cache( $uid, $rows );
+					} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid ) ) {
+						$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid );
+					}
+				} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid ) ) {
+					$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid );
+				}
+				$backorders_localize['initialRows'] = is_array( $rows ) ? $rows : array();
+				if ( ( ! is_string( $phone ) || $phone === '' ) && empty( $backorders_localize['initialRows'] ) ) {
 					$backorders_localize['showNoPhone'] = true;
 				}
 			}

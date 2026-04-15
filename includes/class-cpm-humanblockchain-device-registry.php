@@ -770,6 +770,9 @@ class Cpm_Humanblockchain_Device_Registry {
 		$smallstreet_backorders = array();
 		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
 			$smallstreet_backorders = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $mobile_raw );
+			if ( ! empty( $smallstreet_backorders ) && $wp_uid > 0 ) {
+				Cpm_Humanblockchain_Smallstreet_Backorders::save_user_backorders_cache( $wp_uid, $smallstreet_backorders );
+			}
 		}
 
 		$payload = array(

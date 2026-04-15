@@ -21,6 +21,42 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	/** User lookup by mobile (buyer PoD pre-check). */
 	const OPTION_USER_BY_MOBILE_URL = 'cpm_hb_smallstreet_user_by_mobile_url';
 
+	/** Logged-in user meta: last backorders table rows (refresh-safe if API is empty). */
+	const USER_META_BACKORDERS_CACHE = 'cpm_hb_cached_backorders';
+
+	/** Unix time when {@see USER_META_BACKORDERS_CACHE} was saved. */
+	const USER_META_BACKORDERS_CACHE_AT = 'cpm_hb_cached_backorders_at';
+
+	/**
+	 * Store backorders on this site for the user (used after OTP verify and after successful API fetch).
+	 *
+	 * @param int   $user_id WP user ID.
+	 * @param array $rows    List of order row arrays.
+	 */
+	public static function save_user_backorders_cache( $user_id, array $rows ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 || empty( $rows ) ) {
+			return;
+		}
+		update_user_meta( $user_id, self::USER_META_BACKORDERS_CACHE, $rows );
+		update_user_meta( $user_id, self::USER_META_BACKORDERS_CACHE_AT, time() );
+	}
+
+	/**
+	 * Cached rows from the last successful fetch or OTP redirect.
+	 *
+	 * @param int $user_id WP user ID.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function get_user_backorders_cache( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return array();
+		}
+		$v = get_user_meta( $user_id, self::USER_META_BACKORDERS_CACHE, true );
+		return is_array( $v ) ? $v : array();
+	}
+
 	/**
 	 * Endpoint URL.
 	 *
