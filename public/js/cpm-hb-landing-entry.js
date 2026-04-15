@@ -139,9 +139,15 @@
 				}
 				return;
 			}
-			H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
+			// Fallback if AJAX omits redirect_url: backorders only for ?proof=scan buyer flow; else home.
+			if ( opts.buyerProofScan ) {
+				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
+			} else {
+				H.pendingOtpRedirect = H.homeUrl || '/';
+			}
 			H.phoneModalFromLanding = true;
 			H.buyerProofScan = !! opts.buyerProofScan;
+			H.landingRole = opts.buyerProofScan ? 'buyer' : 'seller';
 
 			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );

@@ -108,6 +108,7 @@
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
 				window.cpmHbLanding.buyerProofScan = false;
+				window.cpmHbLanding.landingRole = '';
 				return;
 			}
 			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -135,6 +136,7 @@
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
 				window.cpmHbLanding.buyerProofScan = false;
+				window.cpmHbLanding.landingRole = '';
 				return;
 			}
 			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -180,6 +182,7 @@
 						window.cpmHbLanding.phoneModalFromLanding = false;
 						window.cpmHbLanding.pendingOtpRedirect = '';
 						window.cpmHbLanding.buyerProofScan = false;
+						window.cpmHbLanding.landingRole = '';
 					} else {
 						$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 						clearInlineFeedback( $activateFeedback );
@@ -217,6 +220,9 @@
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
 				formData += '&cpm_hb_buyer_proof_scan=1';
+			}
+			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
+				formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
 			}
 			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
 			$.post( ajaxUrl, formData )
@@ -261,6 +267,9 @@
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
 				payload += '&cpm_hb_buyer_proof_scan=1';
 			}
+			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
+				payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
+			}
 			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
 			$.post( ajaxUrl, payload )
 				.done( function( res ) {
@@ -268,6 +277,7 @@
 						if ( res.data.redirect_url ) {
 							if ( window.cpmHbLanding ) {
 								window.cpmHbLanding.buyerProofScan = false;
+								window.cpmHbLanding.landingRole = '';
 							}
 							window.location.href = res.data.redirect_url;
 							return;
@@ -277,6 +287,7 @@
 							window.cpmHbLanding.pendingOtpRedirect = '';
 							window.cpmHbLanding.phoneModalFromLanding = false;
 							window.cpmHbLanding.buyerProofScan = false;
+							window.cpmHbLanding.landingRole = '';
 							window.location.href = postUrl;
 							return;
 						}

@@ -589,9 +589,13 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		$buyer_proof_scan = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$landing_role     = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
 		$local_device     = self::find_device_id_by_phone( $mobile_raw );
 
 		if ( $buyer_proof_scan ) {
+			if ( 'buyer' !== $landing_role ) {
+				wp_send_json_error( array( 'message' => __( 'Buyer role is required for this verification path.', 'cpm-humanblockchain' ) ) );
+			}
 			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
 				wp_send_json_error( array( 'message' => __( 'Smallstreet backorders API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
 			}
@@ -714,9 +718,16 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
 		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
+		$redirect_backorders = $landing_backorder && $buyer_proof_scan && 'buyer' === $landing_role;
 
 		if ( $landing_backorder ) {
-			$redirect     = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
+			// Backorders only for buyer + ?proof=scan flow (client sends cpm_hb_buyer_proof_scan + role=buyer); seller → home.
+			if ( $redirect_backorders ) {
+				$redirect = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
+			} else {
+				$redirect = apply_filters( 'cpm_hb_landing_verify_home_url', home_url( '/' ) );
+			}
 			$show_discord = false;
 		} else {
 			// Default: no immediate redirect; show Discord invite modal. Set redirect URL via filter to skip modal.
@@ -725,7 +736,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		$smallstreet_backorders = null;
-		if ( $landing_backorder && $buyer_proof_scan && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
 			$ss_res = Cpm_Humanblockchain_Smallstreet_Backorders::request_backorders_by_mobile( $mobile_raw );
 			if ( ! is_wp_error( $ss_res ) && isset( $ss_res['data'] ) ) {
 				$smallstreet_backorders = $ss_res['data'];
