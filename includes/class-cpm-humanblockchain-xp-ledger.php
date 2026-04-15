@@ -165,6 +165,58 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * WP user id + email for Smallstreet XP ledger (both must refer to the same user when both are sent).
+	 *
+	 * @param int $wp_user_id WordPress user ID.
+	 * @return array{ user_id: int, email: string }
+	 */
+	private static function user_identity_for_xp_api( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+		$email      = '';
+		if ( $wp_user_id > 0 ) {
+			$user = get_userdata( $wp_user_id );
+			if ( $user && ! empty( $user->user_email ) ) {
+				$email = sanitize_email( $user->user_email );
+			}
+		}
+		return array(
+			'user_id' => $wp_user_id,
+			'email'   => is_string( $email ) ? $email : '',
+		);
+	}
+
+	/**
+	 * POST body: scan_type, entry, and user_id and/or email (per cpm-dongtrader xp-ledger/scan).
+	 *
+	 * @param int               $wp_user_id WordPress user ID.
+	 * @param string            $scan_type    seller_scan|buyer_scan.
+	 * @param array<string,mixed> $entry      entry object.
+	 * @return array<string,mixed>
+	 */
+	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry ) {
+		$identity = self::user_identity_for_xp_api( $wp_user_id );
+		$payload  = array(
+			'scan_type' => $scan_type,
+			'entry'     => $entry,
+		);
+		if ( $identity['user_id'] > 0 ) {
+			$payload['user_id'] = $identity['user_id'];
+		}
+		if ( $identity['email'] !== '' ) {
+			$payload['email'] = $identity['email'];
+		}
+		/**
+		 * Full JSON body for POST /xp-ledger/scan (before wp_json_encode).
+		 *
+		 * @param array<string,mixed> $payload    Keys: scan_type, entry, optional user_id, optional email.
+		 * @param int                 $wp_user_id WordPress user ID.
+		 * @param string              $scan_type  seller_scan|buyer_scan.
+		 * @param array<string,mixed> $entry      Entry object.
+		 */
+		return apply_filters( 'cpm_hb_xp_ledger_scan_payload', $payload, $wp_user_id, $scan_type, $entry );
+	}
+
+	/**
 	 * After seller + ?proof=scan OTP: save row and sync to Smallstreet.
 	 *
 	 * @param int    $wp_user_id        WordPress user ID.
@@ -230,11 +282,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return;
 		}
 
-		$payload = array(
-			'user_id'   => $wp_user_id,
-			'scan_type' => 'seller_scan',
-			'entry'     => $entry,
-		);
+		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry );
 
 		$url  = self::get_scan_endpoint_url();
 		$body = wp_json_encode( $payload );
