@@ -498,6 +498,8 @@ class Cpm_Humanblockchain_Public {
 					'noPhone'     => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
 					'loginPrompt' => __( 'Log in to load your backorders from Smallstreet (same phone as your shop account).', 'cpm-humanblockchain' ),
 					'apiMissing'  => __( 'Backorders cannot load until the Smallstreet API key is saved under Settings → NWP Gateway in WordPress.', 'cpm-humanblockchain' ),
+					'selectAll'   => __( 'Select all rows', 'cpm-humanblockchain' ),
+					'selectRow'   => __( 'Select order %s', 'cpm-humanblockchain' ),
 				),
 				'loginUrl'        => wp_login_url( get_permalink() ),
 				'isVisitor'       => ! is_user_logged_in(),

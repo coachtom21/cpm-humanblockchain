@@ -17,15 +17,33 @@
 		}
 		if ( Array.isArray( data ) && data.length && typeof data[0] === 'object' && data[0] !== null ) {
 			var keys = Object.keys( data[0] );
+			var selectAllLbl = S.selectAll || '';
+			var selectRowLbl = S.selectRow || '';
 			var $table = $( '<table class="cpm-hb-backorders-table" />' );
 			var $thead = $( '<thead><tr /></tr></thead>' );
 			var $hr = $thead.find( 'tr' );
+			var $thSelect = $( '<th scope="col" class="cpm-hb-backorders-col-select" />' );
+			var $cbAll = $( '<input type="checkbox" class="cpm-hb-backorders-select-all" />' );
+			if ( selectAllLbl ) {
+				$cbAll.attr( 'aria-label', selectAllLbl );
+				$cbAll.attr( 'title', selectAllLbl );
+			}
+			$thSelect.append( $cbAll );
+			$hr.append( $thSelect );
 			keys.forEach( function( k ) {
 				$hr.append( $( '<th scope="col" />' ).text( k ) );
 			} );
 			var $tbody = $( '<tbody />' );
-			data.forEach( function( row ) {
+			data.forEach( function( row, rowIdx ) {
 				var $tr = $( '<tr />' );
+				var $cb = $( '<input type="checkbox" class="cpm-hb-backorders-row-select" />' );
+				if ( selectRowLbl ) {
+					var rowLabel = selectRowLbl.indexOf( '%' ) !== -1
+						? selectRowLbl.replace( /%s/g, String( rowIdx + 1 ) )
+						: selectRowLbl + ' ' + String( rowIdx + 1 );
+					$cb.attr( 'aria-label', rowLabel );
+				}
+				$tr.append( $( '<td class="cpm-hb-backorders-col-select" />' ).append( $cb ) );
 				keys.forEach( function( k ) {
 					var v = row[ k ];
 					$tr.append( $( '<td />' ).text( v !== null && v !== undefined ? String( v ) : '' ) );
@@ -33,6 +51,20 @@
 				$tbody.append( $tr );
 			} );
 			$table.append( $thead ).append( $tbody );
+
+			$table.on( 'change', '.cpm-hb-backorders-select-all', function() {
+				var on = $( this ).prop( 'checked' );
+				$tbody.find( '.cpm-hb-backorders-row-select' ).prop( 'checked', on );
+				$( this ).prop( 'indeterminate', false );
+			} );
+			$table.on( 'change', '.cpm-hb-backorders-row-select', function() {
+				var $rows = $tbody.find( '.cpm-hb-backorders-row-select' );
+				var total = $rows.length;
+				var n = $rows.filter( ':checked' ).length;
+				$cbAll.prop( 'checked', total > 0 && n === total );
+				$cbAll.prop( 'indeterminate', n > 0 && n < total );
+			} );
+
 			$box.append( $table );
 		} else if ( data && typeof data === 'object' ) {
 			var $pre = $( '<pre class="cpm-hb-backorders-json" />' );

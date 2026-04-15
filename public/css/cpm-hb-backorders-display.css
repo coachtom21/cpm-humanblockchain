@@ -38,6 +38,18 @@
 	font-weight: 600;
 }
 
+.cpm-hb-backorders-col-select {
+	width: 2.25rem;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.cpm-hb-backorders-col-select input[type='checkbox'] {
+	margin: 0;
+	vertical-align: middle;
+	cursor: pointer;
+}
+
 .cpm-hb-backorders-json {
 	margin: 0;
 	overflow: auto;
