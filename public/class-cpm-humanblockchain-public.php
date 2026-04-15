@@ -188,6 +188,8 @@ class Cpm_Humanblockchain_Public {
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-activate-device-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-verify-otp-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-nwp-discord-invite-modal.php';
+		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-seller-pod-intro-modal.php';
+		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-seller-scan-success-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-membership-modal.php';
 		include plugin_dir_path( __FILE__ ) . 'partials/cpm-hb-membership-contact-modal.php';
 	}

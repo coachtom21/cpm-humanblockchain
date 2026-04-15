@@ -8,6 +8,28 @@
 		var $activateModal = $( '#cpm-nwp-activate-modal' );
 		var $verifyModal = $( '#cpm-nwp-verify-otp-modal' );
 		var $discordModal = $( '#cpm-nwp-discord-modal' );
+		var $sellerScanSuccessModal = $( '#cpm-hb-seller-scan-success-modal' );
+
+		function closeSellerScanSuccessModal() {
+			if ( ! $sellerScanSuccessModal.length ) {
+				return;
+			}
+			$sellerScanSuccessModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$( '#cpm-hb-seller-tx-copy-feedback' ).empty();
+			if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden)' ).length === 0 ) {
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			}
+		}
+
+		function showSellerScanSuccessModal( transactionCode ) {
+			if ( ! $sellerScanSuccessModal.length ) {
+				return;
+			}
+			var code = transactionCode || '';
+			$( '#cpm-hb-seller-tx-code-display' ).text( code );
+			$sellerScanSuccessModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+		}
 
 		function closeDiscordModalAndRefresh() {
 			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -108,6 +130,7 @@
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
 				window.cpmHbLanding.buyerProofScan = false;
+				window.cpmHbLanding.podProofScan = false;
 				window.cpmHbLanding.landingRole = '';
 				return;
 			}
@@ -136,6 +159,7 @@
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
 				window.cpmHbLanding.buyerProofScan = false;
+				window.cpmHbLanding.podProofScan = false;
 				window.cpmHbLanding.landingRole = '';
 				return;
 			}
@@ -156,8 +180,50 @@
 			closeDiscordModalAndRefresh();
 		} );
 
+		function finishSellerScanSuccess() {
+			window.location.reload();
+		}
+
+		$( document ).on( 'click', '#cpm-hb-seller-tx-copy', function() {
+			var text = ( $( '#cpm-hb-seller-tx-code-display' ).text() || '' ).trim();
+			var $fb = $( '#cpm-hb-seller-tx-copy-feedback' );
+			function showCopied() {
+				$fb.text( 'Copied!' );
+			}
+			function copyFallback() {
+				var ta = document.createElement( 'textarea' );
+				ta.value = text;
+				ta.setAttribute( 'readonly', '' );
+				ta.style.position = 'fixed';
+				ta.style.left = '-9999px';
+				document.body.appendChild( ta );
+				ta.select();
+				try {
+					if ( document.execCommand( 'copy' ) ) {
+						showCopied();
+					}
+				} catch ( err ) {
+					$fb.empty();
+				}
+				document.body.removeChild( ta );
+			}
+			if ( navigator.clipboard && navigator.clipboard.writeText ) {
+				navigator.clipboard.writeText( text ).then( showCopied ).catch( copyFallback );
+			} else {
+				copyFallback();
+			}
+		} );
+
+		$( document ).on( 'click', '#cpm-hb-seller-scan-done, #cpm-hb-seller-scan-success-close, #cpm-hb-seller-scan-success-modal .cpm-nwp-modal-overlay', function() {
+			finishSellerScanSuccess();
+		} );
+
 		$( document ).on( 'keydown', function( e ) {
 			if ( e.key !== 'Escape' ) {
+				return;
+			}
+			if ( $sellerScanSuccessModal.length && ! $sellerScanSuccessModal.hasClass( 'cpm-nwp-modal--hidden' ) ) {
+				finishSellerScanSuccess();
 				return;
 			}
 			if ( ! $discordModal.hasClass( 'cpm-nwp-modal--hidden' ) ) {
@@ -182,6 +248,7 @@
 						window.cpmHbLanding.phoneModalFromLanding = false;
 						window.cpmHbLanding.pendingOtpRedirect = '';
 						window.cpmHbLanding.buyerProofScan = false;
+						window.cpmHbLanding.podProofScan = false;
 						window.cpmHbLanding.landingRole = '';
 					} else {
 						$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
@@ -219,7 +286,10 @@
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				formData += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
+				formData += '&cpm_hb_buyer_proof_scan=1';
+			}
+			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
+				formData += '&cpm_hb_proof_scan=1';
 				if ( window.cpmHbLanding.proofScanNonce ) {
 					formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
 				}
@@ -268,7 +338,10 @@
 				payload += '&cpm_hb_verify_redirect=1';
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				payload += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
+				payload += '&cpm_hb_buyer_proof_scan=1';
+			}
+			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
+				payload += '&cpm_hb_proof_scan=1';
 				if ( window.cpmHbLanding.proofScanNonce ) {
 					payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
 				}
@@ -293,9 +366,23 @@
 							}
 							if ( window.cpmHbLanding ) {
 								window.cpmHbLanding.buyerProofScan = false;
+								window.cpmHbLanding.podProofScan = false;
 								window.cpmHbLanding.landingRole = '';
 							}
 							window.location.href = res.data.redirect_url;
+							return;
+						}
+						if ( res.data.seller_scan_success && res.data.seller_transaction_code ) {
+							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+							clearInlineFeedback( $verifyFeedback );
+							if ( window.cpmHbLanding ) {
+								window.cpmHbLanding.buyerProofScan = false;
+								window.cpmHbLanding.podProofScan = false;
+								window.cpmHbLanding.phoneModalFromLanding = false;
+								window.cpmHbLanding.pendingOtpRedirect = '';
+								window.cpmHbLanding.landingRole = '';
+							}
+							showSellerScanSuccessModal( res.data.seller_transaction_code );
 							return;
 						}
 						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
@@ -303,6 +390,7 @@
 							window.cpmHbLanding.pendingOtpRedirect = '';
 							window.cpmHbLanding.phoneModalFromLanding = false;
 							window.cpmHbLanding.buyerProofScan = false;
+							window.cpmHbLanding.podProofScan = false;
 							window.cpmHbLanding.landingRole = '';
 							window.location.href = postUrl;
 							return;

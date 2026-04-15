@@ -168,9 +168,12 @@
 			var role = typeof opts.landingRole === 'string' && opts.landingRole !== ''
 				? opts.landingRole
 				: ( opts.buyerProofScan ? 'buyer' : 'seller' );
-			// Fallback if AJAX omits redirect_url: backorders only for ?proof=scan buyer flow; else home.
+			// Fallback if AJAX omits redirect_url: buyer PoD URL; seller + proof=scan → server returns transaction modal (no fallback redirect).
+			H.podProofScan = urlHasProofScan();
 			if ( opts.buyerProofScan ) {
 				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
+			} else if ( role === 'seller' && H.podProofScan ) {
+				H.pendingOtpRedirect = '';
 			} else {
 				H.pendingOtpRedirect = H.homeUrl || '/';
 			}
@@ -211,11 +214,37 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
-			// Always show “Your phone number” → Send OTP → verify (buyer + ?proof=scan → backorder page redirect).
+			if ( role === 'seller' ) {
+				var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
+				if ( $intro.length ) {
+					$intro.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+					$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+					return;
+				}
+			}
 			showPhoneOtpModal( {
 				landingRole: role,
 				buyerProofScan: role === 'buyer' && urlHasProofScan()
 			} );
+		} );
+
+		$( document ).on( 'click', '#cpm-hb-seller-pod-intro-continue', function() {
+			var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
+			$intro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
+			showPhoneOtpModal( {
+				landingRole: role,
+				buyerProofScan: false
+			} );
+		} );
+
+		$( document ).on( 'click', '#cpm-hb-seller-pod-intro-close, #cpm-hb-seller-pod-intro-modal .cpm-nwp-modal-overlay', function() {
+			var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
+			$intro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			if ( $( '.cpm-nwp-modal:not(.cpm-nwp-modal--hidden), .cpm-hb-role-overlay.active' ).length === 0 ) {
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			}
+			showRoleModal();
 		} );
 
 		$( '#cpm-hb-role-close' ).on( 'click', function() {
@@ -230,6 +259,13 @@
 
 		$( document ).on( 'keydown', function( e ) {
 			if ( e.key !== 'Escape' ) {
+				return;
+			}
+			var $sellerIntro = $( '#cpm-hb-seller-pod-intro-modal' );
+			if ( $sellerIntro.length && ! $sellerIntro.hasClass( 'cpm-nwp-modal--hidden' ) ) {
+				$sellerIntro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				showRoleModal();
 				return;
 			}
 			if ( $roleModal.hasClass( 'active' ) ) {

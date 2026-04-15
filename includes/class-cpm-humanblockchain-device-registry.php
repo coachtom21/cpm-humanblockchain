@@ -79,6 +79,22 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Unique transaction code for seller PoD scan completion (share with buyer).
+	 *
+	 * @param int $user_id WordPress user ID.
+	 * @return string
+	 */
+	private static function create_seller_pod_transaction_code( $user_id ) {
+		$user_id = (int) $user_id;
+		$code    = 'HB-' . strtoupper( substr( bin2hex( random_bytes( 8 ) ), 0, 16 ) );
+		if ( $user_id > 0 ) {
+			update_user_meta( $user_id, 'cpm_hb_last_seller_pod_tx_code', $code );
+			update_user_meta( $user_id, 'cpm_hb_last_seller_pod_tx_at', time() );
+		}
+		return $code;
+	}
+
+	/**
 	 * Whether a WordPress user has at least one NWP device with status "activated".
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -667,11 +683,19 @@ class Cpm_Humanblockchain_Device_Registry {
 		$proof_scan_url    = self::request_has_proof_scan_intent();
 		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
 		$redirect_backorders = $landing_backorder && $buyer_proof_scan && $proof_scan_url && 'buyer' === $landing_role;
+		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && $proof_scan_url;
+
+		$seller_transaction_code = '';
+		if ( $seller_pod_complete ) {
+			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
+		}
 
 		if ( $landing_backorder ) {
-			// Backorders only for buyer + ?proof=scan flow (client sends cpm_hb_buyer_proof_scan + role=buyer); seller → home.
+			// Backorders: buyer + ?proof=scan. Seller + proof-scan: transaction code modal (no redirect). Else home.
 			if ( $redirect_backorders ) {
 				$redirect = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
+			} elseif ( $seller_pod_complete ) {
+				$redirect = '';
 			} else {
 				$redirect = apply_filters( 'cpm_hb_landing_verify_home_url', home_url( '/' ) );
 			}
@@ -692,6 +716,10 @@ class Cpm_Humanblockchain_Device_Registry {
 		);
 		if ( $redirect_backorders ) {
 			$payload['smallstreet_backorders'] = $smallstreet_backorders;
+		}
+		if ( $seller_pod_complete ) {
+			$payload['seller_scan_success']     = true;
+			$payload['seller_transaction_code'] = $seller_transaction_code;
 		}
 
 		wp_send_json_success( $payload );

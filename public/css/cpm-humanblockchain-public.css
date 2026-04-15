@@ -526,3 +526,52 @@ body.cpm-nwp-modal-open {
 	background: #f9fafb;
 	border-color: #9ca3af;
 }
+
+/* Seller PoD: transaction code after OTP */
+.cpm-hb-seller-scan-success-inner .cpm-hb-seller-scan-lead {
+	margin: 0.75rem 0 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: #111827;
+	line-height: 1.45;
+}
+
+.cpm-hb-seller-tx-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: stretch;
+	gap: 0.75rem;
+	margin: 1rem 0 0.5rem;
+}
+
+.cpm-hb-seller-tx-code {
+	flex: 1 1 12rem;
+	display: block;
+	padding: 0.75rem 1rem;
+	background: #f3f4f6;
+	border: 1px solid #e5e7eb;
+	border-radius: 8px;
+	font-size: 0.95rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	word-break: break-all;
+	color: #111827;
+}
+
+.cpm-hb-seller-tx-copy {
+	flex: 0 0 auto;
+	align-self: center;
+}
+
+.cpm-hb-seller-scan-hint {
+	min-height: 1.25rem;
+	margin: 0.25rem 0 0;
+	font-size: 0.875rem;
+	color: #059669;
+	font-weight: 600;
+}
+
+.cpm-hb-seller-scan-share {
+	margin-top: 1rem !important;
+	text-align: left;
+}
