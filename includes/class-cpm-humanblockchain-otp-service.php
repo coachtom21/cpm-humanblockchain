@@ -249,6 +249,20 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Trim secrets copied from Twilio Console (newlines / BOM break Basic auth and yield "invalid username").
+	 *
+	 * @param string $value Raw SID, token, or From.
+	 * @return string
+	 */
+	private static function trim_twilio_secret( $value ) {
+		$value = trim( (string) $value );
+		if ( $value !== '' && preg_match( '/^\x{FEFF}/u', $value ) ) {
+			$value = preg_replace( '/^\x{FEFF}/u', '', $value );
+		}
+		return $value;
+	}
+
+	/**
 	 * Get Twilio credentials (from constants or options).
 	 *
 	 * @return array{ sid: string, token: string, from: string }
@@ -257,7 +271,37 @@ class Cpm_Humanblockchain_Otp_Service {
 		$sid   = defined( 'CPM_NWP_TWILIO_SID' ) ? CPM_NWP_TWILIO_SID : get_option( 'cpm_nwp_twilio_sid', '' );
 		$token = defined( 'CPM_NWP_TWILIO_TOKEN' ) ? CPM_NWP_TWILIO_TOKEN : get_option( 'cpm_nwp_twilio_token', '' );
 		$from  = defined( 'CPM_NWP_TWILIO_FROM' ) ? CPM_NWP_TWILIO_FROM : get_option( 'cpm_nwp_twilio_from', '' );
-		return array( 'sid' => $sid, 'token' => $token, 'from' => $from );
+
+		$creds = array(
+			'sid'   => self::trim_twilio_secret( is_string( $sid ) ? $sid : '' ),
+			'token' => self::trim_twilio_secret( is_string( $token ) ? $token : '' ),
+			'from'  => self::trim_twilio_secret( is_string( $from ) ? $from : '' ),
+		);
+
+		/**
+		 * Twilio Account SID + Auth Token (+ optional From). Fix mismatched env or map subaccounts.
+		 *
+		 * @param array{ sid: string, token: string, from: string } $creds Credentials after trim.
+		 */
+		return apply_filters( 'cpm_nwp_twilio_credentials', $creds );
+	}
+
+	/**
+	 * Extra help when Twilio returns 401-style auth errors.
+	 *
+	 * @param string $message Twilio API message.
+	 * @return string
+	 */
+	private static function maybe_append_twilio_auth_help( $message ) {
+		$m = strtolower( (string) $message );
+		if ( false === strpos( $m, 'invalid username' )
+			&& false === strpos( $m, 'invalid password' )
+			&& false === strpos( $m, 'authenticate' )
+			&& false === strpos( $m, 'authentication failed' ) ) {
+			return $message;
+		}
+		return trim( (string) $message ) . ' '
+			. __( 'Use the Twilio Console “Account SID” (starts with AC) and “Auth Token” from the same project as your Verify Service (VA…). Do not use an API Key (SK…) as the username unless you also use its secret as the password. Re-save credentials in Settings → NWP Gateway or wp-config.', 'cpm-humanblockchain' );
 	}
 
 	/**
@@ -267,13 +311,13 @@ class Cpm_Humanblockchain_Otp_Service {
 	 */
 	private static function get_verify_service_sid() {
 		if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && CPM_TWILIO_VERIFY_SERVICE_SID !== '' ) {
-			return trim( CPM_TWILIO_VERIFY_SERVICE_SID );
+			return self::trim_twilio_secret( CPM_TWILIO_VERIFY_SERVICE_SID );
 		}
 		if ( defined( 'CPM_NWP_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) && CPM_NWP_TWILIO_VERIFY_SERVICE_SID !== '' ) {
-			return trim( CPM_NWP_TWILIO_VERIFY_SERVICE_SID );
+			return self::trim_twilio_secret( CPM_NWP_TWILIO_VERIFY_SERVICE_SID );
 		}
 		$opt = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
-		return is_string( $opt ) ? trim( $opt ) : '';
+		return self::trim_twilio_secret( is_string( $opt ) ? $opt : '' );
 	}
 
 	/**
@@ -402,7 +446,9 @@ class Cpm_Humanblockchain_Otp_Service {
 		}
 
 		$err_msg = isset( $body_response['message'] ) ? $body_response['message'] : __( 'SMS delivery failed.', 'cpm-humanblockchain' );
-		$err_msg = self::maybe_append_geo_permission_help( $err_msg, is_array( $body_response ) ? $body_response : array() );
+		$err_msg = self::maybe_append_twilio_auth_help(
+			self::maybe_append_geo_permission_help( $err_msg, is_array( $body_response ) ? $body_response : array() )
+		);
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( 'cpm_nwp twilio HTTP ' . (string) $code . ' to=' . $to . ' response=' . $raw_body );
 		}
@@ -493,12 +539,13 @@ class Cpm_Humanblockchain_Otp_Service {
 		}
 
 		$err_msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'SMS delivery failed.', 'cpm-humanblockchain' );
+		$err_msg = self::maybe_append_twilio_auth_help( self::maybe_append_geo_permission_help( $err_msg, is_array( $parsed['data'] ) ? $parsed['data'] : array() ) );
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 			error_log( 'cpm_nwp twilio verify start HTTP ' . (string) $parsed['http_code'] . ' to=' . $phone_e164 . ' response=' . $parsed['raw'] );
 		}
 		return array(
 			'success' => false,
-			'message' => self::maybe_append_geo_permission_help( $err_msg, is_array( $parsed['data'] ) ? $parsed['data'] : array() ),
+			'message' => $err_msg,
 			'error'   => isset( $parsed['data']['code'] ) ? (string) $parsed['data']['code'] : (string) $parsed['http_code'],
 		);
 	}
@@ -543,14 +590,14 @@ class Cpm_Humanblockchain_Otp_Service {
 			$msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'Invalid verification code. Try again.', 'cpm-humanblockchain' );
 			return array(
 				'success' => false,
-				'message' => $msg,
+				'message' => self::maybe_append_twilio_auth_help( $msg ),
 			);
 		}
 
 		$err_msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'Verification failed.', 'cpm-humanblockchain' );
 		return array(
 			'success' => false,
-			'message' => $err_msg,
+			'message' => self::maybe_append_twilio_auth_help( $err_msg ),
 		);
 	}
 
