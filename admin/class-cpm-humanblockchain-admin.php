@@ -87,6 +87,10 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
+		register_setting( 'cpm_nwp_twilio', 'cpm_nwp_twilio_verify_service_sid', array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+		) );
 		register_setting( 'cpm_nwp_twilio', 'cpm_nwp_default_country', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_default_country' ),
@@ -325,13 +329,15 @@ class Cpm_Humanblockchain_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		$sid      = get_option( 'cpm_nwp_twilio_sid', '' );
-		$token    = get_option( 'cpm_nwp_twilio_token', '' );
-		$from     = get_option( 'cpm_nwp_twilio_from', '' );
-		$country  = get_option( 'cpm_nwp_default_country', 'NP' );
+		$sid              = get_option( 'cpm_nwp_twilio_sid', '' );
+		$token            = get_option( 'cpm_nwp_twilio_token', '' );
+		$from             = get_option( 'cpm_nwp_twilio_from', '' );
+		$verify_service   = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
+		$country          = get_option( 'cpm_nwp_default_country', 'NP' );
 
-		$using_constants = defined( 'CPM_NWP_TWILIO_SID' ) && defined( 'CPM_NWP_TWILIO_TOKEN' ) && defined( 'CPM_NWP_TWILIO_FROM' );
-		$twilio_ready    = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) && Cpm_Humanblockchain_Otp_Service::is_configured();
+		$using_constants = defined( 'CPM_NWP_TWILIO_SID' ) || defined( 'CPM_NWP_TWILIO_TOKEN' ) || defined( 'CPM_NWP_TWILIO_FROM' ) || defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) || defined( 'CPM_NWP_TWILIO_VERIFY_SERVICE_SID' );
+		$twilio_ready      = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) && Cpm_Humanblockchain_Otp_Service::is_configured();
+		$uses_verify_api   = $twilio_ready && class_exists( 'Cpm_Humanblockchain_Otp_Service' ) && Cpm_Humanblockchain_Otp_Service::uses_twilio_verify();
 
 		$default_membership_url   = rest_url( 'myapi/v1/membership' );
 		$default_register_user_url = rest_url( 'myapi/v1/register-user' );
@@ -352,12 +358,15 @@ class Cpm_Humanblockchain_Admin {
 					<strong><?php esc_html_e( 'Twilio status:', 'cpm-humanblockchain' ); ?></strong>
 					<?php if ( $twilio_ready ) : ?>
 						<span style="color:#00a32a;"><?php esc_html_e( 'Ready — OTP SMS can be sent.', 'cpm-humanblockchain' ); ?></span>
+						<?php if ( $uses_verify_api ) : ?>
+							<?php esc_html_e( '(Twilio Verify — no “From” number needed.)', 'cpm-humanblockchain' ); ?>
+						<?php endif; ?>
 					<?php else : ?>
-						<span style="color:#d63638;"><?php esc_html_e( 'Not configured — add Account SID, Auth Token, and From number below (or define constants in wp-config.php).', 'cpm-humanblockchain' ); ?></span>
+						<span style="color:#d63638;"><?php esc_html_e( 'Not configured — add Account SID and Auth Token, then either a Twilio Verify Service SID (VA…) or a From number for the Messages API.', 'cpm-humanblockchain' ); ?></span>
 					<?php endif; ?>
 				</p>
 				<?php if ( $using_constants ) : ?>
-					<p><?php esc_html_e( 'Credentials are loaded from wp-config.php constants (CPM_NWP_TWILIO_*). Fields below may be ignored.', 'cpm-humanblockchain' ); ?></p>
+					<p><?php esc_html_e( 'Some values may be loaded from wp-config.php (e.g. CPM_NWP_TWILIO_* or CPM_TWILIO_VERIFY_SERVICE_SID). Matching fields below can be left blank.', 'cpm-humanblockchain' ); ?></p>
 				<?php endif; ?>
 				<p>
 					<a href="https://console.twilio.com/" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Open Twilio Console', 'cpm-humanblockchain' ); ?></a>
@@ -368,7 +377,7 @@ class Cpm_Humanblockchain_Admin {
 					<?php esc_html_e( 'Sending to Nepal (+977) or other countries: in Twilio, enable outbound SMS for that country under Messaging → Settings → SMS geographic permissions. Otherwise Twilio returns a “permission … region” error.', 'cpm-humanblockchain' ); ?>
 				</p>
 				<p class="description">
-					<?php esc_html_e( 'OTP on this WordPress site uses the credentials saved here — not the Smallstreet app’s environment. If SMS works on Smallstreet but not here, paste the same Twilio SID, token, and From number (or matching wp-config.php constants) and save.', 'cpm-humanblockchain' ); ?>
+					<?php esc_html_e( 'This site does not read Smallstreet’s wp-config automatically. Use the same Twilio Account SID and Auth Token as smallstreet.app, and the same Verify Service SID (VA…) if you use Twilio Verify there (define CPM_TWILIO_VERIFY_SERVICE_SID or save it below).', 'cpm-humanblockchain' ); ?>
 				</p>
 			</div>
 
@@ -399,9 +408,21 @@ class Cpm_Humanblockchain_Admin {
 						</td>
 					</tr>
 					<tr>
+						<th><label for="cpm_nwp_twilio_verify_service_sid"><?php esc_html_e( 'Verify Service SID (optional)', 'cpm-humanblockchain' ); ?></label></th>
+						<td>
+							<?php if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && CPM_TWILIO_VERIFY_SERVICE_SID !== '' ) : ?>
+								<code><?php echo esc_html( CPM_TWILIO_VERIFY_SERVICE_SID ); ?></code>
+								<p class="description"><?php esc_html_e( 'Loaded from wp-config.php (CPM_TWILIO_VERIFY_SERVICE_SID). Remove or override the constant to use the field below instead.', 'cpm-humanblockchain' ); ?></p>
+							<?php else : ?>
+								<input type="text" id="cpm_nwp_twilio_verify_service_sid" name="cpm_nwp_twilio_verify_service_sid" value="<?php echo esc_attr( $verify_service ); ?>" class="regular-text" placeholder="VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+								<p class="description"><?php esc_html_e( 'Twilio Verify (same as Smallstreet). When set, OTP uses the Verify API and you do not need a “From” number. Leave empty to use the classic Messages API + From number instead.', 'cpm-humanblockchain' ); ?></p>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
 						<th><label for="cpm_nwp_twilio_from"><?php esc_html_e( 'From (Twilio number)', 'cpm-humanblockchain' ); ?></label></th>
 						<td><input type="text" id="cpm_nwp_twilio_from" name="cpm_nwp_twilio_from" value="<?php echo esc_attr( $from ); ?>" class="regular-text" placeholder="+15551234567">
-						<p class="description"><?php esc_html_e( 'E.164 format, e.g. +15551234567', 'cpm-humanblockchain' ); ?></p></td>
+						<p class="description"><?php esc_html_e( 'Required only for the Messages API (when Verify Service SID is not set). E.164 format, e.g. +15551234567', 'cpm-humanblockchain' ); ?></p></td>
 					</tr>
 				</table>
 				<?php submit_button(); ?>

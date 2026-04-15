@@ -3,7 +3,11 @@
 /**
  * OTP Service - Twilio SMS integration for device activation.
  *
- * Stores Twilio credentials in wp_options: cpm_nwp_twilio_sid, cpm_nwp_twilio_token, cpm_nwp_twilio_from
+ * Supports two modes (same Twilio Account SID + Auth Token):
+ * 1) Twilio Verify API — optional Verify Service SID (VA…) via CPM_TWILIO_VERIFY_SERVICE_SID or
+ *    cpm_nwp_twilio_verify_service_sid (matches Smallstreet / cpm-twilio). No "From" number required.
+ * 2) Classic Messages API — wp_options cpm_nwp_twilio_sid, cpm_nwp_twilio_token, cpm_nwp_twilio_from
+ *    (or CPM_NWP_TWILIO_* constants) plus local OTP in transients.
  *
  * @package    Cpm_Humanblockchain
  * @subpackage Cpm_Humanblockchain/includes
@@ -209,6 +213,9 @@ class Cpm_Humanblockchain_Otp_Service {
 				'message' => __( 'Please enter the 6-digit code from your SMS.', 'cpm-humanblockchain' ),
 			);
 		}
+		if ( self::uses_twilio_verify() ) {
+			return self::verify_otp_via_twilio_verify( $phone_e164, $code );
+		}
 		$key    = self::get_otp_transient_key( $phone_e164 );
 		$stored = get_transient( $key );
 		if ( ! is_array( $stored ) || empty( $stored['otp'] ) ) {
@@ -254,13 +261,44 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Twilio Verify Service SID (VA…). Same account as Account SID / Auth Token.
+	 *
+	 * @return string
+	 */
+	private static function get_verify_service_sid() {
+		if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && CPM_TWILIO_VERIFY_SERVICE_SID !== '' ) {
+			return trim( CPM_TWILIO_VERIFY_SERVICE_SID );
+		}
+		if ( defined( 'CPM_NWP_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) && CPM_NWP_TWILIO_VERIFY_SERVICE_SID !== '' ) {
+			return trim( CPM_NWP_TWILIO_VERIFY_SERVICE_SID );
+		}
+		$opt = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
+		return is_string( $opt ) ? trim( $opt ) : '';
+	}
+
+	/**
+	 * Whether OTP uses Twilio Verify (not Messages API + local transient OTP).
+	 *
+	 * @return bool
+	 */
+	public static function uses_twilio_verify() {
+		return self::get_verify_service_sid() !== '';
+	}
+
+	/**
 	 * Check if Twilio is configured.
 	 *
 	 * @return bool
 	 */
 	public static function is_configured() {
 		$creds = self::get_credentials();
-		return ! empty( $creds['sid'] ) && ! empty( $creds['token'] ) && ! empty( $creds['from'] );
+		if ( empty( $creds['sid'] ) || empty( $creds['token'] ) ) {
+			return false;
+		}
+		if ( self::uses_twilio_verify() ) {
+			return true;
+		}
+		return ! empty( $creds['from'] );
 	}
 
 	/**
@@ -376,12 +414,157 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * POST to Twilio Verify API (same Basic auth as Messages API).
+	 *
+	 * @param string               $path Relative to https://verify.twilio.com/v2/ (e.g. Services/VA…/Verifications).
+	 * @param array<string, string> $form Form body.
+	 * @return array{ response: array|WP_Error, http_code: int, data: array|null, raw: string }
+	 */
+	private static function twilio_verify_post( $path, array $form ) {
+		$creds = self::get_credentials();
+		$sid   = $creds['sid'];
+		$token = $creds['token'];
+		$url   = 'https://verify.twilio.com/v2/' . ltrim( $path, '/' );
+		$auth  = base64_encode( $sid . ':' . $token );
+		$post_args = array(
+			'headers' => array(
+				'Authorization' => 'Basic ' . $auth,
+				'Content-Type'  => 'application/x-www-form-urlencoded',
+			),
+			'body'      => $form,
+			'timeout'   => 15,
+			'sslverify' => true,
+		);
+		$to = isset( $form['To'] ) ? (string) $form['To'] : '';
+		$post_args = apply_filters( 'cpm_nwp_twilio_http_request_args', $post_args, $to, 'twilio_verify' );
+
+		$response = wp_remote_post( $url, $post_args );
+		$http_code = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
+		$raw       = is_wp_error( $response ) ? '' : wp_remote_retrieve_body( $response );
+		$data      = json_decode( $raw, true );
+
+		return array(
+			'response'  => $response,
+			'http_code' => $http_code,
+			'data'      => is_array( $data ) ? $data : null,
+			'raw'       => $raw,
+		);
+	}
+
+	/**
+	 * Start SMS verification via Twilio Verify (same flow as Smallstreet Verify Service).
+	 *
+	 * @param string $phone_e164 E.164.
+	 * @return array{ success: bool, message: string, error?: string|null }
+	 */
+	private static function send_otp_via_twilio_verify( $phone_e164 ) {
+		$service_sid = self::get_verify_service_sid();
+		$path        = 'Services/' . rawurlencode( $service_sid ) . '/Verifications';
+		$parsed      = self::twilio_verify_post(
+			$path,
+			array(
+				'To'      => $phone_e164,
+				'Channel' => 'sms',
+			)
+		);
+
+		if ( is_wp_error( $parsed['response'] ) ) {
+			$err = $parsed['response']->get_error_message();
+			return array(
+				'success' => false,
+				'message' => sprintf(
+					/* translators: %s: WordPress HTTP error. */
+					__( 'Failed to start SMS verification: %s', 'cpm-humanblockchain' ),
+					$err
+				),
+				'error'   => $err,
+			);
+		}
+
+		if ( $parsed['http_code'] >= 200 && $parsed['http_code'] < 300 ) {
+			$st = isset( $parsed['data']['status'] ) ? (string) $parsed['data']['status'] : '';
+			if ( in_array( $st, array( 'pending', 'queued' ), true ) || $st === '' ) {
+				return array(
+					'success' => true,
+					'message' => __( 'SMS sent successfully.', 'cpm-humanblockchain' ),
+					'error'   => null,
+				);
+			}
+		}
+
+		$err_msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'SMS delivery failed.', 'cpm-humanblockchain' );
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			error_log( 'cpm_nwp twilio verify start HTTP ' . (string) $parsed['http_code'] . ' to=' . $phone_e164 . ' response=' . $parsed['raw'] );
+		}
+		return array(
+			'success' => false,
+			'message' => self::maybe_append_geo_permission_help( $err_msg, is_array( $parsed['data'] ) ? $parsed['data'] : array() ),
+			'error'   => isset( $parsed['data']['code'] ) ? (string) $parsed['data']['code'] : (string) $parsed['http_code'],
+		);
+	}
+
+	/**
+	 * Check code via Twilio Verify API.
+	 *
+	 * @param string $phone_e164 E.164.
+	 * @param string $code       Digits only.
+	 * @return array{ success: bool, message: string }
+	 */
+	private static function verify_otp_via_twilio_verify( $phone_e164, $code ) {
+		$service_sid = self::get_verify_service_sid();
+		$path        = 'Services/' . rawurlencode( $service_sid ) . '/VerificationCheck';
+		$parsed      = self::twilio_verify_post(
+			$path,
+			array(
+				'To'   => $phone_e164,
+				'Code' => $code,
+			)
+		);
+
+		if ( is_wp_error( $parsed['response'] ) ) {
+			return array(
+				'success' => false,
+				'message' => sprintf(
+					/* translators: %s: WordPress HTTP error. */
+					__( 'Verification request failed: %s', 'cpm-humanblockchain' ),
+					$parsed['response']->get_error_message()
+				),
+			);
+		}
+
+		if ( $parsed['http_code'] >= 200 && $parsed['http_code'] < 300 && is_array( $parsed['data'] ) ) {
+			$st = isset( $parsed['data']['status'] ) ? (string) $parsed['data']['status'] : '';
+			if ( 'approved' === $st ) {
+				return array(
+					'success' => true,
+					'message' => __( 'Your device is verified.', 'cpm-humanblockchain' ),
+				);
+			}
+			$msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'Invalid verification code. Try again.', 'cpm-humanblockchain' );
+			return array(
+				'success' => false,
+				'message' => $msg,
+			);
+		}
+
+		$err_msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'Verification failed.', 'cpm-humanblockchain' );
+		return array(
+			'success' => false,
+			'message' => $err_msg,
+		);
+	}
+
+	/**
 	 * Send OTP SMS and store for verification.
 	 *
 	 * @param string $phone_e164 E.164 phone number.
 	 * @return array{ 'success' => bool, 'message' => string }
 	 */
 	public static function send_otp_sms( $phone_e164 ) {
+		if ( self::uses_twilio_verify() ) {
+			return self::send_otp_via_twilio_verify( $phone_e164 );
+		}
+
 		$otp = self::generate_otp();
 		self::store_otp( $phone_e164, $otp );
 
