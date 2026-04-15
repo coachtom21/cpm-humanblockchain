@@ -19,6 +19,9 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	/** Default POST route on Smallstreet. */
 	const DEFAULT_SCAN_URL = 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/xp-ledger/scan';
 
+	/** HTTP method for updating a scan row (PUT or PATCH). */
+	const DEFAULT_SCAN_UPDATE_METHOD = 'PATCH';
+
 	/**
 	 * Seller share: 3% of $10 base → 30¢ → 30 + 21 zeros = 3×10²² XP (stored as string).
 	 */
@@ -57,6 +60,19 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			$url = $default;
 		}
 		return esc_url_raw( $url );
+	}
+
+	/**
+	 * PUT/PATCH …/xp-ledger/scan/{LEDGER_ID}
+	 *
+	 * @param string|int $ledger_id Remote id (e.g. JSON "id").
+	 * @return string
+	 */
+	public static function get_scan_update_url( $ledger_id ) {
+		$ledger_id = trim( (string) $ledger_id );
+		$base      = rtrim( self::get_scan_endpoint_url(), '/' );
+		$url       = $base . '/' . rawurlencode( $ledger_id );
+		return apply_filters( 'cpm_hb_smallstreet_xp_ledger_scan_update_url', $url, $ledger_id );
 	}
 
 	/**
@@ -285,11 +301,353 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * PUT/PATCH body: user_id and/or email + entry (no scan_type).
+	 *
+	 * @param int    $wp_user_id WordPress user ID (seller when updating seller row).
+	 * @param array<string,mixed> $entry Entry object.
+	 * @return array<string,mixed>
+	 */
+	public static function build_xp_ledger_update_payload( $wp_user_id, array $entry ) {
+		$identity = self::user_identity_for_xp_api( $wp_user_id );
+		$payload  = array(
+			'entry' => $entry,
+		);
+		/**
+		 * @param string $mode        email_only|user_id_only|both.
+		 * @param int    $wp_user_id  Local WordPress user ID.
+		 * @param array  $entry       Entry object.
+		 */
+		$mode = apply_filters( 'cpm_hb_xp_ledger_update_identity_fields', 'email_only', $wp_user_id, $entry );
+		if ( ! is_string( $mode ) || ! in_array( $mode, array( 'email_only', 'user_id_only', 'both' ), true ) ) {
+			$mode = 'email_only';
+		}
+
+		if ( 'both' === $mode ) {
+			if ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
+			if ( $identity['email'] !== '' ) {
+				$payload['email'] = $identity['email'];
+			}
+		} elseif ( 'user_id_only' === $mode ) {
+			if ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
+		} else {
+			if ( $identity['email'] !== '' ) {
+				$payload['email'] = $identity['email'];
+			} elseif ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
+		}
+
+		return apply_filters( 'cpm_hb_xp_ledger_update_payload', $payload, $wp_user_id, $entry );
+	}
+
+	/**
+	 * Latest seller_scan row for this HB transaction code and seller user.
+	 *
+	 * @param string $transaction_code HB-… code.
+	 * @param int    $seller_wp_user_id Seller WP user id.
+	 * @return object|null
+	 */
+	public static function get_seller_ledger_row( $transaction_code, $seller_wp_user_id ) {
+		global $wpdb;
+		$table = self::table_name();
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE transaction_id = %s AND scan_type = %s AND wp_user_id = %d ORDER BY id DESC LIMIT 1",
+				$transaction_code,
+				'seller_scan',
+				(int) $seller_wp_user_id
+			)
+		);
+		return ( $row && isset( $row->id ) ) ? $row : null;
+	}
+
+	/**
+	 * PATCH/PUT remote Smallstreet scan row.
+	 *
+	 * @param string $remote_ledger_id Remote id.
+	 * @param int    $wp_user_id       Identity for API (seller or buyer).
+	 * @param array<string,mixed> $entry Entry object.
+	 * @return array{ ok: bool, http_code: int, body: string, raw: string }
+	 */
+	private static function remote_update_scan( $remote_ledger_id, $wp_user_id, array $entry ) {
+		$key = self::api_key();
+		if ( $key === '' ) {
+			return array( 'ok' => false, 'http_code' => 0, 'body' => '', 'raw' => '' );
+		}
+		$url      = self::get_scan_update_url( $remote_ledger_id );
+		$payload  = self::build_xp_ledger_update_payload( $wp_user_id, $entry );
+		$body     = wp_json_encode( $payload );
+		$method   = strtoupper( (string) apply_filters( 'cpm_hb_xp_ledger_scan_update_method', self::DEFAULT_SCAN_UPDATE_METHOD, $remote_ledger_id, $wp_user_id, $entry ) );
+		if ( ! in_array( $method, array( 'PUT', 'PATCH' ), true ) ) {
+			$method = self::DEFAULT_SCAN_UPDATE_METHOD;
+		}
+
+		$args = apply_filters(
+			'cpm_hb_smallstreet_xp_ledger_scan_update_request_args',
+			array(
+				'method'    => $method,
+				'timeout'   => 25,
+				'headers'   => self::request_headers( $key ),
+				'body'      => $body,
+				'sslverify' => true,
+			),
+			$url,
+			$payload,
+			$remote_ledger_id
+		);
+
+		$response = wp_remote_request( $url, $args );
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'ok'        => false,
+				'http_code' => 0,
+				'body'      => $response->get_error_message(),
+				'raw'       => '',
+			);
+		}
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$raw  = wp_remote_retrieve_body( $response );
+		return array(
+			'ok'        => $code >= 200 && $code < 300,
+			'http_code' => $code,
+			'body'      => $raw,
+			'raw'       => $raw,
+		);
+	}
+
+	/**
+	 * PATCH Smallstreet seller row to completed + update local seller_scan row (after buyer_scan POST succeeded).
+	 *
+	 * @param string $transaction_code HB-… code.
+	 * @param int    $seller_id        Seller WP user id.
+	 */
+	private static function complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id ) {
+		global $wpdb;
+		$table      = self::table_name();
+		$seller_row = self::get_seller_ledger_row( $transaction_code, $seller_id );
+		if ( ! $seller_row ) {
+			return;
+		}
+		if ( isset( $seller_row->scan_status ) && 'completed' === $seller_row->scan_status ) {
+			return;
+		}
+
+		$seller_remote_id = isset( $seller_row->remote_ledger_id ) ? trim( (string) $seller_row->remote_ledger_id ) : '';
+		if ( $seller_remote_id === '' ) {
+			return;
+		}
+
+		$seller_xp = isset( $seller_row->xp_units ) ? (string) $seller_row->xp_units : self::xp_units_string_for_scan_type( 'seller_scan' );
+		$seller_entry_update = array(
+			'transaction_id' => $transaction_code,
+			'xp_units'       => $seller_xp,
+			'scan_status'    => 'completed',
+		);
+
+		$upd = self::remote_update_scan( $seller_remote_id, $seller_id, $seller_entry_update );
+
+		if ( $upd['ok'] ) {
+			$seller_entry_json = wp_json_encode(
+				array(
+					'transaction_id' => $transaction_code,
+					'xp_units'       => $seller_xp,
+					'scan_status'    => 'completed',
+				)
+			);
+			$wpdb->update(
+				$table,
+				array(
+					'scan_status'        => 'completed',
+					'entry_json'         => $seller_entry_json,
+					'remote_sync_status' => 'synced',
+					'remote_last_error'  => null,
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => (int) $seller_row->id ),
+				array( '%s', '%s', '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+		} else {
+			$wpdb->update(
+				$table,
+				array(
+					'remote_last_error' => substr( $upd['body'] !== '' ? $upd['body'] : 'PATCH failed', 0, 500 ),
+					'updated_at'        => current_time( 'mysql' ),
+				),
+				array( 'id' => (int) $seller_row->id ),
+				array( '%s', '%s' ),
+				array( '%d' )
+			);
+		}
+	}
+
+	/**
+	 * POST local buyer_scan row + Smallstreet POST; PATCH seller row on remote + local to completed.
+	 *
+	 * @param int    $buyer_id  Buyer WP user id.
+	 * @param int    $seller_id Seller WP user id.
+	 * @param string $transaction_code HB-… code.
+	 * @param int[]  $order_ids Woo / Smallstreet order ids.
+	 */
+	public static function record_buyer_scan_after_confirm( $buyer_id, $seller_id, $transaction_code, array $order_ids ) {
+		$buyer_id = (int) $buyer_id;
+		$seller_id = (int) $seller_id;
+		$transaction_code = trim( (string) $transaction_code );
+		if ( $buyer_id <= 0 || $seller_id <= 0 || $transaction_code === '' ) {
+			return;
+		}
+
+		$scan_type = 'buyer_scan';
+		$xp_units  = self::resolve_xp_units_string( $scan_type, $buyer_id, $transaction_code );
+
+		$entry = array(
+			'transaction_id' => $transaction_code,
+			'xp_units'       => $xp_units,
+			'scan_status'    => 'completed',
+		);
+
+		$entry_local = array_merge(
+			$entry,
+			array(
+				'order_ids' => array_values( array_map( 'intval', $order_ids ) ),
+			)
+		);
+
+		global $wpdb;
+		$table = self::table_name();
+
+		$existing_buyer = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE wp_user_id = %d AND scan_type = %s AND transaction_id = %s LIMIT 1",
+				$buyer_id,
+				$scan_type,
+				$transaction_code
+			)
+		);
+		if ( $existing_buyer ) {
+			$prev = $wpdb->get_row(
+				$wpdb->prepare( "SELECT remote_sync_status FROM {$table} WHERE id = %d", (int) $existing_buyer )
+			);
+			if ( $prev && isset( $prev->remote_sync_status ) && 'synced' === $prev->remote_sync_status ) {
+				self::complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id );
+			}
+			return;
+		}
+
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'wp_user_id'         => $buyer_id,
+				'scan_type'          => $scan_type,
+				'transaction_id'     => $transaction_code,
+				'xp_units'           => $xp_units,
+				'scan_status'        => 'completed',
+				'entry_json'         => wp_json_encode( $entry_local ),
+				'remote_sync_status' => 'pending',
+				'created_at'         => current_time( 'mysql' ),
+				'updated_at'         => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			return;
+		}
+
+		$buyer_row_id = (int) $wpdb->insert_id;
+		$key          = self::api_key();
+
+		if ( $key === '' ) {
+			$wpdb->update(
+				$table,
+				array(
+					'remote_sync_status' => 'skipped',
+					'remote_last_error'  => __( 'Smallstreet API key not configured.', 'cpm-humanblockchain' ),
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => $buyer_row_id ),
+				array( '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			return;
+		}
+
+		$post_payload = self::build_xp_ledger_scan_payload( $buyer_id, $scan_type, $entry );
+		$post_url     = self::get_scan_endpoint_url();
+		$post_args    = apply_filters(
+			'cpm_hb_smallstreet_xp_ledger_scan_request_args',
+			array(
+				'timeout'   => 25,
+				'headers'   => self::request_headers( $key ),
+				'body'      => wp_json_encode( $post_payload ),
+				'sslverify' => true,
+			),
+			$post_url,
+			$post_payload
+		);
+
+		$response = wp_remote_post( $post_url, $post_args );
+		if ( is_wp_error( $response ) ) {
+			$wpdb->update(
+				$table,
+				array(
+					'remote_sync_status' => 'failed',
+					'remote_last_error'  => $response->get_error_message(),
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => $buyer_row_id ),
+				array( '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			return;
+		}
+
+		$http_code = (int) wp_remote_retrieve_response_code( $response );
+		$raw_body  = wp_remote_retrieve_body( $response );
+		$data      = json_decode( $raw_body, true );
+
+		if ( $http_code >= 200 && $http_code < 300 ) {
+			$remote_buyer_id = self::parse_remote_ledger_id( is_array( $data ) ? $data : null );
+			$wpdb->update(
+				$table,
+				array(
+					'remote_ledger_id'   => $remote_buyer_id !== '' ? $remote_buyer_id : null,
+					'remote_sync_status' => 'synced',
+					'remote_last_error'  => null,
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => $buyer_row_id ),
+				array( '%s', '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+		} else {
+			$wpdb->update(
+				$table,
+				array(
+					'remote_sync_status' => 'failed',
+					'remote_last_error'  => $raw_body !== '' ? substr( $raw_body, 0, 500 ) : (string) $http_code,
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => $buyer_row_id ),
+				array( '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			return;
+		}
+
+		self::complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id );
+	}
+
+	/**
 	 * After seller + ?proof=scan OTP: save row and sync to Smallstreet.
 	 *
 	 * @param int    $wp_user_id        WordPress user ID.
 	 * @param string $transaction_code  HB-… code shown in the modal.
-	 * @return array<string,mixed> Summary for AJAX modal: remote, summary, http_code, body, json, success.
+	 * @return array<string,mixed> Outcome (remote, summary, http_code, body, json, success) for logging or hooks; not sent to the browser.
 	 */
 	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code ) {
 		$wp_user_id       = (int) $wp_user_id;

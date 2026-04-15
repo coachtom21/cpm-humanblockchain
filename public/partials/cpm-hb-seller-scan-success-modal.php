@@ -27,11 +27,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<button type="button" class="cpm-nwp-btn cpm-nwp-btn--otp cpm-hb-seller-tx-copy" id="cpm-hb-seller-tx-copy"><?php esc_html_e( 'Copy', 'cpm-humanblockchain' ); ?></button>
 		</div>
 		<p class="cpm-hb-seller-scan-hint" id="cpm-hb-seller-tx-copy-feedback" aria-live="polite"></p>
-		<div id="cpm-hb-seller-xp-api-block" class="cpm-hb-seller-xp-api-block cpm-nwp-modal--hidden" hidden>
-			<p class="cpm-hb-seller-xp-api-label"><?php esc_html_e( 'XP ledger API (Smallstreet)', 'cpm-humanblockchain' ); ?></p>
-			<p class="cpm-hb-seller-xp-api-summary" id="cpm-hb-seller-xp-api-summary" aria-live="polite"></p>
-			<pre class="cpm-hb-seller-xp-api-body" id="cpm-hb-seller-xp-api-body"></pre>
-		</div>
 		<p class="cpm-nwp-verify-subtitle cpm-hb-seller-scan-share"><?php esc_html_e( 'Share this transaction code with the buyer to confirm the delivery.', 'cpm-humanblockchain' ); ?></p>
 		<div class="cpm-nwp-activate-actions">
 			<button type="button" class="cpm-nwp-btn cpm-nwp-btn--otp cpm-hb-seller-scan-done" id="cpm-hb-seller-scan-done"><?php esc_html_e( 'Done', 'cpm-humanblockchain' ); ?></button>
