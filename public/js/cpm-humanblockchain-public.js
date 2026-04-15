@@ -263,6 +263,15 @@
 
 		$( document ).on( 'click', '.cpm-nwp-open-activate-modal', function( e ) {
 			e.preventDefault();
+			// Standard “Activate device” from the register modal must not inherit landing PoD flags (buyer + proof=scan),
+			// or Send OTP would require Smallstreet checks and fail for a normal activation.
+			if ( window.cpmHbLanding ) {
+				window.cpmHbLanding.buyerProofScan = false;
+				window.cpmHbLanding.phoneModalFromLanding = false;
+				window.cpmHbLanding.podProofScan = false;
+				window.cpmHbLanding.landingRole = '';
+				window.cpmHbLanding.pendingOtpRedirect = '';
+			}
 			clearInlineFeedback( $registerFeedback );
 			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearInlineFeedback( $verifyFeedback );
@@ -303,10 +312,22 @@
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
 			}
-			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
-			$.post( ajaxUrl, formData )
+			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl )
+				? window.cpmNwp.ajaxUrl
+				: ( typeof window.ajaxurl === 'string' && window.ajaxurl ? window.ajaxurl : '' );
+			if ( ! ajaxUrl ) {
+				showInlineFeedback( $activateFeedback, 'Cannot reach the site (missing AJAX URL). Reload the page.', 'error' );
+				$btn.prop( 'disabled', false ).text( 'Send OTP' );
+				return false;
+			}
+			$.ajax( {
+				url: ajaxUrl,
+				type: 'POST',
+				data: formData,
+				dataType: 'json'
+			} )
 				.done( function( res ) {
-					if ( res.success && res.data && res.data.message ) {
+					if ( res && res.success && res.data && res.data.message ) {
 						$( '#cpm-nwp-verify-mobile' ).val( mobile );
 						$( '#cpm-nwp-verify-otp-input' ).val( '' );
 						$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -315,11 +336,16 @@
 						showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
 						$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
 					} else {
-						showInlineFeedback( $activateFeedback, ( res.data && res.data.message ) ? res.data.message : 'Request failed.', 'error' );
+						var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+						showInlineFeedback( $activateFeedback, err, 'error' );
 					}
 				} )
-				.fail( function() {
-					showInlineFeedback( $activateFeedback, 'Request failed. Please check your connection and try again.', 'error' );
+				.fail( function( xhr ) {
+					var msg = 'Request failed. Please check your connection and try again.';
+					if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+						msg = xhr.responseJSON.data.message;
+					}
+					showInlineFeedback( $activateFeedback, msg, 'error' );
 				} )
 				.always( function() {
 					$btn.prop( 'disabled', false ).text( 'Send OTP' );
@@ -355,10 +381,22 @@
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
 			}
-			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
-			$.post( ajaxUrl, payload )
+			var verifyAjaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl )
+				? window.cpmNwp.ajaxUrl
+				: ( typeof window.ajaxurl === 'string' && window.ajaxurl ? window.ajaxurl : '' );
+			if ( ! verifyAjaxUrl ) {
+				showInlineFeedback( $verifyFeedback, 'Cannot reach the site (missing AJAX URL). Reload the page.', 'error' );
+				$btn.prop( 'disabled', false ).text( 'Verify & continue' );
+				return false;
+			}
+			$.ajax( {
+				url: verifyAjaxUrl,
+				type: 'POST',
+				data: payload,
+				dataType: 'json'
+			} )
 				.done( function( res ) {
-					if ( res.success && res.data ) {
+					if ( res && res.success && res.data ) {
 						if ( res.data.redirect_url ) {
 							if ( res.data.smallstreet_backorders != null ) {
 								try {
@@ -413,11 +451,19 @@
 						}
 						window.location.reload();
 					} else {
-						showInlineFeedback( $verifyFeedback, ( res.data && res.data.message ) ? res.data.message : 'Verification failed.', 'error' );
+						showInlineFeedback( $verifyFeedback, ( res && res.data && res.data.message ) ? res.data.message : 'Verification failed.', 'error' );
 					}
 				} )
-				.fail( function() {
-					showInlineFeedback( $verifyFeedback, 'Request failed. Please try again.', 'error' );
+				.fail( function( xhr ) {
+					var vmsg = 'Request failed. Please try again.';
+					if ( xhr && xhr.responseJSON && xhr.responseJSON.data ) {
+						if ( typeof xhr.responseJSON.data === 'string' ) {
+							vmsg = xhr.responseJSON.data;
+						} else if ( xhr.responseJSON.data.message ) {
+							vmsg = xhr.responseJSON.data.message;
+						}
+					}
+					showInlineFeedback( $verifyFeedback, vmsg, 'error' );
 				} )
 				.always( function() {
 					$btn.prop( 'disabled', false ).text( 'Verify & continue' );

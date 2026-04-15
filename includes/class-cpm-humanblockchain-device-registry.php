@@ -583,7 +583,14 @@ class Cpm_Humanblockchain_Device_Registry {
 	 * @since 1.0.0
 	 */
 	public static function handle_send_otp() {
-		check_ajax_referer( 'cpm_nwp_send_otp', 'cpm_nwp_otp_nonce' );
+		if ( ! check_ajax_referer( 'cpm_nwp_send_otp', 'cpm_nwp_otp_nonce', false ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Your session expired or this page is outdated. Please reload the page and try Send OTP again.', 'cpm-humanblockchain' ),
+				),
+				403
+			);
+		}
 
 		$mobile_raw = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
 		if ( empty( $mobile_raw ) ) {
@@ -647,7 +654,14 @@ class Cpm_Humanblockchain_Device_Registry {
 	 * @since 1.0.0
 	 */
 	public static function handle_verify_otp() {
-		check_ajax_referer( 'cpm_nwp_verify_otp', 'cpm_nwp_verify_nonce' );
+		if ( ! check_ajax_referer( 'cpm_nwp_verify_otp', 'cpm_nwp_verify_nonce', false ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Your session expired or this page is outdated. Please reload the page and try again.', 'cpm-humanblockchain' ),
+				),
+				403
+			);
+		}
 
 		$mobile_raw = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
 		$otp_code   = isset( $_POST['otp'] ) ? sanitize_text_field( wp_unslash( $_POST['otp'] ) ) : '';
