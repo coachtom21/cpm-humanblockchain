@@ -561,7 +561,7 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$phone_e164 = Cpm_Humanblockchain_Otp_Service::normalize_phone_e164( $mobile_raw );
 		if ( ! $phone_e164 ) {
-			wp_send_json_error( array( 'message' => __( 'Please enter a valid mobile number (e.g. 9849158973 or +9779849158973).', 'cpm-humanblockchain' ) ) );
+			wp_send_json_error( array( 'message' => Cpm_Humanblockchain_Otp_Service::normalize_phone_failure_message( $mobile_raw ) ) );
 		}
 
 		$buyer_proof_scan = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
@@ -627,7 +627,7 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$phone_e164 = Cpm_Humanblockchain_Otp_Service::normalize_phone_e164( $mobile_raw );
 		if ( ! $phone_e164 ) {
-			wp_send_json_error( array( 'message' => __( 'Please enter a valid mobile number.', 'cpm-humanblockchain' ) ) );
+			wp_send_json_error( array( 'message' => Cpm_Humanblockchain_Otp_Service::normalize_phone_failure_message( $mobile_raw ) ) );
 		}
 
 		$device_id = self::find_device_id_by_phone( $mobile_raw );

@@ -71,6 +71,23 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Human-readable reason normalization failed (for AJAX errors).
+	 *
+	 * @param string $mobile_raw Raw input.
+	 * @return string|null Message or null if input is valid.
+	 */
+	public static function normalize_phone_failure_message( $mobile_raw ) {
+		if ( self::normalize_phone_e164( $mobile_raw ) ) {
+			return null;
+		}
+		$digits = preg_replace( '/\D/', '', (string) $mobile_raw );
+		if ( self::get_default_country() === 'NP' && strlen( $digits ) === 11 && preg_match( '/^9[78]/', $digits ) ) {
+			return __( 'Nepal numbers must be exactly 10 digits without +977 (you entered 11 digits). Remove an extra digit, or use international format e.g. +9779849158973.', 'cpm-humanblockchain' );
+		}
+		return __( 'Please enter a valid mobile number (e.g. 9849158973 or +9779849158973).', 'cpm-humanblockchain' );
+	}
+
+	/**
 	 * Get 10-digit national number for legacy US-centric DB checks (fallback).
 	 *
 	 * @param string $phone Raw phone input.

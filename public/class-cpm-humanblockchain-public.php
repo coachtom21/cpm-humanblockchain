@@ -364,13 +364,20 @@ class Cpm_Humanblockchain_Public {
 			get_option( 'cpm_nwp_discord_invite_url', 'https://discord.com/invite/g5jreAPbra' )
 		);
 
+		$default_country = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ? Cpm_Humanblockchain_Otp_Service::get_default_country() : 'NP';
+
 		wp_localize_script( $this->plugin_name, 'cpmNwp', array(
-			'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
-			'action'        => 'cpm_nwp_register_device',
-			'sendOtpAction' => 'cpm_nwp_send_otp',
+			'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+			'action'          => 'cpm_nwp_register_device',
+			'sendOtpAction'   => 'cpm_nwp_send_otp',
 			'verifyOtpAction' => 'cpm_nwp_verify_otp',
-			'homeUrl'       => home_url( '/' ),
-			'discordInviteUrl' => esc_url_raw( $discord_invite ),
+			'homeUrl'         => home_url( '/' ),
+			'discordInviteUrl'  => esc_url_raw( $discord_invite ),
+			'defaultCountry'  => $default_country,
+			'phoneErrors'     => array(
+				'npElevenDigits' => __( 'Nepal numbers must be exactly 10 digits without +977 (you entered 11). Use e.g. 9849158973 or +9779849158973.', 'cpm-humanblockchain' ),
+				'short'          => __( 'Please enter a valid mobile number (at least 10 digits, or full international +977…).', 'cpm-humanblockchain' ),
+			),
 		) );
 
 		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {

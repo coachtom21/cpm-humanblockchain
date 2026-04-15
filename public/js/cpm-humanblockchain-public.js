@@ -278,8 +278,14 @@
 			var $btn = $form.find( 'button[type="submit"]' );
 			var mobile = $( '#cpm-nwp-activate-mobile' ).val();
 			var digits = mobile.replace( /\D/g, '' );
+			var pe = window.cpmNwp && window.cpmNwp.phoneErrors ? window.cpmNwp.phoneErrors : {};
+			var shortMsg = pe.short || 'Please enter a valid mobile number (at least 10 digits, or full international +977…).';
 			if ( digits.length < 10 ) {
-				showInlineFeedback( $activateFeedback, 'Please enter a valid mobile number (at least 10 digits, or full international +977…).', 'error' );
+				showInlineFeedback( $activateFeedback, shortMsg, 'error' );
+				return false;
+			}
+			if ( window.cpmNwp && window.cpmNwp.defaultCountry === 'NP' && digits.length === 11 && /^9[78]/.test( digits ) ) {
+				showInlineFeedback( $activateFeedback, pe.npElevenDigits || 'Nepal numbers must be 10 digits without +977 (you have 11). Example: 9849158973 or +9779849158973.', 'error' );
 				return false;
 			}
 			clearInlineFeedback( $activateFeedback );
