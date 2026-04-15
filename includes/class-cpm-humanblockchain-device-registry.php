@@ -205,8 +205,13 @@ class Cpm_Humanblockchain_Device_Registry {
 				}
 			}
 		}
+		// wp_enqueue_scripts runs before the loop; global $post may be unset. Queried object is reliable.
+		$queried = get_queried_object();
+		if ( $queried instanceof WP_Post && in_array( (string) $queried->post_name, $slugs, true ) ) {
+			return true;
+		}
 		global $post;
-		return $post instanceof WP_Post && in_array( $post->post_name, $slugs, true );
+		return $post instanceof WP_Post && in_array( (string) $post->post_name, $slugs, true );
 	}
 
 	/**

@@ -71,13 +71,6 @@ class Cpm_Humanblockchain_Public {
 	private $backorders_mount_printed = false;
 
 	/**
-	 * Prevent duplicate append if the_content runs more than once.
-	 *
-	 * @var bool
-	 */
-	private static $backorders_content_append_done = false;
-
-	/**
 	 * Outputs a container the backorders script fills (sessionStorage + server initialRows).
 	 * Place in the page editor as [cpm_hb_backorders] or in a template: echo do_shortcode( '[cpm_hb_backorders]' );
 	 *
@@ -102,16 +95,16 @@ class Cpm_Humanblockchain_Public {
 		if ( ! class_exists( 'Cpm_Humanblockchain_Device_Registry' ) || ! Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
 			return $content;
 		}
-		if ( self::$backorders_content_append_done ) {
+		// Only augment the main post body. Sidebars/widgets often run `the_content` first with the same
+		// queried page still "singular"; a global "append once" flag would attach the shortcode there and leave the main column empty.
+		if ( ! in_the_loop() || ! is_main_query() ) {
 			return $content;
 		}
 		if ( false !== strpos( $content, 'cpm-hb-backorders-root' ) ) {
 			$this->backorders_mount_printed = true;
-			self::$backorders_content_append_done = true;
 			return $content;
 		}
 		$this->backorders_mount_printed = true;
-		self::$backorders_content_append_done = true;
 		return $content . "\n\n" . do_shortcode( '[cpm_hb_backorders]' );
 	}
 
