@@ -717,8 +717,10 @@ class Cpm_Humanblockchain_Device_Registry {
 			$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 		}
 
-		// Smallstreet backorders-by-mobile is optional; redirect still goes to the backorder page.
 		$smallstreet_backorders = array();
+		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+			$smallstreet_backorders = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $mobile_raw );
+		}
 
 		$payload = array(
 			'message'            => $check['message'],

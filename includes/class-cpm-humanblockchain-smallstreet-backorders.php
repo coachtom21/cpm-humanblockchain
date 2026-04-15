@@ -279,6 +279,39 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	}
 
 	/**
+	 * Backorder rows for the Human Blockchain backorder page (after buyer OTP verify redirect).
+	 *
+	 * @param string $mobile_raw Raw mobile (same as verify_send).
+	 * @return array<int, array<string, mixed>>|array{} List of order rows for table display.
+	 */
+	public static function get_backorders_for_display( $mobile_raw ) {
+		$res = self::request_backorders_by_mobile( $mobile_raw );
+		if ( is_wp_error( $res ) ) {
+			return array();
+		}
+		if ( $res['code'] < 200 || $res['code'] >= 300 || ! is_array( $res['data'] ) ) {
+			return array();
+		}
+		$d = $res['data'];
+		if ( isset( $d['success'] ) && ! $d['success'] ) {
+			$rows = array();
+		} elseif ( isset( $d['backorders'] ) && is_array( $d['backorders'] ) ) {
+			$rows = $d['backorders'];
+		} else {
+			$rows = array();
+		}
+		/**
+		 * Parsed rows for the backorder page table, or replace if the API uses a different JSON shape.
+		 *
+		 * @param array<int, array<string, mixed>> $rows Order rows.
+		 * @param array<string, mixed>              $data Raw decoded JSON body.
+		 * @param array{ code: int, data: array|null, body: string } $res Full HTTP result.
+		 * @param string                             $mobile_raw Request input.
+		 */
+		return apply_filters( 'cpm_hb_smallstreet_backorders_display_rows', $rows, $d, $res, $mobile_raw );
+	}
+
+	/**
 	 * True if Smallstreet recognizes this mobile for backorders (HTTP 2xx and JSON success when present).
 	 *
 	 * @param string $mobile_raw Raw phone.
