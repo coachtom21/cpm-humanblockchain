@@ -114,11 +114,23 @@
 			$el.removeClass( 'cpm-nwp-inline-feedback--success cpm-nwp-inline-feedback--error' ).addClass( 'cpm-nwp-inline-feedback--hidden' ).empty();
 		}
 
+		function urlHasProofScan() {
+			try {
+				return new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan';
+			} catch ( err ) {
+				return false;
+			}
+		}
+
 		/**
 		 * After role selection: open the same “Your Phone Number” modal used by NWP, then Send OTP → verify OTP (public.js).
+		 * Buyer + ?proof=scan: server checks wp_nwp_devices and Smallstreet backorders-by-mobile before OTP.
 		 * pendingOtpRedirect sends the user to PoD URL after successful verification when the server does not return redirect_url.
+		 *
+		 * @param {{ buyerProofScan?: boolean }} opts
 		 */
-		function showPhoneOtpModal() {
+		function showPhoneOtpModal( opts ) {
+			opts = opts || {};
 			var H = window.cpmHbLanding || {};
 			var $activate = $( '#cpm-nwp-activate-modal' );
 			if ( ! $activate.length ) {
@@ -129,6 +141,7 @@
 			}
 			H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
 			H.phoneModalFromLanding = true;
+			H.buyerProofScan = !! opts.buyerProofScan;
 
 			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -160,8 +173,18 @@
 		} );
 
 		$( '#cpm-hb-role-continue' ).on( 'click', function() {
+			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
+			if ( role === 'buyer' && urlHasProofScan() ) {
+				showPhoneOtpModal( { buyerProofScan: true } );
+				return;
+			}
+			if ( role === 'buyer' ) {
+				var H = window.cpmHbLanding || {};
+				window.location.href = H.proofOfDeliveryUrl || '/';
+				return;
+			}
 			showPhoneOtpModal();
 		} );
 

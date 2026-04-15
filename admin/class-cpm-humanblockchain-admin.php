@@ -108,6 +108,14 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_register_user_api_key' ),
 		) );
+		register_setting( 'cpm_hb_membership', 'cpm_hb_smallstreet_backorders_url', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_smallstreet_backorders_url' ),
+		) );
+		register_setting( 'cpm_hb_membership', 'cpm_hb_smallstreet_backorders_api_key', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_smallstreet_backorders_api_key' ),
+		) );
 	}
 
 	/**
@@ -211,6 +219,48 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Smallstreet backorders-by-mobile URL.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_smallstreet_backorders_url( $value ) {
+		$default = 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile';
+		$value   = is_string( $value ) ? trim( $value ) : '';
+		$prev    = get_option( 'cpm_hb_smallstreet_backorders_url', $default );
+		if ( $value === '' ) {
+			return is_string( $prev ) && $prev !== '' ? $prev : $default;
+		}
+		if ( ! filter_var( $value, FILTER_VALIDATE_URL ) ) {
+			add_settings_error(
+				'cpm_hb_membership',
+				'bad_smallstreet_backorders_url',
+				__( 'Smallstreet backorders URL must be a valid http(s) URL.', 'cpm-humanblockchain' )
+			);
+			return is_string( $prev ) ? $prev : $default;
+		}
+		return esc_url_raw( $value );
+	}
+
+	/**
+	 * Bearer key for backorders-by-mobile; empty keeps previous; clear checkbox removes.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_smallstreet_backorders_api_key( $value ) {
+		if ( isset( $_POST['cpm_hb_smallstreet_backorders_clear_key'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_smallstreet_backorders_clear_key'] ) ) ) {
+			return '';
+		}
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			$prev = get_option( 'cpm_hb_smallstreet_backorders_api_key', '' );
+			return is_string( $prev ) ? $prev : '';
+		}
+		return $value;
+	}
+
+	/**
 	 * Sanitize default country option (NP or US).
 	 *
 	 * @param mixed $value Raw value.
@@ -244,6 +294,8 @@ class Cpm_Humanblockchain_Admin {
 		$register_user_endpoint   = get_option( 'cpm_hb_register_user_api_endpoint', '' );
 		$membership_key_set       = (bool) strlen( (string) get_option( 'smallstreet_api_key', '' ) );
 		$register_user_key_set    = (bool) strlen( (string) get_option( 'cpm_hb_register_user_api_key', '' ) );
+		$smallstreet_backorders_url = get_option( 'cpm_hb_smallstreet_backorders_url', 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile' );
+		$smallstreet_bo_key_set     = class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'NWP Gateway Settings', 'cpm-humanblockchain' ); ?></h1>
@@ -419,6 +471,53 @@ class Cpm_Humanblockchain_Admin {
 								<label>
 									<input type="checkbox" name="cpm_hb_register_user_clear_key" value="1" />
 									<?php esc_html_e( 'Clear dedicated Register User key (then the shared Membership API key is used)', 'cpm-humanblockchain' ); ?>
+								</label>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_smallstreet_backorders_url"><?php esc_html_e( 'Smallstreet — backorders by mobile (URL)', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="url"
+								id="cpm_hb_smallstreet_backorders_url"
+								name="cpm_hb_smallstreet_backorders_url"
+								value="<?php echo esc_attr( is_string( $smallstreet_backorders_url ) ? $smallstreet_backorders_url : '' ); ?>"
+								class="large-text code"
+								placeholder="https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'POST JSON { "mobile": "5551234567" } with Bearer auth. Used for buyer + proof=scan PoD flow (local + Smallstreet check, then OTP).', 'cpm-humanblockchain' ); ?>
+							</p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row">
+							<label for="cpm_hb_smallstreet_backorders_api_key"><?php esc_html_e( 'Smallstreet — backorders API key (Bearer)', 'cpm-humanblockchain' ); ?></label>
+						</th>
+						<td>
+							<input
+								type="password"
+								id="cpm_hb_smallstreet_backorders_api_key"
+								name="cpm_hb_smallstreet_backorders_api_key"
+								value=""
+								class="regular-text"
+								autocomplete="new-password"
+							/>
+							<p class="description">
+								<?php if ( $smallstreet_bo_key_set ) : ?>
+									<span style="color:#00a32a;"><?php esc_html_e( 'Key is set.', 'cpm-humanblockchain' ); ?></span>
+									<?php esc_html_e( 'Leave blank to keep the current key.', 'cpm-humanblockchain' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'A default key may apply until you save a custom value.', 'cpm-humanblockchain' ); ?>
+								<?php endif; ?>
+							</p>
+							<p style="margin-top:10px;">
+								<label>
+									<input type="checkbox" name="cpm_hb_smallstreet_backorders_clear_key" value="1" />
+									<?php esc_html_e( 'Clear Smallstreet backorders API key (disables buyer PoD Smallstreet checks until a new key is saved)', 'cpm-humanblockchain' ); ?>
 								</label>
 							</p>
 						</td>

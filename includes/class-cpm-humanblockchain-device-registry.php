@@ -163,6 +163,76 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Create wp_nwp_devices + WP user when buyer PoD scan flow: phone exists on Smallstreet but not locally.
+	 *
+	 * @param string $phone_e164 Normalized E.164.
+	 * @param string $mobile_raw Raw input for matching.
+	 * @return int|\WP_Error Device row id.
+	 */
+	private static function ensure_buyer_proof_scan_device( $phone_e164, $mobile_raw ) {
+		$existing = self::find_device_id_by_phone( $mobile_raw );
+		if ( $existing ) {
+			return (int) $existing;
+		}
+
+		$stable_email = 'buyer-pod-' . md5( $phone_e164 ) . '@placeholder.invalid';
+		$created_new  = false;
+		$wp_uid       = self::get_or_create_wp_user_for_device( $stable_email, $created_new );
+		if ( is_wp_error( $wp_uid ) ) {
+			return $wp_uid;
+		}
+
+		update_user_meta( (int) $wp_uid, 'phone', $phone_e164 );
+
+		global $wpdb;
+		$table_name = $wpdb->prefix . self::TABLE_NAME;
+
+		$ip_address = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : null;
+		$user_agent = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : null;
+
+		$hash = '';
+		if ( function_exists( 'random_bytes' ) ) {
+			try {
+				$hash = bin2hex( random_bytes( 32 ) );
+			} catch ( Exception $e ) {
+				$hash = wp_generate_password( 64, false, false );
+			}
+		} else {
+			$hash = wp_generate_password( 64, false, false );
+		}
+		$hash = substr( $hash, 0, 64 );
+
+		$inserted = $wpdb->insert(
+			$table_name,
+			array(
+				'user_id'                => (int) $wp_uid,
+				'device_hash'            => $hash,
+				'email'                  => $stable_email,
+				'phone'                  => $phone_e164,
+				'geo_lat'                => null,
+				'geo_lng'                => null,
+				'registered_at'          => current_time( 'mysql' ),
+				'registration_status'    => 'registered',
+				'referral_source_nwp_id' => null,
+				'qrtiger_vcard_link'     => null,
+				'ip_address'             => $ip_address,
+				'user_agent'             => $user_agent ? substr( $user_agent, 0, 512 ) : null,
+			),
+			array( '%d', '%s', '%s', '%s', '%f', '%f', '%s', '%s', '%d', '%s', '%s', '%s' )
+		);
+
+		if ( ! $inserted ) {
+			if ( $created_new ) {
+				require_once ABSPATH . 'wp-admin/includes/user.php';
+				wp_delete_user( (int) $wp_uid );
+			}
+			return new WP_Error( 'device_insert', __( 'Could not save device for verification.', 'cpm-humanblockchain' ) );
+		}
+
+		return (int) $wpdb->insert_id;
+	}
+
+	/**
 	 * Resolve WordPress user ID for a new device: logged-in user, existing email, or newly created account.
 	 *
 	 * @param string   $email        Sanitized registration email.
@@ -518,9 +588,35 @@ class Cpm_Humanblockchain_Device_Registry {
 			wp_send_json_error( array( 'message' => __( 'Please enter a valid mobile number (e.g. 9849158973 or +9779849158973).', 'cpm-humanblockchain' ) ) );
 		}
 
-		$exists = self::find_device_id_by_phone( $mobile_raw );
+		$buyer_proof_scan = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$local_device     = self::find_device_id_by_phone( $mobile_raw );
 
-		if ( ! $exists ) {
+		if ( $buyer_proof_scan ) {
+			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+				wp_send_json_error( array( 'message' => __( 'Smallstreet backorders API is not configured. Add the API key under Settings → NWP Gateway.', 'cpm-humanblockchain' ) ) );
+			}
+			$smallstreet_ok = Cpm_Humanblockchain_Smallstreet_Backorders::mobile_recognized_for_backorders( $mobile_raw );
+			if ( ! $local_device && ! $smallstreet_ok ) {
+				wp_send_json_error(
+					array(
+						'message' => __( 'This number is not registered on this site or on Smallstreet.', 'cpm-humanblockchain' ),
+					)
+				);
+			}
+			if ( $local_device && ! $smallstreet_ok ) {
+				wp_send_json_error(
+					array(
+						'message' => __( 'This number is not recognized on Smallstreet for backorders.', 'cpm-humanblockchain' ),
+					)
+				);
+			}
+			if ( ! $local_device && $smallstreet_ok ) {
+				$ensured = self::ensure_buyer_proof_scan_device( $phone_e164, $mobile_raw );
+				if ( is_wp_error( $ensured ) ) {
+					wp_send_json_error( array( 'message' => $ensured->get_error_message() ) );
+				}
+			}
+		} elseif ( ! $local_device ) {
 			wp_send_json_error( array( 'message' => __( 'This phone number is not registered. Please register your device first.', 'cpm-humanblockchain' ) ) );
 		}
 
@@ -617,6 +713,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		do_action( 'wp_login', $user->user_login, $user );
 
 		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
+		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
 
 		if ( $landing_backorder ) {
 			$redirect     = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
@@ -627,12 +724,23 @@ class Cpm_Humanblockchain_Device_Registry {
 			$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 		}
 
-		wp_send_json_success(
-			array(
-				'message'            => $check['message'],
-				'redirect_url'       => $redirect ? esc_url_raw( $redirect ) : '',
-				'show_discord_modal' => (bool) $show_discord,
-			)
+		$smallstreet_backorders = null;
+		if ( $landing_backorder && $buyer_proof_scan && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+			$ss_res = Cpm_Humanblockchain_Smallstreet_Backorders::request_backorders_by_mobile( $mobile_raw );
+			if ( ! is_wp_error( $ss_res ) && isset( $ss_res['data'] ) ) {
+				$smallstreet_backorders = $ss_res['data'];
+			}
+		}
+
+		$payload = array(
+			'message'            => $check['message'],
+			'redirect_url'       => $redirect ? esc_url_raw( $redirect ) : '',
+			'show_discord_modal' => (bool) $show_discord,
 		);
+		if ( null !== $smallstreet_backorders ) {
+			$payload['smallstreet_backorders'] = $smallstreet_backorders;
+		}
+
+		wp_send_json_success( $payload );
 	}
 }

@@ -107,6 +107,7 @@
 				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
+				window.cpmHbLanding.buyerProofScan = false;
 				return;
 			}
 			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -133,6 +134,7 @@
 				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.pendingOtpRedirect = '';
+				window.cpmHbLanding.buyerProofScan = false;
 				return;
 			}
 			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -177,6 +179,7 @@
 						$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 						window.cpmHbLanding.phoneModalFromLanding = false;
 						window.cpmHbLanding.pendingOtpRedirect = '';
+						window.cpmHbLanding.buyerProofScan = false;
 					} else {
 						$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 						clearInlineFeedback( $activateFeedback );
@@ -212,6 +215,9 @@
 			clearInlineFeedback( $activateFeedback );
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
+			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
+				formData += '&cpm_hb_buyer_proof_scan=1';
+			}
 			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
 			$.post( ajaxUrl, formData )
 				.done( function( res ) {
@@ -252,11 +258,17 @@
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
 				payload += '&cpm_hb_verify_redirect=1';
 			}
+			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
+				payload += '&cpm_hb_buyer_proof_scan=1';
+			}
 			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
 			$.post( ajaxUrl, payload )
 				.done( function( res ) {
 					if ( res.success && res.data ) {
 						if ( res.data.redirect_url ) {
+							if ( window.cpmHbLanding ) {
+								window.cpmHbLanding.buyerProofScan = false;
+							}
 							window.location.href = res.data.redirect_url;
 							return;
 						}
@@ -264,6 +276,7 @@
 							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
 							window.cpmHbLanding.pendingOtpRedirect = '';
 							window.cpmHbLanding.phoneModalFromLanding = false;
+							window.cpmHbLanding.buyerProofScan = false;
 							window.location.href = postUrl;
 							return;
 						}
