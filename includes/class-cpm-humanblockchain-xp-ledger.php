@@ -225,6 +225,10 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	/**
 	 * POST body: scan_type, entry, and user_id and/or email (per cpm-dongtrader xp-ledger/scan).
 	 *
+	 * By default we send **email only** when the account has an email: Smallstreet validates that
+	 * user_id and email refer to the *same user on their site*; our local WP user_id usually does
+	 * not match their user table, which triggers rest_invalid_param. Remote lookup by email is stable.
+	 *
 	 * @param int               $wp_user_id WordPress user ID.
 	 * @param string            $scan_type    seller_scan|buyer_scan.
 	 * @param array<string,mixed> $entry      entry object.
@@ -232,16 +236,43 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 */
 	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry ) {
 		$identity = self::user_identity_for_xp_api( $wp_user_id );
-		$payload  = array(
+		$payload    = array(
 			'scan_type' => $scan_type,
 			'entry'     => $entry,
 		);
-		if ( $identity['user_id'] > 0 ) {
-			$payload['user_id'] = $identity['user_id'];
+		/**
+		 * Which identity fields to send: email_only (default), user_id_only, or both.
+		 * Use "both" only if user_id is Smallstreet’s WP user id (e.g. stored meta), not this site’s id.
+		 *
+		 * @param string $mode        email_only|user_id_only|both.
+		 * @param int    $wp_user_id  Local WordPress user ID.
+		 * @param string $scan_type   seller_scan|buyer_scan.
+		 * @param array  $entry       Entry object.
+		 */
+		$mode = apply_filters( 'cpm_hb_xp_ledger_identity_fields', 'email_only', $wp_user_id, $scan_type, $entry );
+		if ( ! is_string( $mode ) || ! in_array( $mode, array( 'email_only', 'user_id_only', 'both' ), true ) ) {
+			$mode = 'email_only';
 		}
-		if ( $identity['email'] !== '' ) {
-			$payload['email'] = $identity['email'];
+
+		if ( 'both' === $mode ) {
+			if ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
+			if ( $identity['email'] !== '' ) {
+				$payload['email'] = $identity['email'];
+			}
+		} elseif ( 'user_id_only' === $mode ) {
+			if ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
+		} else {
+			if ( $identity['email'] !== '' ) {
+				$payload['email'] = $identity['email'];
+			} elseif ( $identity['user_id'] > 0 ) {
+				$payload['user_id'] = $identity['user_id'];
+			}
 		}
+
 		/**
 		 * Full JSON body for POST /xp-ledger/scan (before wp_json_encode).
 		 *
