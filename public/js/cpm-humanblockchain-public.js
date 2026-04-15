@@ -220,6 +220,9 @@
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
 				formData += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
+				if ( window.cpmHbLanding.proofScanNonce ) {
+					formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
+				}
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
@@ -266,6 +269,9 @@
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
 				payload += '&cpm_hb_buyer_proof_scan=1&cpm_hb_proof_scan=1';
+				if ( window.cpmHbLanding.proofScanNonce ) {
+					payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
+				}
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
 				payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );

@@ -13,6 +13,21 @@
 			window.cpmHbLanding = {};
 		}
 
+		try {
+			if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
+				sessionStorage.setItem( 'cpm_hb_proof_scan', '1' );
+			}
+		} catch ( err ) {
+			// ignore
+		}
+		if ( window.cpmHbLanding.hasProofScan ) {
+			try {
+				sessionStorage.setItem( 'cpm_hb_proof_scan', '1' );
+			} catch ( err2 ) {
+				// ignore
+			}
+		}
+
 		var state = {
 			proof: null,
 			final: null
@@ -116,8 +131,19 @@
 
 		function urlHasProofScan() {
 			try {
-				return new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan';
+				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
+					return true;
+				}
 			} catch ( err ) {
+				// ignore
+			}
+			var H = window.cpmHbLanding || {};
+			if ( H.hasProofScan ) {
+				return true;
+			}
+			try {
+				return sessionStorage.getItem( 'cpm_hb_proof_scan' ) === '1';
+			} catch ( err2 ) {
 				return false;
 			}
 		}

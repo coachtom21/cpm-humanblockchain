@@ -66,6 +66,19 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Buyer proof-scan flow: client sends cpm_hb_proof_scan=1 or a nonce minted when ?proof=scan was on the initial request.
+	 *
+	 * @return bool
+	 */
+	private static function request_has_proof_scan_intent() {
+		if ( isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) ) ) {
+			return true;
+		}
+		$nonce = isset( $_POST['cpm_hb_proof_scan_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan_nonce'] ) ) : '';
+		return $nonce !== '' && (bool) wp_verify_nonce( $nonce, 'cpm_hb_proof_scan_flow' );
+	}
+
+	/**
 	 * Whether a WordPress user has at least one NWP device with status "activated".
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -542,7 +555,7 @@ class Cpm_Humanblockchain_Device_Registry {
 			if ( 'buyer' !== $landing_role ) {
 				wp_send_json_error( array( 'message' => __( 'Buyer role is required for this verification path.', 'cpm-humanblockchain' ) ) );
 			}
-			$proof_scan_url = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
+			$proof_scan_url = self::request_has_proof_scan_intent();
 			if ( ! $proof_scan_url ) {
 				wp_send_json_error( array( 'message' => __( 'Open this flow from a link that includes ?proof=scan in the URL.', 'cpm-humanblockchain' ) ) );
 			}
@@ -661,7 +674,7 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
 		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
-		$proof_scan_url    = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
+		$proof_scan_url    = self::request_has_proof_scan_intent();
 		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
 		$redirect_backorders = $landing_backorder && $buyer_proof_scan && $proof_scan_url && 'buyer' === $landing_role;
 

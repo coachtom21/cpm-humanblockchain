@@ -55,6 +55,15 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
+	 * Whether the current request URL includes ?proof=scan (buyer PoD / backorders flow).
+	 *
+	 * @return bool
+	 */
+	private function request_has_proof_scan_param() {
+		return isset( $_GET['proof'] ) && 'scan' === sanitize_text_field( wp_unslash( $_GET['proof'] ) );
+	}
+
+	/**
 	 * Whether to show the landing “Enter Website” gate (logged-out visitors, front page only).
 	 *
 	 * @return bool
@@ -341,6 +350,9 @@ class Cpm_Humanblockchain_Public {
 					'whatIsThisUrl'       => esc_url_raw( $what_default ),
 					'howItWorksUrl'       => esc_url_raw( $how_default ),
 					'answerBothPrompts'   => __( 'Please answer both prompts (Proof of Delivery and Final Destination).', 'cpm-humanblockchain' ),
+					// Set from the initial HTTP request so ?proof=scan still counts if the address bar is cleaned before OTP (replaceState, etc.).
+					'hasProofScan'        => $this->request_has_proof_scan_param(),
+					'proofScanNonce'      => $this->request_has_proof_scan_param() ? wp_create_nonce( 'cpm_hb_proof_scan_flow' ) : '',
 				)
 			);
 		}
