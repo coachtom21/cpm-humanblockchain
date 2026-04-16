@@ -164,24 +164,31 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
-	 * Whether to show the landing “Enter Website” gate (logged-out visitors).
+	 * Whether to show the landing “Enter Website” gate.
 	 *
-	 * Default: front page only. Also shown on any URL with ?proof=scan so PoD links can open the same prompts
-	 * (even when not the home page). ?cpm_hb_skip_gate=1 still hides the gate unless ?proof=scan is present.
+	 * - Logged-out: default is front page only; also any URL with ?proof=scan.
+	 * - Logged-in: only when ?proof=scan is present (same PoD prompts).
+	 * - ?cpm_hb_skip_gate=1 hides the gate for guests unless ?proof=scan is present.
 	 *
 	 * @return bool
 	 */
 	public function should_show_landing_entry_modal() {
+		$proof_scan = $this->request_has_proof_scan_param();
+
 		if ( is_user_logged_in() ) {
-			return false;
+			if ( ! $proof_scan ) {
+				return false;
+			}
+			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', true );
 		}
+
 		// After "Home" we navigate with ?cpm_hb_skip_gate=1 so the gate is not rendered on that load (avoids flash; works when navigation is reported as reload).
 		if ( isset( $_GET['cpm_hb_skip_gate'] ) && '1' === (string) $_GET['cpm_hb_skip_gate'] ) {
-			if ( ! $this->request_has_proof_scan_param() ) {
+			if ( ! $proof_scan ) {
 				return false;
 			}
 		}
-		if ( $this->request_has_proof_scan_param() ) {
+		if ( $proof_scan ) {
 			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', true );
 		}
 		$default = is_front_page();
