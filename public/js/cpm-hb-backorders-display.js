@@ -16,6 +16,26 @@
 		return 0;
 	}
 
+	/** Rows already tied to buyer_scan / seller_scan in xp_ledger (server also filters; this covers stale sessionStorage). */
+	function filterRowsExcludingLinkedOrders( rows ) {
+		var H = window.cpmHbBackorders;
+		var linked = ( H && Array.isArray( H.linkedOrderIds ) ) ? H.linkedOrderIds : [];
+		if ( ! linked.length || ! Array.isArray( rows ) ) {
+			return rows;
+		}
+		var set = {};
+		linked.forEach( function( id ) {
+			var n = parseInt( id, 10 );
+			if ( ! isNaN( n ) && n > 0 ) {
+				set[ n ] = true;
+			}
+		} );
+		return rows.filter( function( row ) {
+			var oid = getOrderIdFromRow( row );
+			return ! ( oid > 0 && set[ oid ] );
+		} );
+	}
+
 	function renderBackorders( data ) {
 		var S = window.cpmHbBackorders && window.cpmHbBackorders.strings ? window.cpmHbBackorders.strings : {};
 		var title = S.title || 'Backorders';
@@ -277,7 +297,7 @@
 		}
 
 		if ( data !== null ) {
-			mountBackordersTable( $mount, Array.isArray( data ) ? data : [] );
+			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( Array.isArray( data ) ? data : [] ) );
 			return;
 		}
 
@@ -292,7 +312,7 @@
 		}
 
 		if ( Object.prototype.hasOwnProperty.call( H, 'initialRows' ) ) {
-			mountBackordersTable( $mount, Array.isArray( H.initialRows ) ? H.initialRows : [] );
+			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( Array.isArray( H.initialRows ) ? H.initialRows : [] ) );
 			return;
 		}
 

@@ -518,7 +518,11 @@ class Cpm_Humanblockchain_Public {
 				'confirmAction'        => 'cpm_hb_buyer_confirm_delivery',
 				'confirmNonce'         => wp_create_nonce( 'cpm_hb_backorders_confirm' ),
 				'homeUrl'              => esc_url_raw( home_url( '/' ) ),
+				'linkedOrderIds'       => array(),
 			);
+			if ( is_user_logged_in() && class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+				$backorders_localize['linkedOrderIds'] = Cpm_Humanblockchain_Xp_Ledger::get_linked_order_ids_for_backorders_display();
+			}
 			// Logged-in + API: load rows by phone; persist successful responses in user meta so refresh still shows data if API is empty.
 			if ( is_user_logged_in() && $api_ok ) {
 				$uid   = (int) get_current_user_id();

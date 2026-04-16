@@ -924,4 +924,113 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			false
 		);
 	}
+
+	/**
+	 * Shop order IDs already tied to a buyer_scan or seller_scan row (column and/or entry_json).
+	 *
+	 * Used to hide those rows from the backorders table.
+	 *
+	 * @return int[] Unique positive order IDs.
+	 */
+	public static function get_linked_order_ids_for_backorders_display() {
+		global $wpdb;
+		$table = self::table_name();
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name is prefixed constant.
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT order_id, entry_json FROM {$table} WHERE scan_type IN (%s, %s)",
+				'buyer_scan',
+				'seller_scan'
+			),
+			ARRAY_A
+		);
+		if ( ! is_array( $rows ) ) {
+			$rows = array();
+		}
+		$ids = array();
+		foreach ( $rows as $r ) {
+			if ( ! is_array( $r ) ) {
+				continue;
+			}
+			$oid = isset( $r['order_id'] ) ? (int) $r['order_id'] : 0;
+			if ( $oid > 0 ) {
+				$ids[ $oid ] = true;
+			}
+			$json = isset( $r['entry_json'] ) ? $r['entry_json'] : '';
+			$entry = is_string( $json ) && $json !== '' ? json_decode( $json, true ) : null;
+			if ( ! is_array( $entry ) ) {
+				continue;
+			}
+			if ( ! empty( $entry['order_ids'] ) && is_array( $entry['order_ids'] ) ) {
+				foreach ( $entry['order_ids'] as $x ) {
+					$xi = (int) $x;
+					if ( $xi > 0 ) {
+						$ids[ $xi ] = true;
+					}
+				}
+			}
+			if ( isset( $entry['order_id'] ) ) {
+				$xi = (int) $entry['order_id'];
+				if ( $xi > 0 ) {
+					$ids[ $xi ] = true;
+				}
+			}
+		}
+		$out = array_map( 'intval', array_keys( $ids ) );
+		sort( $out );
+
+		/**
+		 * Order IDs to omit from the Smallstreet backorders list (already linked in xp_ledger).
+		 *
+		 * @param int[] $out Linked Woo/Smallstreet order IDs.
+		 */
+		return apply_filters( 'cpm_hb_backorders_exclude_linked_order_ids', $out );
+	}
+
+	/**
+	 * Resolve shop order id from a Smallstreet backorders API row (matches JS getOrderIdFromRow).
+	 *
+	 * @param array<string, mixed> $row Row from backorders-by-mobile.
+	 * @return int
+	 */
+	public static function backorder_row_order_id( array $row ) {
+		if ( isset( $row['id'] ) && $row['id'] !== '' && null !== $row['id'] ) {
+			$n = (int) $row['id'];
+			return $n > 0 ? $n : 0;
+		}
+		if ( isset( $row['order_number'] ) && $row['order_number'] !== '' && null !== $row['order_number'] ) {
+			$n = (int) $row['order_number'];
+			return $n > 0 ? $n : 0;
+		}
+		return 0;
+	}
+
+	/**
+	 * Drop backorder rows whose order id already appears in xp_ledger (buyer or seller scan).
+	 *
+	 * @param array<int, array<string, mixed>> $rows Backorder rows.
+	 * @param int[]|null                       $linked_ids Optional precomputed list; when null, loads from DB.
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function filter_backorder_rows_excluding_linked_orders( array $rows, $linked_ids = null ) {
+		if ( null === $linked_ids ) {
+			$linked_ids = self::get_linked_order_ids_for_backorders_display();
+		}
+		if ( ! is_array( $linked_ids ) || empty( $linked_ids ) ) {
+			return $rows;
+		}
+		$exclude = array_flip( array_map( 'intval', $linked_ids ) );
+		$out     = array();
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$oid = self::backorder_row_order_id( $row );
+			if ( $oid > 0 && isset( $exclude[ $oid ] ) ) {
+				continue;
+			}
+			$out[] = $row;
+		}
+		return $out;
+	}
 }

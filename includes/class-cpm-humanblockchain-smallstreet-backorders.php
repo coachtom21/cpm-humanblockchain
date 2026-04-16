@@ -54,7 +54,11 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 			return array();
 		}
 		$v = get_user_meta( $user_id, self::USER_META_BACKORDERS_CACHE, true );
-		return is_array( $v ) ? $v : array();
+		$rows = is_array( $v ) ? $v : array();
+		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+			$rows = Cpm_Humanblockchain_Xp_Ledger::filter_backorder_rows_excluding_linked_orders( $rows );
+		}
+		return $rows;
 	}
 
 	/**
@@ -363,7 +367,11 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 		 * @param array{ code: int, data: array|null, body: string } $res Full HTTP result.
 		 * @param string                             $mobile_raw Request input.
 		 */
-		return apply_filters( 'cpm_hb_smallstreet_backorders_display_rows', $rows, $d, $res, $mobile_raw );
+		$rows = apply_filters( 'cpm_hb_smallstreet_backorders_display_rows', $rows, $d, $res, $mobile_raw );
+		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+			$rows = Cpm_Humanblockchain_Xp_Ledger::filter_backorder_rows_excluding_linked_orders( $rows );
+		}
+		return $rows;
 	}
 
 	/**
