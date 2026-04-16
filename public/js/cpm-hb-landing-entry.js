@@ -234,14 +234,12 @@
 			var role = typeof opts.landingRole === 'string' && opts.landingRole !== ''
 				? opts.landingRole
 				: ( opts.buyerProofScan ? 'buyer' : 'seller' );
-			// Fallback if AJAX omits redirect_url: buyer PoD URL; seller + proof=scan → server returns transaction modal (no fallback redirect).
+			// Fallback only when ?proof=scan was on the page load (nonce); otherwise no forced redirect after verify.
 			H.podProofScan = urlHasProofScan();
-			if ( opts.buyerProofScan ) {
+			if ( opts.buyerProofScan && H.proofScanNonce ) {
 				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
-			} else if ( role === 'seller' && H.podProofScan ) {
-				H.pendingOtpRedirect = '';
 			} else {
-				H.pendingOtpRedirect = H.homeUrl || '/';
+				H.pendingOtpRedirect = '';
 			}
 			H.phoneModalFromLanding = true;
 			H.buyerProofScan = !! opts.buyerProofScan;

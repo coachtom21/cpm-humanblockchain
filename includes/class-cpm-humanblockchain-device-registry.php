@@ -79,6 +79,19 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * True only when the proof-scan nonce from a page that loaded with ?proof=scan is valid (used for buyer → backorders redirect).
+	 *
+	 * @return bool
+	 */
+	private static function request_has_valid_proof_scan_nonce() {
+		if ( ! isset( $_POST['cpm_hb_proof_scan_nonce'] ) ) {
+			return false;
+		}
+		$nonce = sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan_nonce'] ) );
+		return $nonce !== '' && (bool) wp_verify_nonce( $nonce, 'cpm_hb_proof_scan_flow' );
+	}
+
+	/**
 	 * Unique transaction code for seller PoD scan completion (share with buyer).
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -611,8 +624,7 @@ class Cpm_Humanblockchain_Device_Registry {
 			if ( 'buyer' !== $landing_role ) {
 				wp_send_json_error( array( 'message' => __( 'Buyer role is required for this verification path.', 'cpm-humanblockchain' ) ) );
 			}
-			$proof_scan_url = self::request_has_proof_scan_intent();
-			if ( ! $proof_scan_url ) {
+			if ( ! self::request_has_valid_proof_scan_nonce() ) {
 				wp_send_json_error( array( 'message' => __( 'Open this flow from a link that includes ?proof=scan in the URL.', 'cpm-humanblockchain' ) ) );
 			}
 			if ( ! $local_device ) {
@@ -743,7 +755,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
 		$proof_scan_url    = self::request_has_proof_scan_intent();
 		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
-		$redirect_backorders = $landing_backorder && $buyer_proof_scan && $proof_scan_url && 'buyer' === $landing_role;
+		// Backorders redirect only when the page was loaded with ?proof=scan (nonce), not for generic landing OTP.
+		$redirect_backorders = $landing_backorder && $buyer_proof_scan && self::request_has_valid_proof_scan_nonce() && 'buyer' === $landing_role;
 		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && $proof_scan_url;
 
 		$seller_transaction_code = '';
@@ -755,15 +768,17 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		if ( $landing_backorder ) {
-			// Backorders: buyer + ?proof=scan. Seller + proof-scan: transaction code modal (no redirect). Else home.
 			if ( $redirect_backorders ) {
-				$redirect = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
+				$redirect     = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
+				$show_discord = false;
 			} elseif ( $seller_pod_complete ) {
-				$redirect = '';
+				$redirect     = '';
+				$show_discord = false;
 			} else {
-				$redirect = apply_filters( 'cpm_hb_landing_verify_home_url', home_url( '/' ) );
+				// Landing OTP without buyer+?proof=scan backorder redirect: stay logged in on this page (Discord / reload), do not send to home.
+				$redirect     = apply_filters( 'cpm_hb_landing_verify_no_proof_redirect', '' );
+				$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 			}
-			$show_discord = false;
 		} else {
 			// Default: no immediate redirect; show Discord invite modal. Set redirect URL via filter to skip modal.
 			$redirect     = apply_filters( 'cpm_nwp_after_verify_redirect', '' );

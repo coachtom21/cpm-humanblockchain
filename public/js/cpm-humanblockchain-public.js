@@ -429,6 +429,19 @@
 							showSellerScanSuccessModal( res.data.seller_transaction_code );
 							return;
 						}
+						if ( res.data.show_discord_modal ) {
+							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+							clearInlineFeedback( $verifyFeedback );
+							if ( window.cpmHbLanding ) {
+								window.cpmHbLanding.pendingOtpRedirect = '';
+							}
+							if ( window.cpmNwp && window.cpmNwp.discordInviteUrl ) {
+								$( '#cpm-nwp-discord-join-link' ).attr( 'href', window.cpmNwp.discordInviteUrl );
+							}
+							$discordModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+							return;
+						}
 						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
 							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
 							window.cpmHbLanding.pendingOtpRedirect = '';
@@ -437,16 +450,6 @@
 							window.cpmHbLanding.podProofScan = false;
 							window.cpmHbLanding.landingRole = '';
 							window.location.href = postUrl;
-							return;
-						}
-						if ( res.data.show_discord_modal ) {
-							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-							clearInlineFeedback( $verifyFeedback );
-							if ( window.cpmNwp && window.cpmNwp.discordInviteUrl ) {
-								$( '#cpm-nwp-discord-join-link' ).attr( 'href', window.cpmNwp.discordInviteUrl );
-							}
-							$discordModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 							return;
 						}
 						window.location.reload();
