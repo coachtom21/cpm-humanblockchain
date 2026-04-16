@@ -249,9 +249,10 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 * @param string            $scan_type    seller_scan|buyer_scan.
 	 * @param array<string,mixed> $entry      entry object.
 	 * @param int|null          $order_id     Woo / shop order id (buyer_scan); omit from JSON when empty.
+	 * @param string|null       $date_mysql   `date` field `Y-m-d H:i:s`; default site time.
 	 * @return array<string,mixed>
 	 */
-	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry, $order_id = null ) {
+	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry, $order_id = null, $date_mysql = null ) {
 		$identity = self::user_identity_for_xp_api( $wp_user_id );
 		$oid        = null !== $order_id ? (int) $order_id : 0;
 		$payload    = array(
@@ -294,32 +295,52 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			$payload['order_id'] = $oid;
 		}
 
+		$date_str = is_string( $date_mysql ) && $date_mysql !== ''
+			? $date_mysql
+			: self::default_ledger_patch_date_mysql( $wp_user_id, $entry, $oid > 0 ? $oid : null );
+		$payload['date'] = $date_str;
+
 		$payload['entry'] = $entry;
 
 		/**
 		 * Full JSON body for POST /xp-ledger/scan (before wp_json_encode).
 		 *
-		 * @param array<string,mixed> $payload    Keys: scan_type, email|user_id, optional order_id, entry.
+		 * @param array<string,mixed> $payload    Keys: scan_type, email|user_id, optional order_id, date, entry.
 		 * @param int                 $wp_user_id WordPress user ID.
 		 * @param string              $scan_type  seller_scan|buyer_scan.
 		 * @param array<string,mixed> $entry      Entry object.
 		 * @param int|null            $order_id   Optional order id sent to API.
+		 * @param string              $date_str   Datetime string sent as `date`.
 		 */
-		return apply_filters( 'cpm_hb_xp_ledger_scan_payload', $payload, $wp_user_id, $scan_type, $entry, $order_id );
+		return apply_filters( 'cpm_hb_xp_ledger_scan_payload', $payload, $wp_user_id, $scan_type, $entry, $order_id, $date_str );
 	}
 
 	/**
-	 * PUT/PATCH body: user_id and/or email + entry (no scan_type).
+	 * Default MySQL datetime for PATCH `date` (site timezone).
+	 *
+	 * @param int|null $wp_user_id Context user.
+	 * @param array<string,mixed> $entry Entry object.
+	 * @param int|null $order_id Order id if any.
+	 * @return string Y-m-d H:i:s
+	 */
+	private static function default_ledger_patch_date_mysql( $wp_user_id, array $entry, $order_id ) {
+		$d = (string) apply_filters( 'cpm_hb_xp_ledger_update_date', current_time( 'mysql' ), $wp_user_id, $entry, $order_id );
+		return $d !== '' ? $d : current_time( 'mysql' );
+	}
+
+	/**
+	 * PUT/PATCH body: user_id and/or email, optional order_id, date, entry (no scan_type).
 	 *
 	 * @param int    $wp_user_id WordPress user ID (seller when updating seller row).
 	 * @param array<string,mixed> $entry Entry object.
+	 * @param int|null $order_id  Woo / shop order id when known (buyer confirm).
+	 * @param string|null $date_mysql Event datetime `Y-m-d H:i:s` for `date` field; default site time.
 	 * @return array<string,mixed>
 	 */
-	public static function build_xp_ledger_update_payload( $wp_user_id, array $entry ) {
+	public static function build_xp_ledger_update_payload( $wp_user_id, array $entry, $order_id = null, $date_mysql = null ) {
 		$identity = self::user_identity_for_xp_api( $wp_user_id );
-		$payload  = array(
-			'entry' => $entry,
-		);
+		$oid        = null !== $order_id ? (int) $order_id : 0;
+		$payload    = array();
 		/**
 		 * @param string $mode        email_only|user_id_only|both.
 		 * @param int    $wp_user_id  Local WordPress user ID.
@@ -349,7 +370,18 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			}
 		}
 
-		return apply_filters( 'cpm_hb_xp_ledger_update_payload', $payload, $wp_user_id, $entry );
+		if ( $oid > 0 ) {
+			$payload['order_id'] = $oid;
+		}
+
+		$date_str = is_string( $date_mysql ) && $date_mysql !== ''
+			? $date_mysql
+			: self::default_ledger_patch_date_mysql( $wp_user_id, $entry, $order_id );
+		$payload['date'] = $date_str;
+
+		$payload['entry'] = $entry;
+
+		return apply_filters( 'cpm_hb_xp_ledger_update_payload', $payload, $wp_user_id, $entry, $order_id, $date_str );
 	}
 
 	/**
@@ -379,15 +411,17 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 * @param string $remote_ledger_id Remote id.
 	 * @param int    $wp_user_id       Identity for API (seller or buyer).
 	 * @param array<string,mixed> $entry Entry object.
+	 * @param int|null $order_id      Optional order id (seller update after buyer confirm).
+	 * @param string|null $date_mysql Optional `date` for payload (defaults inside builder).
 	 * @return array{ ok: bool, http_code: int, body: string, raw: string }
 	 */
-	private static function remote_update_scan( $remote_ledger_id, $wp_user_id, array $entry ) {
+	private static function remote_update_scan( $remote_ledger_id, $wp_user_id, array $entry, $order_id = null, $date_mysql = null ) {
 		$key = self::api_key();
 		if ( $key === '' ) {
 			return array( 'ok' => false, 'http_code' => 0, 'body' => '', 'raw' => '' );
 		}
 		$url      = self::get_scan_update_url( $remote_ledger_id );
-		$payload  = self::build_xp_ledger_update_payload( $wp_user_id, $entry );
+		$payload  = self::build_xp_ledger_update_payload( $wp_user_id, $entry, $order_id, $date_mysql );
 		$body     = wp_json_encode( $payload );
 		$method   = strtoupper( (string) apply_filters( 'cpm_hb_xp_ledger_scan_update_method', self::DEFAULT_SCAN_UPDATE_METHOD, $remote_ledger_id, $wp_user_id, $entry ) );
 		if ( ! in_array( $method, array( 'PUT', 'PATCH' ), true ) ) {
@@ -430,10 +464,11 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	/**
 	 * PATCH Smallstreet seller row to completed + update local seller_scan row (after buyer_scan POST succeeded).
 	 *
-	 * @param string $transaction_code HB-… code.
-	 * @param int    $seller_id        Seller WP user id.
+	 * @param string   $transaction_code HB-… code.
+	 * @param int      $seller_id        Seller WP user id.
+	 * @param int|null $order_id         Primary order id from buyer confirmation (stored on seller row + PATCH).
 	 */
-	private static function complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id ) {
+	private static function complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id, $order_id = null ) {
 		global $wpdb;
 		$table      = self::table_name();
 		$seller_row = self::get_seller_ledger_row( $transaction_code, $seller_id );
@@ -449,6 +484,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return;
 		}
 
+		$oid       = null !== $order_id ? (int) $order_id : 0;
 		$seller_xp = isset( $seller_row->xp_units ) ? (string) $seller_row->xp_units : self::xp_units_string_for_scan_type( 'seller_scan' );
 		$seller_entry_update = array(
 			'transaction_id' => $transaction_code,
@@ -456,27 +492,41 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			'scan_status'    => 'completed',
 		);
 
-		$upd = self::remote_update_scan( $seller_remote_id, $seller_id, $seller_entry_update );
+		$date_str = self::default_ledger_patch_date_mysql( $seller_id, $seller_entry_update, $order_id );
+
+		$upd = self::remote_update_scan( $seller_remote_id, $seller_id, $seller_entry_update, $oid > 0 ? $oid : null, $date_str );
 
 		if ( $upd['ok'] ) {
-			$seller_entry_json = wp_json_encode(
-				array(
-					'transaction_id' => $transaction_code,
-					'xp_units'       => $seller_xp,
-					'scan_status'    => 'completed',
-				)
+			$seller_entry_data = array(
+				'transaction_id' => $transaction_code,
+				'xp_units'       => $seller_xp,
+				'scan_status'    => 'completed',
+				'date'           => $date_str,
 			);
+			if ( $oid > 0 ) {
+				$seller_entry_data['order_id'] = $oid;
+			}
+			$seller_entry_json = wp_json_encode( $seller_entry_data );
+			$seller_update     = array(
+				'scan_status'        => 'completed',
+				'entry_json'         => $seller_entry_json,
+				'remote_sync_status' => 'synced',
+				'remote_last_error'  => null,
+				'ledger_date'        => $date_str,
+				'updated_at'         => current_time( 'mysql' ),
+			);
+			if ( $oid > 0 ) {
+				$seller_update['order_id'] = $oid;
+			}
+			$formats = array( '%s', '%s', '%s', '%s', '%s', '%s' );
+			if ( $oid > 0 ) {
+				$formats[] = '%s';
+			}
 			$wpdb->update(
 				$table,
-				array(
-					'scan_status'        => 'completed',
-					'entry_json'         => $seller_entry_json,
-					'remote_sync_status' => 'synced',
-					'remote_last_error'  => null,
-					'updated_at'         => current_time( 'mysql' ),
-				),
+				$seller_update,
 				array( 'id' => (int) $seller_row->id ),
-				array( '%s', '%s', '%s', '%s', '%s' ),
+				$formats,
 				array( '%d' )
 			);
 		} else {
@@ -524,10 +574,17 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			$primary_order_id = (int) apply_filters( 'cpm_hb_xp_ledger_buyer_primary_order_id', (int) $order_ids_clean[0], $order_ids_clean, $buyer_id, $transaction_code );
 		}
 
+		$ledger_date = self::default_ledger_patch_date_mysql(
+			$buyer_id,
+			$entry,
+			$primary_order_id > 0 ? $primary_order_id : null
+		);
+
 		$entry_local = array_merge(
 			$entry,
 			array(
 				'order_ids' => $order_ids_clean,
+				'date'      => $ledger_date,
 			)
 		);
 
@@ -547,7 +604,11 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				$wpdb->prepare( "SELECT remote_sync_status FROM {$table} WHERE id = %d", (int) $existing_buyer )
 			);
 			if ( $prev && isset( $prev->remote_sync_status ) && 'synced' === $prev->remote_sync_status ) {
-				self::complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id );
+				self::complete_seller_ledger_row_after_buyer_remote(
+					$transaction_code,
+					$seller_id,
+					$primary_order_id > 0 ? $primary_order_id : null
+				);
 			}
 			return;
 		}
@@ -563,10 +624,11 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'scan_status'        => 'completed',
 				'entry_json'         => wp_json_encode( $entry_local ),
 				'remote_sync_status' => 'pending',
+				'ledger_date'        => $ledger_date,
 				'created_at'         => current_time( 'mysql' ),
 				'updated_at'         => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -591,7 +653,13 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return;
 		}
 
-		$post_payload = self::build_xp_ledger_scan_payload( $buyer_id, $scan_type, $entry, $primary_order_id > 0 ? $primary_order_id : null );
+		$post_payload = self::build_xp_ledger_scan_payload(
+			$buyer_id,
+			$scan_type,
+			$entry,
+			$primary_order_id > 0 ? $primary_order_id : null,
+			$ledger_date
+		);
 		$post_url     = self::get_scan_endpoint_url();
 		$post_args    = apply_filters(
 			'cpm_hb_smallstreet_xp_ledger_scan_request_args',
@@ -654,7 +722,11 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return;
 		}
 
-		self::complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id );
+		self::complete_seller_ledger_row_after_buyer_remote(
+			$transaction_code,
+			$seller_id,
+			$primary_order_id > 0 ? $primary_order_id : null
+		);
 	}
 
 	/**
@@ -687,6 +759,9 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			'scan_status'    => 'pending',
 		);
 
+		$ledger_date = self::default_ledger_patch_date_mysql( $wp_user_id, $entry, null );
+		$entry_store = array_merge( $entry, array( 'date' => $ledger_date ) );
+
 		global $wpdb;
 		$table = self::table_name();
 
@@ -699,12 +774,13 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'order_id'           => null,
 				'xp_units'           => $xp_units,
 				'scan_status'        => 'pending',
-				'entry_json'         => wp_json_encode( $entry ),
+				'entry_json'         => wp_json_encode( $entry_store ),
 				'remote_sync_status' => 'pending',
+				'ledger_date'        => $ledger_date,
 				'created_at'         => current_time( 'mysql' ),
 				'updated_at'         => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -753,7 +829,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			);
 		}
 
-		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry, null );
+		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry, null, $ledger_date );
 
 		$url  = self::get_scan_endpoint_url();
 		$body = wp_json_encode( $payload );

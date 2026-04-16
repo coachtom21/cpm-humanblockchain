@@ -157,6 +157,7 @@ class Cpm_Humanblockchain_Activator {
 			remote_ledger_id VARCHAR(64) DEFAULT NULL,
 			remote_sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
 			remote_last_error TEXT NULL,
+			ledger_date DATETIME DEFAULT NULL,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME DEFAULT NULL,
 			PRIMARY KEY (id),
@@ -191,6 +192,9 @@ class Cpm_Humanblockchain_Activator {
 		$columns = $wpdb->get_col( "SHOW COLUMNS FROM `{$table_name}`" );
 		if ( ! in_array( 'order_id', $columns, true ) ) {
 			$wpdb->query( "ALTER TABLE `{$table_name}` ADD COLUMN order_id BIGINT UNSIGNED DEFAULT NULL, ADD KEY order_id (order_id)" );
+		}
+		if ( ! in_array( 'ledger_date', $columns, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table_name}` ADD COLUMN ledger_date DATETIME DEFAULT NULL" );
 		}
 	}
 }
