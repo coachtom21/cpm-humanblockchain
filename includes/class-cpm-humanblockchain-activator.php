@@ -150,6 +150,7 @@ class Cpm_Humanblockchain_Activator {
 			wp_user_id BIGINT UNSIGNED NOT NULL,
 			scan_type VARCHAR(32) NOT NULL DEFAULT 'seller_scan',
 			transaction_id VARCHAR(64) NOT NULL,
+			order_id BIGINT UNSIGNED DEFAULT NULL,
 			xp_units VARCHAR(64) NOT NULL DEFAULT '0',
 			scan_status VARCHAR(32) NOT NULL DEFAULT 'pending',
 			entry_json LONGTEXT NULL,
@@ -162,6 +163,7 @@ class Cpm_Humanblockchain_Activator {
 			KEY wp_user_id (wp_user_id),
 			KEY scan_type (scan_type),
 			KEY transaction_id (transaction_id),
+			KEY order_id (order_id),
 			KEY remote_sync_status (remote_sync_status)
 		) $charset_collate;";
 
@@ -184,6 +186,11 @@ class Cpm_Humanblockchain_Activator {
 		$row = $wpdb->get_row( "SHOW COLUMNS FROM `{$table_name}` WHERE Field = 'xp_units'" );
 		if ( $row && isset( $row->Type ) && false !== stripos( (string) $row->Type, 'int' ) ) {
 			$wpdb->query( "ALTER TABLE `{$table_name}` MODIFY xp_units VARCHAR(64) NOT NULL DEFAULT '0'" );
+		}
+
+		$columns = $wpdb->get_col( "SHOW COLUMNS FROM `{$table_name}`" );
+		if ( ! in_array( 'order_id', $columns, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table_name}` ADD COLUMN order_id BIGINT UNSIGNED DEFAULT NULL, ADD KEY order_id (order_id)" );
 		}
 	}
 }

@@ -239,7 +239,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
-	 * POST body: scan_type, entry, and user_id and/or email (per cpm-dongtrader xp-ledger/scan).
+	 * POST body: scan_type, email (or user_id), optional order_id, entry (cpm-dongtrader xp-ledger/scan).
 	 *
 	 * By default we send **email only** when the account has an email: Smallstreet validates that
 	 * user_id and email refer to the *same user on their site*; our local WP user_id usually does
@@ -248,13 +248,14 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 * @param int               $wp_user_id WordPress user ID.
 	 * @param string            $scan_type    seller_scan|buyer_scan.
 	 * @param array<string,mixed> $entry      entry object.
+	 * @param int|null          $order_id     Woo / shop order id (buyer_scan); omit from JSON when empty.
 	 * @return array<string,mixed>
 	 */
-	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry ) {
+	public static function build_xp_ledger_scan_payload( $wp_user_id, $scan_type, array $entry, $order_id = null ) {
 		$identity = self::user_identity_for_xp_api( $wp_user_id );
+		$oid        = null !== $order_id ? (int) $order_id : 0;
 		$payload    = array(
 			'scan_type' => $scan_type,
-			'entry'     => $entry,
 		);
 		/**
 		 * Which identity fields to send: email_only (default), user_id_only, or both.
@@ -289,15 +290,22 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			}
 		}
 
+		if ( $oid > 0 ) {
+			$payload['order_id'] = $oid;
+		}
+
+		$payload['entry'] = $entry;
+
 		/**
 		 * Full JSON body for POST /xp-ledger/scan (before wp_json_encode).
 		 *
-		 * @param array<string,mixed> $payload    Keys: scan_type, entry, optional user_id, optional email.
+		 * @param array<string,mixed> $payload    Keys: scan_type, email|user_id, optional order_id, entry.
 		 * @param int                 $wp_user_id WordPress user ID.
 		 * @param string              $scan_type  seller_scan|buyer_scan.
 		 * @param array<string,mixed> $entry      Entry object.
+		 * @param int|null            $order_id   Optional order id sent to API.
 		 */
-		return apply_filters( 'cpm_hb_xp_ledger_scan_payload', $payload, $wp_user_id, $scan_type, $entry );
+		return apply_filters( 'cpm_hb_xp_ledger_scan_payload', $payload, $wp_user_id, $scan_type, $entry, $order_id );
 	}
 
 	/**
@@ -510,10 +518,16 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			'scan_status'    => 'completed',
 		);
 
+		$order_ids_clean = array_values( array_filter( array_map( 'intval', $order_ids ) ) );
+		$primary_order_id = 0;
+		if ( ! empty( $order_ids_clean ) ) {
+			$primary_order_id = (int) apply_filters( 'cpm_hb_xp_ledger_buyer_primary_order_id', (int) $order_ids_clean[0], $order_ids_clean, $buyer_id, $transaction_code );
+		}
+
 		$entry_local = array_merge(
 			$entry,
 			array(
-				'order_ids' => array_values( array_map( 'intval', $order_ids ) ),
+				'order_ids' => $order_ids_clean,
 			)
 		);
 
@@ -544,6 +558,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'wp_user_id'         => $buyer_id,
 				'scan_type'          => $scan_type,
 				'transaction_id'     => $transaction_code,
+				'order_id'           => $primary_order_id > 0 ? $primary_order_id : null,
 				'xp_units'           => $xp_units,
 				'scan_status'        => 'completed',
 				'entry_json'         => wp_json_encode( $entry_local ),
@@ -551,7 +566,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'created_at'         => current_time( 'mysql' ),
 				'updated_at'         => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -576,7 +591,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return;
 		}
 
-		$post_payload = self::build_xp_ledger_scan_payload( $buyer_id, $scan_type, $entry );
+		$post_payload = self::build_xp_ledger_scan_payload( $buyer_id, $scan_type, $entry, $primary_order_id > 0 ? $primary_order_id : null );
 		$post_url     = self::get_scan_endpoint_url();
 		$post_args    = apply_filters(
 			'cpm_hb_smallstreet_xp_ledger_scan_request_args',
@@ -681,6 +696,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'wp_user_id'         => $wp_user_id,
 				'scan_type'          => $scan_type,
 				'transaction_id'     => $transaction_code,
+				'order_id'           => null,
 				'xp_units'           => $xp_units,
 				'scan_status'        => 'pending',
 				'entry_json'         => wp_json_encode( $entry ),
@@ -688,7 +704,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				'created_at'         => current_time( 'mysql' ),
 				'updated_at'         => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -737,7 +753,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			);
 		}
 
-		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry );
+		$payload = self::build_xp_ledger_scan_payload( $wp_user_id, $scan_type, $entry, null );
 
 		$url  = self::get_scan_endpoint_url();
 		$body = wp_json_encode( $payload );
