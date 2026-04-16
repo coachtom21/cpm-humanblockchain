@@ -45,6 +45,57 @@
 			setPressed( $( '.cpm-hb-entry-pill[data-prompt="final"]' ), state.final );
 		}
 
+		function urlHasProofScan() {
+			try {
+				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
+					return true;
+				}
+			} catch ( err ) {
+				// ignore
+			}
+			var H = window.cpmHbLanding || {};
+			if ( H.hasProofScan ) {
+				return true;
+			}
+			try {
+				return sessionStorage.getItem( 'cpm_hb_proof_scan' ) === '1';
+			} catch ( err2 ) {
+				return false;
+			}
+		}
+
+		function stripProofScanFromUrl() {
+			try {
+				var u = new URL( window.location.href );
+				if ( u.searchParams.get( 'proof' ) !== 'scan' ) {
+					return;
+				}
+				u.searchParams.delete( 'proof' );
+				var q = u.searchParams.toString();
+				u.search = q ? '?' + q : '';
+				history.replaceState( {}, '', u.pathname + u.search + u.hash );
+			} catch ( err ) {
+				// ignore
+			}
+		}
+
+		/**
+		 * Matches PHP cpm_hb_proof_scan_landing_seen — prevents the gate from reappearing on every refresh while ?proof=scan stays in the address bar.
+		 */
+		function markProofScanLandingDismissed() {
+			if ( ! urlHasProofScan() ) {
+				return;
+			}
+			var maxAge = 60 * 60 * 24 * 30;
+			var secure = window.location.protocol === 'https:' ? '; Secure' : '';
+			try {
+				document.cookie = 'cpm_hb_proof_scan_landing_seen=1; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+			} catch ( e ) {
+				// ignore
+			}
+			stripProofScanFromUrl();
+		}
+
 		$( document ).on( 'click', '.cpm-hb-entry-pill', function() {
 			var prompt = $( this ).data( 'prompt' );
 			var val = $( this ).data( 'value' );
@@ -57,6 +108,7 @@
 		} );
 
 		function dismissLandingModal() {
+			markProofScanLandingDismissed();
 			$modal.removeClass( 'active' ).attr( 'aria-hidden', 'true' );
 			$( 'body' ).removeClass( 'cpm-hb-landing-entry-active' );
 		}
@@ -129,29 +181,11 @@
 			$el.removeClass( 'cpm-nwp-inline-feedback--success cpm-nwp-inline-feedback--error' ).addClass( 'cpm-nwp-inline-feedback--hidden' ).empty();
 		}
 
-		function urlHasProofScan() {
-			try {
-				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
-					return true;
-				}
-			} catch ( err ) {
-				// ignore
-			}
-			var H = window.cpmHbLanding || {};
-			if ( H.hasProofScan ) {
-				return true;
-			}
-			try {
-				return sessionStorage.getItem( 'cpm_hb_proof_scan' ) === '1';
-			} catch ( err2 ) {
-				return false;
-			}
-		}
-
 		/**
 		 * ?proof=scan PoD flow: after prompts + role, skip phone OTP and go to the proof-of-delivery URL (e.g. backorders).
 		 */
 		function skipOtpAndGoProofOfDelivery() {
+			markProofScanLandingDismissed();
 			var H = window.cpmHbLanding || {};
 			var base = H.proofOfDeliveryUrl || H.homeUrl || '/';
 			try {

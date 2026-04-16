@@ -164,6 +164,18 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
+	 * Cookie set in JS when the user dismisses or completes the ?proof=scan landing gate (avoids showing it on every refresh).
+	 *
+	 * @return bool
+	 */
+	private function proof_scan_landing_already_acknowledged() {
+		if ( ! isset( $_COOKIE['cpm_hb_proof_scan_landing_seen'] ) ) {
+			return false;
+		}
+		return '1' === sanitize_text_field( wp_unslash( $_COOKIE['cpm_hb_proof_scan_landing_seen'] ) );
+	}
+
+	/**
 	 * Whether to show the landing “Enter Website” gate.
 	 *
 	 * - Logged-out: default is front page only; also any URL with ?proof=scan.
@@ -174,6 +186,11 @@ class Cpm_Humanblockchain_Public {
 	 */
 	public function should_show_landing_entry_modal() {
 		$proof_scan = $this->request_has_proof_scan_param();
+
+		// Once the user closes or completes the PoD gate, JS sets a cookie so ?proof=scan does not reopen it on every navigation/refresh.
+		if ( $proof_scan && $this->proof_scan_landing_already_acknowledged() ) {
+			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', false );
+		}
 
 		if ( is_user_logged_in() ) {
 			if ( ! $proof_scan ) {
