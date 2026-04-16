@@ -278,7 +278,8 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
-			if ( urlHasProofScan() ) {
+			// "Seller verification" intro + skip-OTP PoD path only when ?proof=scan (or server hasProofScan). No param → phone/OTP modal only.
+			if ( proofScanInUrlOrFromServer() ) {
 				if ( role === 'seller' ) {
 					var $introPs = $( '#cpm-hb-seller-pod-intro-modal' );
 					if ( $introPs.length ) {
@@ -290,14 +291,6 @@
 				skipOtpAndGoProofOfDelivery();
 				return;
 			}
-			if ( role === 'seller' ) {
-				var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
-				if ( $intro.length ) {
-					$intro.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-					$( 'body' ).addClass( 'cpm-nwp-modal-open' );
-					return;
-				}
-			}
 			showPhoneOtpModal( {
 				landingRole: role,
 				buyerProofScan: role === 'buyer' && urlHasProofScan()
@@ -307,7 +300,7 @@
 		$( document ).on( 'click', '#cpm-hb-seller-pod-intro-continue', function() {
 			var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
 			$intro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			if ( urlHasProofScan() ) {
+			if ( proofScanInUrlOrFromServer() ) {
 				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 				skipOtpAndGoProofOfDelivery();
 				return;
