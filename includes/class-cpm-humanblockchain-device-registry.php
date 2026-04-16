@@ -92,6 +92,21 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * After landing OTP verify without ?proof=scan: send users to WooCommerce My Account when available.
+	 *
+	 * @return string
+	 */
+	private static function get_post_verify_account_redirect_url() {
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$url = wc_get_page_permalink( 'myaccount' );
+			if ( is_string( $url ) && $url !== '' ) {
+				return $url;
+			}
+		}
+		return apply_filters( 'cpm_hb_default_logged_in_redirect_url', home_url( '/' ) );
+	}
+
+	/**
 	 * Unique transaction code for seller PoD scan completion (share with buyer).
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -753,11 +768,10 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
 		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
-		$proof_scan_url    = self::request_has_proof_scan_intent();
 		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
-		// Backorders redirect only when the page was loaded with ?proof=scan (nonce), not for generic landing OTP.
+		// Backorders + XP/NWP only when the page was loaded with ?proof=scan (valid nonce), not for generic landing OTP.
 		$redirect_backorders = $landing_backorder && $buyer_proof_scan && self::request_has_valid_proof_scan_nonce() && 'buyer' === $landing_role;
-		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && $proof_scan_url;
+		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && self::request_has_valid_proof_scan_nonce();
 
 		$seller_transaction_code = '';
 		if ( $seller_pod_complete ) {
@@ -775,9 +789,9 @@ class Cpm_Humanblockchain_Device_Registry {
 				$redirect     = '';
 				$show_discord = false;
 			} else {
-				// Landing OTP without buyer+?proof=scan backorder redirect: stay logged in on this page (Discord / reload), do not send to home.
-				$redirect     = apply_filters( 'cpm_hb_landing_verify_no_proof_redirect', '' );
-				$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
+				// Landing OTP without ?proof=scan: log in and go to My Account (or filter); no XP ledger until PoD link.
+				$redirect     = apply_filters( 'cpm_hb_landing_verify_no_proof_redirect', self::get_post_verify_account_redirect_url() );
+				$show_discord = (bool) apply_filters( 'cpm_hb_landing_verify_no_proof_show_discord', false );
 			}
 		} else {
 			// Default: no immediate redirect; show Discord invite modal. Set redirect URL via filter to skip modal.
