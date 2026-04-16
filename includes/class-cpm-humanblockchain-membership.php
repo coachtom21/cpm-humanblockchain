@@ -132,7 +132,7 @@ class Cpm_Humanblockchain_Membership {
 	 * @param int                  $user_id  Local WordPress user ID.
 	 * @param array<string,mixed> $api_data Decoded JSON body from the membership API.
 	 */
-	private static function save_membership_response_to_user_meta( $user_id, array $api_data ) {
+	public static function save_membership_response_to_user_meta( $user_id, array $api_data ) {
 		$user_id = (int) $user_id;
 		if ( $user_id <= 0 ) {
 			return;
@@ -346,6 +346,135 @@ class Cpm_Humanblockchain_Membership {
 				'raw'     => $data,
 			),
 			$code >= 400 && $code < 600 ? $code : 500
+		);
+	}
+
+	/**
+	 * Re-POST membership using the last saved level_id / level_name (same endpoint as the modal).
+	 * Updates `_membership_level` on success so account pages can show fresh remote state.
+	 *
+	 * @param int $user_id WordPress user ID.
+	 * @return array{ ok: bool, skipped?: bool, message?: string, data?: array<int|string,mixed> }
+	 */
+	public static function refresh_membership_from_api_for_user( $user_id ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 ) {
+			return array(
+				'ok'      => false,
+				'skipped' => true,
+				'message' => __( 'Invalid user.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		$api_key = self::get_api_key();
+		if ( $api_key === '' ) {
+			return array(
+				'ok'      => false,
+				'skipped' => true,
+				'message' => __( 'Membership API is not configured on this site.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		$cached  = get_user_meta( $user_id, '_membership_level', true );
+		$decoded = is_string( $cached ) ? json_decode( $cached, true ) : null;
+		if ( ! is_array( $decoded ) ) {
+			$decoded = array();
+		}
+
+		$level_id   = isset( $decoded['level_id'] ) ? (int) $decoded['level_id'] : 0;
+		$level_name = isset( $decoded['level_name'] ) ? sanitize_text_field( (string) $decoded['level_name'] ) : '';
+
+		if ( $level_id <= 0 && $level_name === '' ) {
+			return array(
+				'ok'      => false,
+				'skipped' => true,
+				'message' => __( 'No saved membership to sync yet. Choose a membership level first.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		$user = get_userdata( $user_id );
+		if ( ! $user || ! is_email( $user->user_email ) ) {
+			return array(
+				'ok'      => false,
+				'skipped' => true,
+				'message' => __( 'User email is missing.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		$phone = '';
+		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) ) {
+			$phone = Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $user_id );
+		}
+		if ( $phone === '' || ! self::phone_has_enough_digits( $phone ) ) {
+			return array(
+				'ok'      => false,
+				'skipped' => true,
+				'message' => __( 'A valid phone number on your profile or device record is required to sync membership.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		$body = array(
+			'email' => $user->user_email,
+			'phone' => self::normalize_phone_for_api( $phone ),
+		);
+		if ( $level_id > 0 ) {
+			$body['level_id'] = $level_id;
+		}
+		if ( $level_name !== '' ) {
+			$body['level_name'] = $level_name;
+		}
+
+		$include_uid = (bool) apply_filters(
+			'cpm_hb_membership_include_user_id',
+			self::membership_endpoint_is_same_site(),
+			$user_id,
+			self::get_api_endpoint_url()
+		);
+		if ( $include_uid ) {
+			$body['user_id'] = $user_id;
+		}
+
+		$url  = self::get_api_endpoint_url();
+		$args = array(
+			'timeout' => 30,
+			'headers' => array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $api_key,
+			),
+			'body'    => wp_json_encode( $body ),
+		);
+
+		$response = wp_remote_post( $url, $args );
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'ok'      => false,
+				'message' => $response->get_error_message(),
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$raw  = wp_remote_retrieve_body( $response );
+		$data = json_decode( $raw, true );
+		if ( ! is_array( $data ) ) {
+			return array(
+				'ok'      => false,
+				'message' => __( 'Unexpected response from membership service.', 'cpm-humanblockchain' ),
+			);
+		}
+
+		if ( $code >= 200 && $code < 300 && ! empty( $data['success'] ) ) {
+			self::save_membership_response_to_user_meta( $user_id, $data );
+			return array(
+				'ok'   => true,
+				'data' => $data,
+			);
+		}
+
+		$message = isset( $data['message'] ) ? (string) $data['message'] : __( 'Membership could not be updated.', 'cpm-humanblockchain' );
+		return array(
+			'ok'      => false,
+			'message' => $message,
+			'data'    => $data,
 		);
 	}
 }

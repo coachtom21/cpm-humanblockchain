@@ -48,6 +48,62 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Ledger rows for a WordPress user (newest first).
+	 *
+	 * @param int $wp_user_id User ID.
+	 * @param int $limit      Max rows (capped).
+	 * @return array<int, object> List of row objects.
+	 */
+	public static function get_ledger_rows_for_user( $wp_user_id, $limit = 200 ) {
+		global $wpdb;
+		$wp_user_id = (int) $wp_user_id;
+		$limit       = min( 500, max( 1, (int) $limit ) );
+		if ( $wp_user_id <= 0 ) {
+			return array();
+		}
+		$table = self::table_name();
+		$rows  = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT * FROM {$table} WHERE wp_user_id = %d ORDER BY id DESC LIMIT {$limit}",
+				$wp_user_id
+			)
+		);
+		return is_array( $rows ) ? $rows : array();
+	}
+
+	/**
+	 * Row count and total XP (exact only when BCMath bcadd is available).
+	 *
+	 * @param int $wp_user_id User ID.
+	 * @return array{ row_count: int, total_xp: string, total_exact: bool }
+	 */
+	public static function get_xp_summary_for_user( $wp_user_id ) {
+		$rows = self::get_ledger_rows_for_user( $wp_user_id, 500 );
+		$out  = array(
+			'row_count'   => count( $rows ),
+			'total_xp'    => '0',
+			'total_exact' => false,
+		);
+		if ( ! function_exists( 'bcadd' ) ) {
+			return $out;
+		}
+		$sum = '0';
+		foreach ( $rows as $row ) {
+			if ( ! is_object( $row ) || ! isset( $row->xp_units ) ) {
+				continue;
+			}
+			$u = preg_replace( '/\D/', '', (string) $row->xp_units );
+			if ( $u === '' ) {
+				continue;
+			}
+			$sum = bcadd( $sum, $u, 0 );
+		}
+		$out['total_xp']    = $sum;
+		$out['total_exact'] = true;
+		return $out;
+	}
+
+	/**
 	 * Scan endpoint (override via filter).
 	 *
 	 * @return string
