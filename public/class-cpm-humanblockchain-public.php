@@ -189,7 +189,9 @@ class Cpm_Humanblockchain_Public {
 
 		// Once the user closes or completes the PoD gate, JS sets a cookie so ?proof=scan does not reopen it on every navigation/refresh.
 		if ( $proof_scan && $this->proof_scan_landing_already_acknowledged() ) {
-			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', false );
+			if ( (bool) apply_filters( 'cpm_hb_suppress_proof_scan_landing_after_ack', true ) ) {
+				return false;
+			}
 		}
 
 		if ( is_user_logged_in() ) {
@@ -208,7 +210,11 @@ class Cpm_Humanblockchain_Public {
 		if ( $proof_scan ) {
 			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', true );
 		}
+		// Some themes / Local setups mis-detect the front page; allow a filter without breaking the default path.
 		$default = is_front_page();
+		if ( ! $default && function_exists( 'is_home' ) && is_home() && ! is_paged() && 'posts' === get_option( 'show_on_front' ) ) {
+			$default = true;
+		}
 		return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal', $default );
 	}
 

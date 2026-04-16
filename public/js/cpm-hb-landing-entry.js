@@ -80,10 +80,26 @@
 		}
 
 		/**
+		 * True only when this page load is a PoD link: query ?proof=scan or server said so.
+		 * Do not use sessionStorage here — stale values caused the ack cookie to be set on normal home dismiss, which hid all future ?proof=scan popups.
+		 */
+		function proofScanInUrlOrFromServer() {
+			try {
+				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
+					return true;
+				}
+			} catch ( err ) {
+				// ignore
+			}
+			var H = window.cpmHbLanding || {};
+			return !! H.hasProofScan;
+		}
+
+		/**
 		 * Matches PHP cpm_hb_proof_scan_landing_seen — prevents the gate from reappearing on every refresh while ?proof=scan stays in the address bar.
 		 */
 		function markProofScanLandingDismissed() {
-			if ( ! urlHasProofScan() ) {
+			if ( ! proofScanInUrlOrFromServer() ) {
 				return;
 			}
 			var maxAge = 60 * 60 * 24 * 30;
