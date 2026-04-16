@@ -234,8 +234,8 @@
 			var role = typeof opts.landingRole === 'string' && opts.landingRole !== ''
 				? opts.landingRole
 				: ( opts.buyerProofScan ? 'buyer' : 'seller' );
-			// Fallback only when ?proof=scan was on the page load (nonce); otherwise no forced redirect after verify.
-			H.podProofScan = urlHasProofScan();
+			// PoD flags only when ?proof=scan / hasProofScan — not sessionStorage alone (avoids buyer Smallstreet error on normal login).
+			H.podProofScan = proofScanInUrlOrFromServer();
 			if ( opts.buyerProofScan && H.proofScanNonce ) {
 				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
 			} else {
@@ -293,7 +293,7 @@
 			}
 			showPhoneOtpModal( {
 				landingRole: role,
-				buyerProofScan: role === 'buyer' && urlHasProofScan()
+				buyerProofScan: role === 'buyer' && proofScanInUrlOrFromServer()
 			} );
 		} );
 
