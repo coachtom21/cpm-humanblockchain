@@ -149,6 +149,22 @@
 		}
 
 		/**
+		 * ?proof=scan PoD flow: after prompts + role, skip phone OTP and go to the proof-of-delivery URL (e.g. backorders).
+		 */
+		function skipOtpAndGoProofOfDelivery() {
+			var H = window.cpmHbLanding || {};
+			var base = H.proofOfDeliveryUrl || H.homeUrl || '/';
+			try {
+				var u = new URL( base, window.location.href );
+				u.searchParams.set( 'proof', 'scan' );
+				window.location.assign( u.toString() );
+			} catch ( err ) {
+				var join = base.indexOf( '?' ) >= 0 ? '&' : '?';
+				window.location.assign( base + join + 'proof=scan' );
+			}
+		}
+
+		/**
 		 * After role selection: open the same “Your Phone Number” modal used by NWP, then Send OTP → verify OTP (public.js).
 		 * Buyer + ?proof=scan: server checks wp_nwp_devices before OTP; after verify, redirect to backorder page (no Smallstreet fetch for now).
 		 * pendingOtpRedirect sends the user to PoD URL after successful verification when the server does not return redirect_url.
@@ -214,6 +230,18 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
+			if ( urlHasProofScan() ) {
+				if ( role === 'seller' ) {
+					var $introPs = $( '#cpm-hb-seller-pod-intro-modal' );
+					if ( $introPs.length ) {
+						$introPs.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+						$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+						return;
+					}
+				}
+				skipOtpAndGoProofOfDelivery();
+				return;
+			}
 			if ( role === 'seller' ) {
 				var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
 				if ( $intro.length ) {
@@ -231,6 +259,11 @@
 		$( document ).on( 'click', '#cpm-hb-seller-pod-intro-continue', function() {
 			var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
 			$intro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			if ( urlHasProofScan() ) {
+				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+				skipOtpAndGoProofOfDelivery();
+				return;
+			}
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			showPhoneOtpModal( {
 				landingRole: role,
