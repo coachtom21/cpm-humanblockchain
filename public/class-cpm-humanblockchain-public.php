@@ -493,6 +493,7 @@ class Cpm_Humanblockchain_Public {
 					// Set from the initial HTTP request so ?proof=scan still counts if the address bar is cleaned before OTP (replaceState, etc.).
 					'hasProofScan'        => $this->request_has_proof_scan_param(),
 					'proofScanNonce'      => $this->request_has_proof_scan_param() ? wp_create_nonce( 'cpm_hb_proof_scan_flow' ) : '',
+					'isLoggedIn'          => is_user_logged_in(),
 				)
 			);
 		}

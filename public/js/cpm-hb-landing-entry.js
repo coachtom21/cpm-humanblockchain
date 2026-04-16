@@ -215,6 +215,46 @@
 		}
 
 		/**
+		 * Logged-in seller on ?proof=scan: mint transaction code + XP without phone OTP.
+		 */
+		function requestLoggedInSellerPodCode() {
+			var H = window.cpmHbLanding || {};
+			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
+			if ( ! ajaxUrl || ! H.proofScanNonce ) {
+				window.alert( 'Reload the page from a link that includes ?proof=scan, then try again.' );
+				return;
+			}
+			$.ajax( {
+				url: ajaxUrl,
+				type: 'POST',
+				dataType: 'json',
+				data: {
+					action: 'cpm_hb_seller_pod_logged_in',
+					nonce: H.proofScanNonce
+				}
+			} )
+				.done( function( res ) {
+					if ( res && res.success && res.data && res.data.seller_transaction_code ) {
+						if ( typeof window.cpmHbShowSellerPodSuccess === 'function' ) {
+							window.cpmHbShowSellerPodSuccess( res.data.seller_transaction_code );
+						} else {
+							window.alert( res.data.seller_transaction_code );
+						}
+						return;
+					}
+					var msg = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+					window.alert( msg );
+				} )
+				.fail( function( xhr ) {
+					var msg = 'Request failed.';
+					if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+						msg = xhr.responseJSON.data.message;
+					}
+					window.alert( msg );
+				} );
+		}
+
+		/**
 		 * After role selection: open the same “Your Phone Number” modal used by NWP, then Send OTP → verify OTP (public.js).
 		 * Buyer + ?proof=scan: server checks wp_nwp_devices before OTP; after verify, redirect to backorder page (no Smallstreet fetch for now).
 		 * pendingOtpRedirect sends the user to PoD URL after successful verification when the server does not return redirect_url.
@@ -278,17 +318,34 @@
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			persistScanWithRole();
 			hideRoleModal();
-			// "Seller verification" intro + skip-OTP PoD path only when ?proof=scan (or server hasProofScan). No param → phone/OTP modal only.
+			var H = window.cpmHbLanding || {};
+			// PoD (?proof=scan): guest seller → intro then OTP; logged-in seller → code + API without OTP; guest buyer → OTP then backorders; logged-in buyer → backorders.
 			if ( proofScanInUrlOrFromServer() ) {
 				if ( role === 'seller' ) {
+					if ( H.isLoggedIn ) {
+						requestLoggedInSellerPodCode();
+						return;
+					}
 					var $introPs = $( '#cpm-hb-seller-pod-intro-modal' );
 					if ( $introPs.length ) {
 						$introPs.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 						$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 						return;
 					}
+					showPhoneOtpModal( {
+						landingRole: 'seller',
+						buyerProofScan: false
+					} );
+					return;
 				}
-				skipOtpAndGoProofOfDelivery();
+				if ( H.isLoggedIn ) {
+					skipOtpAndGoProofOfDelivery();
+					return;
+				}
+				showPhoneOtpModal( {
+					landingRole: 'buyer',
+					buyerProofScan: true
+				} );
 				return;
 			}
 			showPhoneOtpModal( {
@@ -300,14 +357,15 @@
 		$( document ).on( 'click', '#cpm-hb-seller-pod-intro-continue', function() {
 			var $intro = $( '#cpm-hb-seller-pod-intro-modal' );
 			$intro.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			if ( proofScanInUrlOrFromServer() ) {
+			var H = window.cpmHbLanding || {};
+			if ( H.isLoggedIn ) {
 				$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
-				skipOtpAndGoProofOfDelivery();
+				requestLoggedInSellerPodCode();
 				return;
 			}
-			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
+			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 			showPhoneOtpModal( {
-				landingRole: role,
+				landingRole: 'seller',
 				buyerProofScan: false
 			} );
 		} );

@@ -320,6 +320,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_cpm_hb_buyer_confirm_delivery', array( __CLASS__, 'handle_buyer_confirm_delivery' ) );
+		add_action( 'wp_ajax_cpm_hb_seller_pod_logged_in', array( __CLASS__, 'handle_seller_pod_logged_in' ) );
 		// Remove NWP device rows when the WP user is removed (same user_id / email in wp_nwp_devices).
 		add_action( 'delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 3 );
 		add_action( 'wpmu_delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 1 );
@@ -821,6 +822,41 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		wp_send_json_success( $payload );
+	}
+
+	/**
+	 * Logged-in user on ?proof=scan: issue seller transaction code + XP ledger without OTP (same outcome as after verify_otp seller path).
+	 *
+	 * @since 1.0.0
+	 */
+	public static function handle_seller_pod_logged_in() {
+		if ( ! is_user_logged_in() ) {
+			wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'cpm-humanblockchain' ) ), 403 );
+		}
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'cpm_hb_proof_scan_flow' ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Session expired or open this page from a link that includes ?proof=scan.', 'cpm-humanblockchain' ) ),
+				403
+			);
+		}
+		$wp_uid = (int) get_current_user_id();
+		if ( $wp_uid <= 0 ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid user.', 'cpm-humanblockchain' ) ), 403 );
+		}
+
+		$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
+		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+			Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
+		}
+
+		wp_send_json_success(
+			array(
+				'seller_scan_success'       => true,
+				'seller_transaction_code'   => $seller_transaction_code,
+				'message'                   => __( 'Seller scan recorded. Share your transaction code with the buyer.', 'cpm-humanblockchain' ),
+			)
+		);
 	}
 
 	/**

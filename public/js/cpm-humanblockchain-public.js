@@ -31,6 +31,9 @@
 			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 		}
 
+		/** Called from landing-entry.js after logged-in seller PoD AJAX (no OTP). */
+		window.cpmHbShowSellerPodSuccess = showSellerScanSuccessModal;
+
 		function closeDiscordModalAndRefresh() {
 			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
