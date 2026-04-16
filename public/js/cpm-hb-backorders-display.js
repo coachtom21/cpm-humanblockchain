@@ -184,9 +184,12 @@
 				.done( function( res ) {
 					if ( res && res.success && res.data && res.data.message ) {
 						$feedback.text( res.data.message ).removeClass( 'cpm-hb-backorders-modal-feedback--error' ).addClass( 'cpm-hb-backorders-modal-feedback--ok' );
+						var dest = ( res.data.redirect_url && typeof res.data.redirect_url === 'string' )
+							? res.data.redirect_url
+							: ( H && H.homeUrl ? H.homeUrl : '/' );
 						setTimeout( function() {
-							closeModal();
-						}, 1200 );
+							window.location.href = dest;
+						}, 900 );
 					} else {
 						var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
 						$feedback.text( err ).addClass( 'cpm-hb-backorders-modal-feedback--error' );

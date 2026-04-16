@@ -873,6 +873,13 @@ class Cpm_Humanblockchain_Device_Registry {
 			)
 		);
 
-		wp_send_json_success( array( 'message' => __( 'Delivery confirmation recorded.', 'cpm-humanblockchain' ) ) );
+		$redirect = esc_url_raw( apply_filters( 'cpm_hb_buyer_confirm_redirect_url', home_url( '/' ) ) );
+
+		wp_send_json_success(
+			array(
+				'message'      => __( 'Delivery confirmation recorded.', 'cpm-humanblockchain' ),
+				'redirect_url' => $redirect,
+			)
+		);
 	}
 }

@@ -517,6 +517,7 @@ class Cpm_Humanblockchain_Public {
 				'ajaxUrl'              => admin_url( 'admin-ajax.php' ),
 				'confirmAction'        => 'cpm_hb_buyer_confirm_delivery',
 				'confirmNonce'         => wp_create_nonce( 'cpm_hb_backorders_confirm' ),
+				'homeUrl'              => esc_url_raw( home_url( '/' ) ),
 			);
 			// Logged-in + API: load rows by phone; persist successful responses in user meta so refresh still shows data if API is empty.
 			if ( is_user_logged_in() && $api_ok ) {
