@@ -554,8 +554,8 @@
 			var raw = $el.val().replace( /\D/g, '' );
 			var country = ( window.cpmNwp && window.cpmNwp.defaultCountry ) ? window.cpmNwp.defaultCountry : 'AUTO';
 			var np10 = raw.length === 10 && /^9[78]/.test( raw );
-			// While typing, keep +977 if digits match Nepal mobile pattern (aligns with server; rare US 978/984 NPAs collide).
-			var npPrefix = ( /^9[78]\d{0,8}$/.test( raw ) && raw.length < 10 ) || np10;
+			// Nepal mobile is 9[78] + 8 digits. Count lone "9" as possible Nepal (with Default country US, only ^9[78]… was too late — first keystroke became +1).
+			var npPrefix = ( /^9[78]\d{0,8}$/.test( raw ) && raw.length < 10 ) || ( raw.length === 1 && raw === '9' ) || np10;
 			var asNepal = npPrefix || country === 'NP' || country === 'AUTO';
 			var formatted = '';
 
