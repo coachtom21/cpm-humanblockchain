@@ -305,8 +305,8 @@
 			var role = typeof opts.landingRole === 'string' && opts.landingRole !== ''
 				? opts.landingRole
 				: ( opts.buyerProofScan ? 'buyer' : 'seller' );
-			// PoD flags only when ?proof=scan / hasProofScan — not sessionStorage alone (avoids buyer Smallstreet error on normal login).
-			H.podProofScan = proofScanInUrlOrFromServer();
+			// PoD flags: URL/server hasProofScan, or minted cpmNwp nonces, or explicit gate (seller OTP must always send proof nonce for transaction code + API).
+			H.podProofScan = proofScanInUrlOrFromServer() || ( !! N.hasProofScan && !! N.proofScanNonce ) || !! opts.fromProofScanPod;
 			if ( opts.buyerProofScan && H.proofScanNonce ) {
 				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
 			} else {
@@ -366,7 +366,8 @@
 					}
 					showPhoneOtpModal( {
 						landingRole: 'seller',
-						buyerProofScan: false
+						buyerProofScan: false,
+						fromProofScanPod: true
 					} );
 					return;
 				}
@@ -376,7 +377,8 @@
 				}
 				showPhoneOtpModal( {
 					landingRole: 'buyer',
-					buyerProofScan: true
+					buyerProofScan: true,
+					fromProofScanPod: true
 				} );
 				return;
 			}
@@ -398,7 +400,8 @@
 			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
 			showPhoneOtpModal( {
 				landingRole: 'seller',
-				buyerProofScan: false
+				buyerProofScan: false,
+				fromProofScanPod: true
 			} );
 		} );
 

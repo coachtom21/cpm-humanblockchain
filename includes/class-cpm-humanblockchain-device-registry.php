@@ -767,9 +767,12 @@ class Cpm_Humanblockchain_Device_Registry {
 		/** This action is documented in wp-includes/user.php. */
 		do_action( 'wp_login', $user->user_login, $user );
 
-		$landing_backorder = isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) );
-		$buyer_proof_scan  = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
-		$landing_role      = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
+		$buyer_proof_scan    = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$landing_role        = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
+		$cpm_hb_proof_scan_1 = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
+		// Landing / PoD verify: explicit flag, or ?proof=scan + role + nonce (in case cpm_hb_verify_redirect was not posted).
+		$landing_backorder   = ( isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) ) )
+			|| ( $cpm_hb_proof_scan_1 && self::request_has_valid_proof_scan_nonce() && in_array( $landing_role, array( 'buyer', 'seller' ), true ) );
 		// Backorders + XP/NWP only when the page was loaded with ?proof=scan (valid nonce), not for generic landing OTP.
 		$redirect_backorders = $landing_backorder && $buyer_proof_scan && self::request_has_valid_proof_scan_nonce() && 'buyer' === $landing_role;
 		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && self::request_has_valid_proof_scan_nonce();

@@ -363,6 +363,15 @@
 			}
 			clearInlineFeedback( $activateFeedback );
 			applyProofScanContextIfNeeded();
+			ensureHbLandingFromNwp();
+			if ( window.cpmHbLanding && window.cpmNwp && window.cpmNwp.hasProofScan && ! window.cpmHbSkipPodOtpContext
+				&& ( window.cpmHbLanding.landingRole === 'seller' || window.cpmHbLanding.landingRole === 'buyer' ) ) {
+				window.cpmHbLanding.phoneModalFromLanding = true;
+				window.cpmHbLanding.podProofScan = true;
+				if ( ! window.cpmHbLanding.proofScanNonce && window.cpmNwp.proofScanNonce ) {
+					window.cpmHbLanding.proofScanNonce = window.cpmNwp.proofScanNonce;
+				}
+			}
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
@@ -430,6 +439,16 @@
 			}
 			clearInlineFeedback( $verifyFeedback );
 			applyProofScanContextIfNeeded();
+			ensureHbLandingFromNwp();
+			// Seller / buyer ?proof=scan: ensure landing flags so verify always posts cpm_hb_verify_redirect + proof nonce (server needs these for transaction code + XP API).
+			if ( window.cpmHbLanding && window.cpmNwp && window.cpmNwp.hasProofScan && ! window.cpmHbSkipPodOtpContext
+				&& ( window.cpmHbLanding.landingRole === 'seller' || window.cpmHbLanding.landingRole === 'buyer' ) ) {
+				window.cpmHbLanding.phoneModalFromLanding = true;
+				window.cpmHbLanding.podProofScan = true;
+				if ( ! window.cpmHbLanding.proofScanNonce && window.cpmNwp.proofScanNonce ) {
+					window.cpmHbLanding.proofScanNonce = window.cpmNwp.proofScanNonce;
+				}
+			}
 			$btn.prop( 'disabled', true ).text( 'Verifying...' );
 			var payload = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.verifyOtpAction ? window.cpmNwp.verifyOtpAction : 'cpm_nwp_verify_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
