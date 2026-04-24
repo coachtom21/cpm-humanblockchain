@@ -317,7 +317,7 @@ class Cpm_Humanblockchain_Admin {
 	 */
 	public function sanitize_default_country( $value ) {
 		$value = is_string( $value ) ? strtoupper( trim( $value ) ) : '';
-		return in_array( $value, array( 'NP', 'US' ), true ) ? $value : 'NP';
+		return in_array( $value, array( 'NP', 'US', 'AUTO' ), true ) ? $value : 'AUTO';
 	}
 
 	/**
@@ -333,7 +333,7 @@ class Cpm_Humanblockchain_Admin {
 		$token            = get_option( 'cpm_nwp_twilio_token', '' );
 		$from             = get_option( 'cpm_nwp_twilio_from', '' );
 		$verify_service   = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
-		$country          = get_option( 'cpm_nwp_default_country', 'NP' );
+		$country          = get_option( 'cpm_nwp_default_country', 'AUTO' );
 
 		$using_constants = defined( 'CPM_NWP_TWILIO_SID' ) || defined( 'CPM_NWP_TWILIO_TOKEN' ) || defined( 'CPM_NWP_TWILIO_FROM' )
 			|| defined( 'CPM_TWILIO_ACCOUNT_SID' ) || defined( 'CPM_TWILIO_AUTH_TOKEN' ) || defined( 'CPM_TWILIO_FROM' )
@@ -379,7 +379,7 @@ class Cpm_Humanblockchain_Admin {
 					<?php esc_html_e( 'Sending to Nepal (+977) or other countries: in Twilio, enable outbound SMS for that country under Messaging → Settings → SMS geographic permissions. Otherwise Twilio returns a “permission … region” error.', 'cpm-humanblockchain' ); ?>
 				</p>
 				<p class="description">
-					<?php esc_html_e( 'If Twilio message logs show error 30006 (landline or unreachable carrier), the destination cannot receive SMS: use a real mobile number, correct E.164 (e.g. +977 for Nepal), and set “Default country” so 10-digit entry is not misrouted to +1.', 'cpm-humanblockchain' ); ?>
+					<?php esc_html_e( 'If Twilio message logs show error 30006 (landline or unreachable carrier), the destination cannot receive SMS: use a real mobile number. Ten-digit numbers starting with 97/98 are sent as Nepal (+977) before +1. Prefer Automatic or Nepal in Default country, or type +977… explicitly.', 'cpm-humanblockchain' ); ?>
 				</p>
 				<p class="description">
 					<?php esc_html_e( 'This site does not read Smallstreet’s wp-config automatically. Use the same Twilio Account SID and Auth Token as smallstreet.app, and the same Verify Service SID (VA…) if you use Twilio Verify there (define CPM_TWILIO_VERIFY_SERVICE_SID or save it below).', 'cpm-humanblockchain' ); ?>
@@ -395,10 +395,11 @@ class Cpm_Humanblockchain_Admin {
 						<th scope="row"><label for="cpm_nwp_default_country"><?php esc_html_e( 'Default country (10-digit numbers)', 'cpm-humanblockchain' ); ?></label></th>
 						<td>
 							<select id="cpm_nwp_default_country" name="cpm_nwp_default_country">
-								<option value="NP" <?php selected( $country, 'NP' ); ?>><?php esc_html_e( 'Nepal (+977) — mobile numbers starting with 97/98', 'cpm-humanblockchain' ); ?></option>
-								<option value="US" <?php selected( $country, 'US' ); ?>><?php esc_html_e( 'United States / Canada (+1)', 'cpm-humanblockchain' ); ?></option>
+								<option value="AUTO" <?php selected( $country, 'AUTO' ); ?>><?php esc_html_e( 'Automatic — 97/98… as Nepal (+977), other 10 digits as +1', 'cpm-humanblockchain' ); ?></option>
+								<option value="NP" <?php selected( $country, 'NP' ); ?>><?php esc_html_e( 'Nepal (+977) — 10 digits as Nepali mobile', 'cpm-humanblockchain' ); ?></option>
+								<option value="US" <?php selected( $country, 'US' ); ?>><?php esc_html_e( 'United States / Canada (+1) for generic 10-digit (97/98 still go to +977 first)', 'cpm-humanblockchain' ); ?></option>
 							</select>
-							<p class="description"><?php esc_html_e( 'If the user types 10 digits without a country code, this decides whether they are interpreted as Nepal or US. Prefer full international format (+977…) in forms to avoid ambiguity.', 'cpm-humanblockchain' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Server always maps 10-digit numbers starting with 97 or 98 to +977 (Nepal mobile) before applying +1, unless a developer disables this with the cpm_nwp_ten_digit_97_98_as_nepal filter. “Automatic” uses +1 only for other 10-digit numbers. For unambiguous input, use full E.164 (+977… or +1…).', 'cpm-humanblockchain' ); ?></p>
 						</td>
 					</tr>
 					<tr>

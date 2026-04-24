@@ -27,13 +27,17 @@ class Cpm_Humanblockchain_Otp_Service {
 	const TRANSIENT_PREFIX = 'cpm_nwp_otp_';
 
 	/**
-	 * Default country when user enters 10 digits without country code: NP or US.
+	 * Default country when user enters 10 digits without country code: NP, US, or AUTO.
 	 *
-	 * @return string 'NP' or 'US'
+	 * - NP: 10-digit 97/98… → +977; other 10-digit → +1 (legacy quirk; prefer typing +977).
+	 * - US: 10-digit → +1 **except** 9[78]… is treated as Nepal first (see normalize_phone_e164) so 984… is not sent as +1.
+	 * - AUTO: same routing as US for remaining digits; Nepal 9[78] always +977 when filter allows.
+	 *
+	 * @return string 'NP'|'US'|'AUTO'
 	 */
 	public static function get_default_country() {
-		$country = get_option( 'cpm_nwp_default_country', 'NP' );
-		return in_array( $country, array( 'NP', 'US' ), true ) ? $country : 'NP';
+		$country = get_option( 'cpm_nwp_default_country', 'AUTO' );
+		return in_array( $country, array( 'NP', 'US', 'AUTO' ), true ) ? $country : 'AUTO';
 	}
 
 	/**
@@ -56,12 +60,14 @@ class Cpm_Humanblockchain_Otp_Service {
 			return '+' . $digits;
 		}
 
-		// Nepal mobile: 10 digits starting with 98 or 97 (when default country NP)
-		if ( self::get_default_country() === 'NP' && strlen( $digits ) === 10 && preg_match( '/^9[78]/', $digits ) ) {
+		// Nepal mobile 10-digit (e.g. 9849158973): always resolve to +977 *before* NANP +1 so a mis-set
+		// "US" default in NWP Gateway does not send SMS to +1 984… (Twilio 30006 on wrong country).
+		// Disable with: add_filter( 'cpm_nwp_ten_digit_97_98_as_nepal', '__return_false' );
+		if ( strlen( $digits ) === 10 && preg_match( '/^9[78]\d{8}$/', $digits ) && (bool) apply_filters( 'cpm_nwp_ten_digit_97_98_as_nepal', true ) ) {
 			return '+977' . $digits;
 		}
 
-		// US / Canada NANP: 10 digits
+		// US / Canada NANP: remaining 10-digit numbers
 		if ( strlen( $digits ) === 10 ) {
 			return '+1' . $digits;
 		}
@@ -85,7 +91,8 @@ class Cpm_Humanblockchain_Otp_Service {
 			return null;
 		}
 		$digits = preg_replace( '/\D/', '', (string) $mobile_raw );
-		if ( self::get_default_country() === 'NP' && strlen( $digits ) === 11 && preg_match( '/^9[78]/', $digits ) ) {
+		$def = self::get_default_country();
+		if ( in_array( $def, array( 'NP', 'AUTO' ), true ) && strlen( $digits ) === 11 && preg_match( '/^9[78]/', $digits ) ) {
 			return __( 'Nepal numbers must be exactly 10 digits without +977 (you entered 11 digits). Remove an extra digit, or use international format e.g. +9779849158973.', 'cpm-humanblockchain' );
 		}
 		return __( 'Please enter a valid mobile number (e.g. 9849158973 or +9779849158973).', 'cpm-humanblockchain' );

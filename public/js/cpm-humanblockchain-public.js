@@ -296,7 +296,8 @@
 				showInlineFeedback( $activateFeedback, shortMsg, 'error' );
 				return false;
 			}
-			if ( window.cpmNwp && window.cpmNwp.defaultCountry === 'NP' && digits.length === 11 && /^9[78]/.test( digits ) ) {
+			var dc = window.cpmNwp && window.cpmNwp.defaultCountry ? window.cpmNwp.defaultCountry : 'AUTO';
+			if ( ( dc === 'NP' || dc === 'AUTO' ) && digits.length === 11 && /^9[78]/.test( digits ) ) {
 				showInlineFeedback( $activateFeedback, pe.npElevenDigits || 'Nepal numbers must be 10 digits without +977 (you have 11). Example: 9849158973 or +9779849158973.', 'error' );
 				return false;
 			}
@@ -482,28 +483,56 @@
 			$( this ).val( v );
 		} );
 
-		$( document ).on( 'input', '[data-phone-mask]', function() {
-			var v = $( this ).val().replace( /\D/g, '' );
-			if ( v.length > 0 && v[0] !== '1' ) {
-				v = '1' + v;
-			}
-			if ( v.length > 1 ) {
-				v = v.substring( 0, 11 );
-			}
+		/**
+		 * Live format: matches server normalize (10-digit 97/98… → +977 even if Default country is US; otherwise NANP +1 for US).
+		 */
+		$( document ).on( 'input', '[data-phone-mask], #cpm-nwp-activate-mobile, #cpm-nwp-mobile', function() {
+			var $el = $( this );
+			var raw = $el.val().replace( /\D/g, '' );
+			var country = ( window.cpmNwp && window.cpmNwp.defaultCountry ) ? window.cpmNwp.defaultCountry : 'AUTO';
+			var np10 = raw.length === 10 && /^9[78]/.test( raw );
+			// While typing, keep +977 if digits match Nepal mobile pattern (aligns with server; rare US 978/984 NPAs collide).
+			var npPrefix = ( /^9[78]\d{0,8}$/.test( raw ) && raw.length < 10 ) || np10;
+			var asNepal = npPrefix || country === 'NP' || country === 'AUTO';
 			var formatted = '';
-			if ( v.length > 0 ) {
-				formatted = '+1';
+
+			if ( asNepal ) {
+				var d = raw;
+				if ( d.length > 10 ) {
+					d = d.substring( 0, 10 );
+				}
+				if ( d.length > 0 ) {
+					formatted = '+977';
+					if ( d.length <= 3 ) {
+						formatted += ' ' + d;
+					} else if ( d.length <= 6 ) {
+						formatted += ' ' + d.substring( 0, 3 ) + ' ' + d.substring( 3 );
+					} else {
+						formatted += ' ' + d.substring( 0, 3 ) + ' ' + d.substring( 3, 6 ) + ' ' + d.substring( 6 );
+					}
+				}
+			} else {
+				var v = raw;
+				if ( v.length > 0 && v[0] !== '1' ) {
+					v = '1' + v;
+				}
 				if ( v.length > 1 ) {
-					formatted += ' (' + v.substring( 1, 4 );
-					if ( v.length > 4 ) {
-						formatted += ') ' + v.substring( 4, 7 );
-						if ( v.length > 7 ) {
-							formatted += '-' + v.substring( 7 );
+					v = v.substring( 0, 11 );
+				}
+				if ( v.length > 0 ) {
+					formatted = '+1';
+					if ( v.length > 1 ) {
+						formatted += ' (' + v.substring( 1, 4 );
+						if ( v.length > 4 ) {
+							formatted += ') ' + v.substring( 4, 7 );
+							if ( v.length > 7 ) {
+								formatted += '-' + v.substring( 7 );
+							}
 						}
 					}
 				}
 			}
-			$( this ).val( formatted );
+			$el.val( formatted );
 		} );
 
 		function generateDeviceHash() {
