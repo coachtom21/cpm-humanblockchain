@@ -55,7 +55,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<div class="cpm-nwp-form-actions">
 				<button type="submit" class="cpm-nwp-btn cpm-nwp-btn--primary"><?php esc_html_e( 'Confirm Registration', 'cpm-humanblockchain' ); ?></button>
-				<button type="button" class="cpm-nwp-btn cpm-nwp-btn--secondary cpm-nwp-open-activate-modal"><?php esc_html_e( 'Activate device', 'cpm-humanblockchain' ); ?></button>
+				<button type="button" class="cpm-nwp-btn cpm-nwp-btn--secondary cpm-nwp-open-activate-modal cpm-nwp-open-activate-modal--from-register"><?php esc_html_e( 'Activate device', 'cpm-humanblockchain' ); ?></button>
 				<a href="<?php echo esc_url( home_url( '/nwp-gateway/membership-selection/' ) ); ?>" class="cpm-nwp-btn cpm-nwp-btn--secondary"><?php esc_html_e( 'Go to Membership', 'cpm-humanblockchain' ); ?></a>
 			</div>
 		</form>

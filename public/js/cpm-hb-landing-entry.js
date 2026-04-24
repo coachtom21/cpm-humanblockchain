@@ -280,7 +280,21 @@
 		 */
 		function showPhoneOtpModal( opts ) {
 			opts = opts || {};
-			var H = window.cpmHbLanding || {};
+			// Must mutate window.cpmHbLanding — `var H = cpmHbLanding || {}` breaks when the global is missing (assignments only hit a throwaway object).
+			if ( ! window.cpmHbLanding ) {
+				window.cpmHbLanding = {};
+			}
+			var H = window.cpmHbLanding;
+			var N = window.cpmNwp || {};
+			if ( ! H.proofScanNonce && N.proofScanNonce ) {
+				H.proofScanNonce = N.proofScanNonce;
+			}
+			if ( ! H.proofOfDeliveryUrl && N.proofOfDeliveryUrl ) {
+				H.proofOfDeliveryUrl = N.proofOfDeliveryUrl;
+			}
+			if ( H.hasProofScan == null && N.hasProofScan != null ) {
+				H.hasProofScan = N.hasProofScan;
+			}
 			var $activate = $( '#cpm-nwp-activate-modal' );
 			if ( ! $activate.length ) {
 				if ( H.proofOfDeliveryUrl ) {
@@ -301,6 +315,7 @@
 			H.phoneModalFromLanding = true;
 			H.buyerProofScan = !! opts.buyerProofScan;
 			H.landingRole = role;
+			window.cpmHbSkipPodOtpContext = false;
 
 			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );

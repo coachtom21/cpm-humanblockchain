@@ -437,6 +437,14 @@ class Cpm_Humanblockchain_Public {
 			)
 		);
 
+		// Shared for landing modal + cpmNwp: OTP verify must send proof nonce/role when ?proof=scan even if cpmHbLanding is not yet defined in JS.
+		$cpm_hb_proof_default     = class_exists( 'Cpm_Humanblockchain_Device_Registry' )
+			? Cpm_Humanblockchain_Device_Registry::get_backorder_page_url()
+			: home_url( '/backorder/' );
+		$cpm_hb_proof_delivery_url = apply_filters( 'cpm_hb_proof_of_delivery_url', $cpm_hb_proof_default );
+		$cpm_hb_has_proof_scan     = $this->request_has_proof_scan_param();
+		$cpm_hb_proof_scan_nonce   = $cpm_hb_has_proof_scan ? wp_create_nonce( 'cpm_hb_proof_scan_flow' ) : '';
+
 		if ( $this->should_show_landing_entry_modal() ) {
 			wp_enqueue_script(
 				$this->plugin_name . '-landing-entry',
@@ -446,10 +454,7 @@ class Cpm_Humanblockchain_Public {
 				true
 			);
 
-			$proof_default = class_exists( 'Cpm_Humanblockchain_Device_Registry' )
-				? Cpm_Humanblockchain_Device_Registry::get_backorder_page_url()
-				: home_url( '/backorder/' );
-			$proof_url     = apply_filters( 'cpm_hb_proof_of_delivery_url', $proof_default );
+			$proof_url  = $cpm_hb_proof_delivery_url;
 			$funnel_url = apply_filters( 'cpm_hb_onboarding_funnel_url', home_url( '/nwp-gateway/' ) );
 
 			$how_default = apply_filters( 'cpm_hb_how_it_works_url', home_url( '/two-qrcode/' ) );
@@ -478,8 +483,8 @@ class Cpm_Humanblockchain_Public {
 					'howItWorksUrl'       => esc_url_raw( $how_default ),
 					'answerBothPrompts'   => __( 'Please answer both prompts (Proof of Delivery and Final Destination).', 'cpm-humanblockchain' ),
 					// Set from the initial HTTP request so ?proof=scan still counts if the address bar is cleaned before OTP (replaceState, etc.).
-					'hasProofScan'        => $this->request_has_proof_scan_param(),
-					'proofScanNonce'      => $this->request_has_proof_scan_param() ? wp_create_nonce( 'cpm_hb_proof_scan_flow' ) : '',
+					'hasProofScan'        => $cpm_hb_has_proof_scan,
+					'proofScanNonce'      => $cpm_hb_proof_scan_nonce,
 					'isLoggedIn'          => is_user_logged_in(),
 				)
 			);
@@ -493,14 +498,17 @@ class Cpm_Humanblockchain_Public {
 		$default_country = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ? Cpm_Humanblockchain_Otp_Service::get_default_country() : 'NP';
 
 		wp_localize_script( $this->plugin_name, 'cpmNwp', array(
-			'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
-			'action'          => 'cpm_nwp_register_device',
-			'sendOtpAction'   => 'cpm_nwp_send_otp',
-			'verifyOtpAction' => 'cpm_nwp_verify_otp',
-			'homeUrl'         => home_url( '/' ),
-			'discordInviteUrl'  => esc_url_raw( $discord_invite ),
-			'defaultCountry'  => $default_country,
-			'phoneErrors'     => array(
+			'ajaxUrl'            => admin_url( 'admin-ajax.php' ),
+			'action'             => 'cpm_nwp_register_device',
+			'sendOtpAction'      => 'cpm_nwp_send_otp',
+			'verifyOtpAction'    => 'cpm_nwp_verify_otp',
+			'homeUrl'            => home_url( '/' ),
+			'discordInviteUrl'   => esc_url_raw( $discord_invite ),
+			'defaultCountry'     => $default_country,
+			'hasProofScan'       => $cpm_hb_has_proof_scan,
+			'proofScanNonce'     => $cpm_hb_proof_scan_nonce,
+			'proofOfDeliveryUrl' => esc_url_raw( $cpm_hb_proof_delivery_url ),
+			'phoneErrors'        => array(
 				'npElevenDigits' => __( 'Nepal numbers must be exactly 10 digits without +977 (you entered 11). Use e.g. 9849158973 or +9779849158973.', 'cpm-humanblockchain' ),
 				'short'          => __( 'Please enter a valid mobile number (at least 10 digits, or full international +977…).', 'cpm-humanblockchain' ),
 			),

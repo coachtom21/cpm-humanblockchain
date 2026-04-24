@@ -57,6 +57,61 @@
 			showInlineFeedback( $box, '', '' );
 		}
 
+		/**
+		 * Merge cpmNwp ?proof=scan data onto cpmHbLanding so OTP always sends nonces/role (landing-entry may not be enqueued; showPhoneOtpModal used to write to a throwaway {}).
+		 */
+		function ensureHbLandingFromNwp() {
+			var N = window.cpmNwp || {};
+			if ( ! window.cpmHbLanding ) {
+				window.cpmHbLanding = {};
+			}
+			var H = window.cpmHbLanding;
+			if ( N.proofScanNonce && ! H.proofScanNonce ) {
+				H.proofScanNonce = N.proofScanNonce;
+			}
+			if ( N.proofOfDeliveryUrl && ! H.proofOfDeliveryUrl ) {
+				H.proofOfDeliveryUrl = N.proofOfDeliveryUrl;
+			}
+			if ( N.hasProofScan != null && H.hasProofScan == null ) {
+				H.hasProofScan = N.hasProofScan;
+			}
+		}
+
+		/**
+		 * If the page was loaded with ?proof=scan but the user registered a device first, re-apply PoD context before Send OTP / verify.
+		 */
+		function applyProofScanContextIfNeeded() {
+			if ( window.cpmHbSkipPodOtpContext ) {
+				return;
+			}
+			var N = window.cpmNwp || {};
+			ensureHbLandingFromNwp();
+			var H = window.cpmHbLanding || {};
+			if ( H.phoneModalFromLanding ) {
+				return;
+			}
+			if ( ! N.hasProofScan || ! N.proofScanNonce ) {
+				return;
+			}
+			var role = 'buyer';
+			try {
+				var raw = sessionStorage.getItem( 'hb_last_scan' );
+				if ( raw ) {
+					var j = JSON.parse( raw );
+					if ( j.user_role === 'seller' || j.user_role === 'buyer' ) {
+						role = j.user_role;
+					}
+				}
+			} catch ( err ) {
+				// ignore
+			}
+			H.phoneModalFromLanding = true;
+			H.podProofScan = true;
+			H.landingRole = role;
+			H.buyerProofScan = role === 'buyer';
+			H.pendingOtpRedirect = role === 'buyer' ? ( N.proofOfDeliveryUrl || H.proofOfDeliveryUrl || '' ) : '';
+		}
+
 		function getReferralFromUrl() {
 			var params = new URLSearchParams( window.location.search );
 			return params.get( 'issuer' ) || params.get( 'referrer' ) || params.get( 'ref' ) || params.get( 'nwp_issuer' ) || '';
@@ -85,6 +140,10 @@
 		}
 
 		function showActivateModalAfterRegistration( $form ) {
+			if ( window.cpmNwp && window.cpmNwp.hasProofScan && window.cpmNwp.proofScanNonce ) {
+				window.cpmHbSkipPodOtpContext = false;
+			}
+			applyProofScanContextIfNeeded();
 			var mobileVal = $( '#cpm-nwp-mobile' ).val() || '';
 			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearInlineFeedback( $verifyFeedback );
@@ -266,9 +325,10 @@
 
 		$( document ).on( 'click', '.cpm-nwp-open-activate-modal', function( e ) {
 			e.preventDefault();
-			// Standard “Activate device” from the register modal must not inherit landing PoD flags (buyer + proof=scan),
-			// or Send OTP would require Smallstreet checks and fail for a normal activation.
-			if ( window.cpmHbLanding ) {
+			// “Activate device” from the register modal (not PoD) must not inherit ?proof=scan (Smallstreet / buyer checks).
+			var fromRegister = $( e.currentTarget ).hasClass( 'cpm-nwp-open-activate-modal--from-register' );
+			if ( fromRegister && window.cpmHbLanding ) {
+				window.cpmHbSkipPodOtpContext = true;
 				window.cpmHbLanding.buyerProofScan = false;
 				window.cpmHbLanding.phoneModalFromLanding = false;
 				window.cpmHbLanding.podProofScan = false;
@@ -302,6 +362,7 @@
 				return false;
 			}
 			clearInlineFeedback( $activateFeedback );
+			applyProofScanContextIfNeeded();
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
 			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
@@ -368,6 +429,7 @@
 				return false;
 			}
 			clearInlineFeedback( $verifyFeedback );
+			applyProofScanContextIfNeeded();
 			$btn.prop( 'disabled', true ).text( 'Verifying...' );
 			var payload = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.verifyOtpAction ? window.cpmNwp.verifyOtpAction : 'cpm_nwp_verify_otp' );
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
@@ -488,6 +550,7 @@
 		 */
 		$( document ).on( 'input', '[data-phone-mask], #cpm-nwp-activate-mobile, #cpm-nwp-mobile', function() {
 			var $el = $( this );
+			/* Digits only; leading 977 is stripped for Nepal so "+977" in the field is not re-encoded as 977+977+… */
 			var raw = $el.val().replace( /\D/g, '' );
 			var country = ( window.cpmNwp && window.cpmNwp.defaultCountry ) ? window.cpmNwp.defaultCountry : 'AUTO';
 			var np10 = raw.length === 10 && /^9[78]/.test( raw );
@@ -498,6 +561,13 @@
 
 			if ( asNepal ) {
 				var d = raw;
+				// Pasted "9779…" or the displayed "+977" re-fed: strip country code 977 from the digit string once or more, then cap 10.
+				while ( d.length > 0 && d.indexOf( '977' ) === 0 && d.length > 3 ) {
+					d = d.substring( 3 );
+				}
+				if ( d === '977' ) {
+					d = '';
+				}
 				if ( d.length > 10 ) {
 					d = d.substring( 0, 10 );
 				}
