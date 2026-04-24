@@ -13,8 +13,22 @@
 			window.cpmHbLanding = {};
 		}
 
+		/* Matches PHP: case-insensitive proof=Scan / proof=scan (browsers and URLSearchParams are case-sensitive on the key). */
+		function queryProofIsScan() {
+			try {
+				var q = window.location.search || '';
+				var m = q.match( /[?&]proof=([^&]*)/i );
+				if ( ! m || m.length < 2 ) {
+					return false;
+				}
+				return decodeURIComponent( m[ 1 ].replace( /\+/g, ' ' ) ).toLowerCase() === 'scan';
+			} catch ( e ) {
+				return false;
+			}
+		}
+
 		try {
-			if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
+			if ( queryProofIsScan() ) {
 				sessionStorage.setItem( 'cpm_hb_proof_scan', '1' );
 			}
 		} catch ( err ) {
@@ -46,12 +60,8 @@
 		}
 
 		function urlHasProofScan() {
-			try {
-				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
-					return true;
-				}
-			} catch ( err ) {
-				// ignore
+			if ( queryProofIsScan() ) {
+				return true;
 			}
 			var H = window.cpmHbLanding || {};
 			if ( H.hasProofScan ) {
@@ -65,14 +75,25 @@
 		}
 
 		function stripProofScanFromUrl() {
+			if ( ! queryProofIsScan() ) {
+				return;
+			}
 			try {
 				var u = new URL( window.location.href );
-				if ( u.searchParams.get( 'proof' ) !== 'scan' ) {
+				var toDelete = [];
+				u.searchParams.forEach( function( _v, k ) {
+					if ( k.toLowerCase() === 'proof' ) {
+						toDelete.push( k );
+					}
+				} );
+				if ( toDelete.length === 0 ) {
 					return;
 				}
-				u.searchParams.delete( 'proof' );
-				var q = u.searchParams.toString();
-				u.search = q ? '?' + q : '';
+				toDelete.forEach( function( k ) {
+					u.searchParams.delete( k );
+				} );
+				var qs = u.searchParams.toString();
+				u.search = qs ? '?' + qs : '';
 				history.replaceState( {}, '', u.pathname + u.search + u.hash );
 			} catch ( err ) {
 				// ignore
@@ -84,12 +105,8 @@
 		 * Do not use sessionStorage here — stale values caused the ack cookie to be set on normal home dismiss, which hid all future ?proof=scan popups.
 		 */
 		function proofScanInUrlOrFromServer() {
-			try {
-				if ( new URLSearchParams( window.location.search ).get( 'proof' ) === 'scan' ) {
-					return true;
-				}
-			} catch ( err ) {
-				// ignore
+			if ( queryProofIsScan() ) {
+				return true;
 			}
 			var H = window.cpmHbLanding || {};
 			return !! H.hasProofScan;

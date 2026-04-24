@@ -379,6 +379,9 @@ class Cpm_Humanblockchain_Admin {
 					<?php esc_html_e( 'Sending to Nepal (+977) or other countries: in Twilio, enable outbound SMS for that country under Messaging → Settings → SMS geographic permissions. Otherwise Twilio returns a “permission … region” error.', 'cpm-humanblockchain' ); ?>
 				</p>
 				<p class="description">
+					<?php esc_html_e( 'If Twilio message logs show error 30006 (landline or unreachable carrier), the destination cannot receive SMS: use a real mobile number, correct E.164 (e.g. +977 for Nepal), and set “Default country” so 10-digit entry is not misrouted to +1.', 'cpm-humanblockchain' ); ?>
+				</p>
+				<p class="description">
 					<?php esc_html_e( 'This site does not read Smallstreet’s wp-config automatically. Use the same Twilio Account SID and Auth Token as smallstreet.app, and the same Verify Service SID (VA…) if you use Twilio Verify there (define CPM_TWILIO_VERIFY_SERVICE_SID or save it below).', 'cpm-humanblockchain' ); ?>
 				</p>
 			</div>

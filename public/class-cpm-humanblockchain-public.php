@@ -160,19 +160,11 @@ class Cpm_Humanblockchain_Public {
 	 * @return bool
 	 */
 	private function request_has_proof_scan_param() {
-		return isset( $_GET['proof'] ) && 'scan' === sanitize_text_field( wp_unslash( $_GET['proof'] ) );
-	}
-
-	/**
-	 * Cookie set in JS when the user dismisses or completes the ?proof=scan landing gate (avoids showing it on every refresh).
-	 *
-	 * @return bool
-	 */
-	private function proof_scan_landing_already_acknowledged() {
-		if ( ! isset( $_COOKIE['cpm_hb_proof_scan_landing_seen'] ) ) {
+		if ( ! isset( $_GET['proof'] ) || is_array( $_GET['proof'] ) ) {
 			return false;
 		}
-		return '1' === sanitize_text_field( wp_unslash( $_COOKIE['cpm_hb_proof_scan_landing_seen'] ) );
+		$v = sanitize_text_field( wp_unslash( $_GET['proof'] ) );
+		return ( $v !== '' && strtolower( $v ) === 'scan' );
 	}
 
 	/**
@@ -187,12 +179,7 @@ class Cpm_Humanblockchain_Public {
 	public function should_show_landing_entry_modal() {
 		$proof_scan = $this->request_has_proof_scan_param();
 
-		// Guests only: ack cookie (after dismiss) suppresses repeat ?proof=scan loads. Logged-in users are not suppressed — an ack cookie may already exist from a logged-out session.
-		if ( $proof_scan && ! is_user_logged_in() && $this->proof_scan_landing_already_acknowledged() ) {
-			if ( (bool) apply_filters( 'cpm_hb_suppress_proof_scan_landing_after_ack', true ) ) {
-				return false;
-			}
-		}
+		// Do not suppress a fresh ?proof=scan using an old ack cookie (e.g. user dismissed the gate on Home earlier, then opens a PoD link on /nwp-landing/?proof=scan). JS still sets the cookie on dismiss to pair with history.replaceState on the same page; full reloads after dismiss usually have no ?proof=scan in the request.
 
 		if ( is_user_logged_in() ) {
 			if ( ! $proof_scan ) {

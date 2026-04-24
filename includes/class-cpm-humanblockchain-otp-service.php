@@ -400,6 +400,119 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Extra help for Twilio delivery error 30006 (landline / carrier cannot deliver SMS).
+	 *
+	 * @param string   $message    Base message.
+	 * @param int      $error_code From Message resource (error_code) or API body.
+	 * @return string
+	 */
+	private static function maybe_append_landline_30006_help( $message, $error_code ) {
+		if ( 30006 !== (int) $error_code ) {
+			return (string) $message;
+		}
+		return trim( (string) $message ) . ' '
+			. __( 'This number likely cannot receive SMS (landline, non-SMS line, or blocked route). Use a real mobile in full international format (e.g. Nepal: +977984000000; US: +1…). In Twilio, confirm SMS geo permissions and that the device can receive test SMS. See https://www.twilio.com/docs/api/errors/30006', 'cpm-humanblockchain' );
+	}
+
+	/**
+	 * GET a Message instance from the Twilio REST API.
+	 *
+	 * @param string               $message_sid Message SID (SM…).
+	 * @param array{ sid: string, token: string, from: string } $creds Account credentials.
+	 * @return array<string, mixed>|null Decoded JSON or null on failure.
+	 */
+	private static function twilio_get_message( $message_sid, array $creds ) {
+		$sid   = $creds['sid'];
+		$token = $creds['token'];
+		if ( $sid === '' || $token === '' || $message_sid === '' ) {
+			return null;
+		}
+		$url  = 'https://api.twilio.com/2010-04-01/Accounts/' . $sid . '/Messages/' . rawurlencode( $message_sid ) . '.json';
+		$auth = base64_encode( $sid . ':' . $token );
+		$args = array(
+			'headers'   => array( 'Authorization' => 'Basic ' . $auth ),
+			'timeout'   => 10,
+			'sslverify' => true,
+		);
+		$args  = apply_filters( 'cpm_nwp_twilio_get_message_request_args', $args, $message_sid );
+		$resp  = wp_remote_get( $url, $args );
+		if ( is_wp_error( $resp ) ) {
+			return null;
+		}
+		$code = (int) wp_remote_retrieve_response_code( $resp );
+		if ( $code < 200 || $code >= 300 ) {
+			return null;
+		}
+		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+		return is_array( $body ) ? $body : null;
+	}
+
+	/**
+	 * Poll a Message until it leaves “queued” / “sending” so 30006 appears on the resource (not only in Console later).
+	 *
+	 * @param array<string, mixed> $body_response First POST /Messages response.
+	 * @param array{ sid: string, token: string, from: string } $creds Credentials.
+	 * @param string               $to            E.164 to (for debug log).
+	 * @return array<string, mixed> Latest message data.
+	 */
+	private static function twilio_message_after_send_poll( $body_response, array $creds, $to ) {
+		if ( ! is_array( $body_response ) || empty( $body_response['sid'] ) ) {
+			return is_array( $body_response ) ? $body_response : array();
+		}
+		$in_progress = array( 'queued', 'sending', 'accepted', 'scheduled' );
+		$data        = $body_response;
+		for ( $i = 0; $i < 12; $i++ ) {
+			$st = isset( $data['status'] ) ? (string) $data['status'] : '';
+			if ( $st === '' || ! in_array( $st, $in_progress, true ) ) {
+				break;
+			}
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				error_log( 'cpm_nwp twilio poll message to=' . $to . ' status=' . $st . ' i=' . $i );
+			}
+			usleep( 300000 );
+			$next = self::twilio_get_message( (string) $data['sid'], $creds );
+			if ( is_array( $next ) ) {
+				$data = $next;
+			} else {
+				break;
+			}
+		}
+		return is_array( $data ) ? $data : $body_response;
+	}
+
+	/**
+	 * User-facing line for a failed/undelivered message including Twilio 30006 context.
+	 *
+	 * @param array<string, mixed> $data Message resource JSON.
+	 * @return string
+	 */
+	private static function message_failed_user_text( array $data ) {
+		$msg     = '';
+		$err_msg = $data['error_message'] ?? $data['ErrorMessage'] ?? null;
+		if ( is_string( $err_msg ) && $err_msg !== '' ) {
+			$msg = $err_msg;
+		}
+		$err_code = 0;
+		if ( isset( $data['error_code'] ) && is_numeric( $data['error_code'] ) ) {
+			$err_code = (int) $data['error_code'];
+		} elseif ( isset( $data['ErrorCode'] ) && is_numeric( $data['ErrorCode'] ) ) {
+			$err_code = (int) $data['ErrorCode'];
+		}
+		if ( $msg === '' && $err_code > 0 ) {
+			$msg = sprintf(
+				/* translators: %d: Twilio error code, e.g. 30006 */
+				__( 'SMS could not be delivered (Twilio error %d).', 'cpm-humanblockchain' ),
+				$err_code
+			);
+		} elseif ( $msg === '' ) {
+			$msg = __( 'SMS could not be delivered.', 'cpm-humanblockchain' );
+		}
+		$msg = self::maybe_append_landline_30006_help( $msg, $err_code );
+		return self::maybe_append_geo_permission_help( $msg, array( 'code' => $err_code, 'message' => $msg ) );
+	}
+
+	/**
 	 * Send SMS via Twilio REST API.
 	 *
 	 * @param string $to   E.164 number (e.g. +15551234567).
@@ -458,17 +571,22 @@ class Cpm_Humanblockchain_Otp_Service {
 		$body_response = json_decode( $raw_body, true );
 
 		if ( $code >= 200 && $code < 300 ) {
-			// Twilio returns 201 with status queued|sent|failed; treat non-delivered as failure when status is present.
+			// Re-fetch while queued so async failures (e.g. 30006 landline) are visible before we tell the user “success”.
+			if ( is_array( $body_response ) && ! empty( $body_response['sid'] ) ) {
+				$body_response = self::twilio_message_after_send_poll( $body_response, $creds, $to );
+			}
+			$raw_body = wp_json_encode( $body_response );
+
 			$twilio_status = is_array( $body_response ) && isset( $body_response['status'] ) ? $body_response['status'] : '';
 			if ( in_array( $twilio_status, array( 'failed', 'undelivered', 'canceled' ), true ) ) {
-				$err_detail = isset( $body_response['error_message'] ) ? $body_response['error_message'] : $twilio_status;
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-					error_log( 'cpm_nwp twilio message status=' . $twilio_status . ' to=' . $to . ' body=' . $raw_body );
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'cpm_nwp twilio message status=' . $twilio_status . ' to=' . $to . ' body=' . ( is_string( $raw_body ) ? $raw_body : '' ) );
 				}
-				$fail_msg = $err_detail ? $err_detail : __( 'SMS could not be delivered.', 'cpm-humanblockchain' );
+				$fail_msg = self::message_failed_user_text( is_array( $body_response ) ? $body_response : array() );
 				return array(
 					'success' => false,
-					'message' => self::maybe_append_geo_permission_help( $fail_msg, $body_response ),
+					'message' => $fail_msg,
 					'error'   => $twilio_status,
 				);
 			}
@@ -656,6 +774,10 @@ class Cpm_Humanblockchain_Otp_Service {
 		);
 
 		$result = self::send_sms( $phone_e164, $body );
+		if ( ! $result['success'] ) {
+			// Do not keep a “phantom” OTP the user can never have received.
+			self::clear_otp_transient( $phone_e164 );
+		}
 		return $result;
 	}
 }
