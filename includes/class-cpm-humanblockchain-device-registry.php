@@ -682,7 +682,7 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
-	 * Handle Verify OTP AJAX: check code, mark device activated, log user in, then client shows Discord step (or redirect if filtered).
+	 * Handle Verify OTP AJAX: check code, mark device activated, log user in, then client shows Discord (role and ?proof=scan are ignored for post-verify UI).
 	 *
 	 * @since 1.0.0
 	 */
@@ -767,62 +767,15 @@ class Cpm_Humanblockchain_Device_Registry {
 		/** This action is documented in wp-includes/user.php. */
 		do_action( 'wp_login', $user->user_login, $user );
 
-		$buyer_proof_scan    = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
-		$landing_role        = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
-		$cpm_hb_proof_scan_1 = isset( $_POST['cpm_hb_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_proof_scan'] ) );
-		// Landing / PoD verify: explicit flag, or ?proof=scan + role + nonce (in case cpm_hb_verify_redirect was not posted).
-		$landing_backorder   = ( isset( $_POST['cpm_hb_verify_redirect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_verify_redirect'] ) ) )
-			|| ( $cpm_hb_proof_scan_1 && self::request_has_valid_proof_scan_nonce() && in_array( $landing_role, array( 'buyer', 'seller' ), true ) );
-		// Backorders + XP/NWP only when the page was loaded with ?proof=scan (valid nonce), not for generic landing OTP.
-		$redirect_backorders = $landing_backorder && $buyer_proof_scan && self::request_has_valid_proof_scan_nonce() && 'buyer' === $landing_role;
-		$seller_pod_complete = $landing_backorder && 'seller' === $landing_role && self::request_has_valid_proof_scan_nonce();
-
-		$seller_transaction_code = '';
-		if ( $seller_pod_complete ) {
-			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
-			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
-				Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
-			}
-		}
-
-		if ( $landing_backorder ) {
-			if ( $redirect_backorders ) {
-				$redirect     = apply_filters( 'cpm_hb_wc_backorder_redirect_url', self::get_backorder_page_url() );
-				$show_discord = false;
-			} elseif ( $seller_pod_complete ) {
-				$redirect     = '';
-				$show_discord = false;
-			} else {
-				// Landing OTP without ?proof=scan: log in and go to My Account (or filter); no XP ledger until PoD link.
-				$redirect     = apply_filters( 'cpm_hb_landing_verify_no_proof_redirect', self::get_post_verify_account_redirect_url() );
-				$show_discord = (bool) apply_filters( 'cpm_hb_landing_verify_no_proof_show_discord', false );
-			}
-		} else {
-			// Default: no immediate redirect; show Discord invite modal. Set redirect URL via filter to skip modal.
-			$redirect     = apply_filters( 'cpm_nwp_after_verify_redirect', '' );
-			$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
-		}
-
-		$smallstreet_backorders = array();
-		if ( $redirect_backorders && class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-			$smallstreet_backorders = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $mobile_raw );
-			if ( ! empty( $smallstreet_backorders ) && $wp_uid > 0 ) {
-				Cpm_Humanblockchain_Smallstreet_Backorders::save_user_backorders_cache( $wp_uid, $smallstreet_backorders );
-			}
-		}
+		// Unified outcome: logged in above; show Discord on success unless a filter sets an immediate redirect (client checks redirect first).
+		$redirect     = apply_filters( 'cpm_nwp_after_verify_redirect', '' );
+		$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
 
 		$payload = array(
 			'message'            => $check['message'],
 			'redirect_url'       => $redirect ? esc_url_raw( $redirect ) : '',
-			'show_discord_modal' => (bool) $show_discord,
+			'show_discord_modal' => $show_discord,
 		);
-		if ( $redirect_backorders ) {
-			$payload['smallstreet_backorders'] = $smallstreet_backorders;
-		}
-		if ( $seller_pod_complete ) {
-			$payload['seller_scan_success']     = true;
-			$payload['seller_transaction_code'] = $seller_transaction_code;
-		}
 
 		wp_send_json_success( $payload );
 	}
