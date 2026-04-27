@@ -107,7 +107,7 @@ $logo_inner = apply_filters( 'cpm_hb_landing_entry_logo_inner_html', $logo_inner
 						<?php echo wp_kses_post( $logo_inner ); ?>
 					</div>
 					<div>
-						<h1 id="cpm-hb-entry-title" class="cpm-hb-entry-h1"><?php echo esc_html( $site_name ); ?> • <?php esc_html_e( 'Enter Website', 'cpm-humanblockchain' ); ?></h1>
+						<h2 id="cpm-hb-entry-title" class="cpm-hb-entry-h1"><?php echo esc_html( $site_name ); ?> • <?php esc_html_e( 'Enter Website', 'cpm-humanblockchain' ); ?></h2>
 						<div class="cpm-hb-entry-sub"><?php esc_html_e( 'Two quick prompts. Then you choose the path.', 'cpm-humanblockchain' ); ?></div>
 					</div>
 				</div>
