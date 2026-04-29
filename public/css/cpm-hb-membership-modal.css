@@ -6,10 +6,17 @@
 	--cpm-hb-m-accent: #7dd3fc;
 	--cpm-hb-m-accent2: #a78bfa;
 	--cpm-hb-m-panel: #1e293b;
-	--cpm-hb-m-card: #273549;
+	--cpm-hb-m-card: #1f2f45;
+	--cpm-hb-m-card-elevated: #253652;
 	--cpm-hb-m-text: #f1f5f9;
+	--cpm-hb-m-list: #e2e8f0;
 	--cpm-hb-m-muted: #94a3b8;
-	--cpm-hb-m-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+	--cpm-hb-m-badge-fg: #e0f2fe;
+	--cpm-hb-m-badge-bg: rgba(15, 23, 42, 0.75);
+	--cpm-hb-m-badge-border: rgba(125, 211, 252, 0.25);
+	--cpm-hb-m-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", Arial, sans-serif;
+	--cpm-hb-m-radius: 16px;
+	--cpm-hb-m-gap: clamp(16px, 2.2vw, 24px);
 }
 
 body.cpm-hb-membership-modal-open {
@@ -34,7 +41,7 @@ body.cpm-hb-membership-modal-open {
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-container {
-	background: var(--cpm-hb-m-panel);
+	background: linear-gradient(165deg, #24364f 0%, var(--cpm-hb-m-panel) 40%, #162536 100%);
 	width: min(1100px, calc(100vw - 32px));
 	max-width: 100%;
 	max-height: min(92vh, 900px);
@@ -42,11 +49,14 @@ body.cpm-hb-membership-modal-open {
 	overflow-x: hidden;
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
-	border-radius: 16px;
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	box-shadow: 0 25px 60px rgba(0, 0, 0, 0.55);
+	border-radius: var(--cpm-hb-m-radius);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	box-shadow:
+		0 0 0 1px rgba(125, 211, 252, 0.06) inset,
+		0 28px 64px rgba(0, 0, 0, 0.5),
+		0 8px 24px rgba(0, 0, 0, 0.3);
 	position: relative;
-	padding: 24px 22px 22px;
+	padding: 28px clamp(20px, 3vw, 32px) 28px;
 	box-sizing: border-box;
 }
 
@@ -74,20 +84,76 @@ body.cpm-hb-membership-modal-open {
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-title {
-	margin: 0 0 8px;
+	margin: 0 0 10px;
 	padding-right: 44px;
-	font-size: 1.5rem;
+	font-size: clamp(1.35rem, 3.5vw, 1.65rem);
 	font-weight: 800;
+	letter-spacing: -0.02em;
 	color: var(--cpm-hb-m-text);
 	text-align: center;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-intro {
-	margin: 0 0 20px;
-	font-size: 0.9rem;
+	margin: 0 auto 24px;
+	max-width: 38em;
+	font-size: 0.94rem;
 	color: var(--cpm-hb-m-muted);
 	text-align: center;
-	line-height: 1.45;
+	line-height: 1.55;
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-branch-row {
+	margin: 0 auto 26px;
+	max-width: min(1000px, 100%);
+	text-align: left;
+	padding: 16px 18px 18px;
+	background: rgba(15, 23, 42, 0.45);
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-branch-label {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 800;
+	color: #a8b9d4;
+	letter-spacing: 0.12em;
+	margin-bottom: 10px;
+	text-transform: uppercase;
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-branch {
+	width: 100%;
+	max-width: 100%;
+	box-sizing: border-box;
+	padding: 13px 16px;
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--cpm-hb-m-text);
+	background: #0b1220;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-radius: 10px;
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%237dd3fc'%3E%3Cpath d='M4 6h8l-4 5z'/%3E%3C/svg%3E");
+	background-color: #0b1220;
+	background-repeat: no-repeat;
+	background-position: right 14px center;
+	padding-right: 44px;
+	line-height: 1.4;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-branch:hover {
+	border-color: rgba(125, 211, 252, 0.35);
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-branch:focus {
+	outline: none;
+	border-color: rgba(125, 211, 252, 0.55);
+	box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.18);
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-success {
@@ -127,8 +193,8 @@ body.cpm-hb-membership-modal-open {
 #cpm-hb-membership-modal .cpm-hb-membership-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 14px;
-	margin-bottom: 22px;
+	gap: var(--cpm-hb-m-gap);
+	margin-bottom: 28px;
 	width: 100%;
 	min-width: 0;
 	overflow-x: hidden;
@@ -140,6 +206,7 @@ body.cpm-hb-membership-modal-open {
 	#cpm-hb-membership-modal .cpm-hb-membership-grid {
 		grid-template-columns: 1fr;
 		max-width: 100%;
+		gap: 16px;
 	}
 }
 
@@ -147,21 +214,24 @@ body.cpm-hb-membership-modal-open {
 	#cpm-hb-membership-modal .cpm-hb-membership-container {
 		max-height: min(94vh, 920px);
 		min-height: auto;
-		padding: 20px 16px 18px;
+		padding: 24px 16px 22px;
+	}
+	#cpm-hb-membership-modal .cpm-hb-membership-branch-row {
+		padding: 14px 14px 16px;
 	}
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card {
 	margin: 0;
-	padding: 16px 14px;
+	padding: 20px 18px 20px;
 	text-align: left;
 	border-radius: 14px;
-	border: 2px solid rgba(255, 255, 255, 0.1);
-	background: var(--cpm-hb-m-card);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: linear-gradient(180deg, var(--cpm-hb-m-card-elevated) 0%, var(--cpm-hb-m-card) 100%);
 	color: var(--cpm-hb-m-text);
 	cursor: pointer;
 	font: inherit;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease, background 0.18s ease;
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -174,63 +244,70 @@ body.cpm-hb-membership-modal-open {
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card:hover {
-	border-color: rgba(125, 211, 252, 0.35);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+	border-color: rgba(125, 211, 252, 0.28);
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+	transform: translateY(-1px);
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card:focus {
 	outline: none;
-	border-color: rgba(125, 211, 252, 0.55);
-	box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.2);
+	border-color: rgba(125, 211, 252, 0.5);
+	box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.18);
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card.is-selected {
-	border-color: rgba(125, 211, 252, 0.85);
+	border-color: rgba(125, 211, 252, 0.7);
 	box-shadow:
-		0 0 0 1px rgba(125, 211, 252, 0.35),
-		0 12px 32px rgba(0, 0, 0, 0.35);
-	background: linear-gradient(180deg, rgba(125, 211, 252, 0.08), rgba(39, 53, 73, 0.98));
+		0 0 0 1px rgba(125, 211, 252, 0.2),
+		0 12px 36px rgba(15, 23, 42, 0.55);
+	background: linear-gradient(165deg, rgba(45, 68, 96, 0.95) 0%, rgba(31, 48, 69, 0.99) 100%);
+	transform: translateY(-1px);
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card-title {
 	display: block;
-	font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+	font-size: clamp(1rem, 2.3vw, 1.08rem);
 	font-weight: 800;
-	margin-bottom: 8px;
-	line-height: 1.25;
+	margin-bottom: 10px;
+	line-height: 1.3;
+	letter-spacing: -0.01em;
 	overflow-wrap: anywhere;
+	color: #f8fafc;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card-badge {
 	display: inline-block;
 	align-self: flex-start;
-	font-size: 0.72rem;
-	font-weight: 600;
-	color: var(--cpm-hb-m-muted);
-	padding: 4px 10px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: var(--cpm-hb-m-badge-fg);
+	padding: 6px 12px;
 	border-radius: 999px;
-	border: 1px solid rgba(255, 255, 255, 0.14);
-	margin-bottom: 12px;
+	border: 1px solid var(--cpm-hb-m-badge-border);
+	background: linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, var(--cpm-hb-m-badge-bg) 100%);
+	margin-bottom: 14px;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card.is-selected .cpm-hb-membership-card-badge {
-	border-color: rgba(125, 211, 252, 0.4);
-	color: var(--cpm-hb-m-accent);
+	border-color: rgba(125, 211, 252, 0.55);
+	color: #f0f9ff;
+	background: linear-gradient(180deg, rgba(56, 189, 248, 0.28) 0%, rgba(12, 74, 110, 0.55) 100%);
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card-list {
 	margin: 0;
-	padding-left: 1.15rem;
-	font-size: 0.8rem;
-	line-height: 1.5;
-	color: #cbd5e1;
+	padding-left: 1.2rem;
+	font-size: 0.875rem;
+	line-height: 1.6;
+	color: var(--cpm-hb-m-list);
 	flex: 1;
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card-list li {
-	margin-bottom: 6px;
+	margin-bottom: 8px;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-card-list li:last-child {
@@ -240,23 +317,33 @@ body.cpm-hb-membership-modal-open {
 #cpm-hb-membership-modal .cpm-hb-membership-actions {
 	display: flex;
 	justify-content: center;
+	padding-top: 4px;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-continue {
-	min-width: 200px;
-	padding: 14px 28px;
-	font-size: 1rem;
+	min-width: 240px;
+	padding: 15px 36px;
+	font-size: 1.02rem;
 	font-weight: 800;
+	letter-spacing: 0.03em;
 	border: none;
-	border-radius: 14px;
+	border-radius: 12px;
 	cursor: pointer;
-	background: linear-gradient(135deg, rgba(125, 211, 252, 0.95), rgba(167, 139, 250, 0.95));
-	color: #0f172a;
-	transition: filter 0.12s ease, opacity 0.12s ease;
+	background: linear-gradient(120deg, #6ecfff 0%, #7dd3fc 32%, #a78bfa 100%);
+	color: #0a1628;
+	box-shadow: 0 4px 16px rgba(56, 189, 248, 0.25);
+	transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease, opacity 0.12s ease;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-continue:hover:not(:disabled) {
-	filter: brightness(1.05);
+	filter: brightness(1.06);
+	box-shadow: 0 6px 24px rgba(99, 102, 241, 0.35);
+	transform: translateY(-1px);
+}
+
+#cpm-hb-membership-modal .cpm-hb-membership-continue:focus-visible {
+	outline: 2px solid rgba(125, 211, 252, 0.9);
+	outline-offset: 3px;
 }
 
 #cpm-hb-membership-modal .cpm-hb-membership-continue:disabled {
@@ -503,4 +590,42 @@ body.cpm-hb-membership-modal-open {
 
 #cpm-hb-membership-contact-modal.cpm-hb-membership-contact--phone-only .cpm-hb-membership-email-row {
 	display: none !important;
+}
+
+/*
+ * NWP / theme globals sometimes reset lists or collapse grids. Keep the three
+ * “branches” visible and selectable.
+ */
+#cpm-hb-membership-modal .cpm-hb-membership-grid {
+	display: grid !important;
+	grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+	gap: clamp(16px, 2.2vw, 24px) !important;
+	visibility: visible !important;
+	width: 100% !important;
+	min-height: 0 !important;
+}
+@media (max-width: 1100px) {
+	#cpm-hb-membership-modal .cpm-hb-membership-grid {
+		grid-template-columns: 1fr !important;
+		gap: 16px !important;
+	}
+}
+#cpm-hb-membership-modal .cpm-hb-membership-card {
+	display: flex !important;
+	visibility: visible !important;
+	opacity: 1 !important;
+	-webkit-appearance: none;
+	appearance: none;
+}
+#cpm-hb-membership-modal .cpm-hb-membership-card-list {
+	visibility: visible !important;
+	display: block !important;
+	list-style: disc !important;
+	list-style-position: outside !important;
+	padding-left: 1.25rem !important;
+}
+#cpm-hb-membership-modal .cpm-hb-membership-card-list li {
+	visibility: visible !important;
+	display: list-item !important;
+	color: #e2e8f0 !important;
 }

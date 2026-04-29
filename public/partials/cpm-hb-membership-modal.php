@@ -9,6 +9,13 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+
+$cpm_hb_membership_branches = class_exists( 'Cpm_Humanblockchain_Membership' )
+	? Cpm_Humanblockchain_Membership::get_branch_options()
+	: array();
+if ( ! is_array( $cpm_hb_membership_branches ) ) {
+	$cpm_hb_membership_branches = array();
+}
 ?>
 
 <div id="cpm-hb-membership-modal" class="cpm-hb-membership-overlay" role="dialog" aria-modal="true" aria-labelledby="cpm-hb-membership-title" aria-hidden="true">
@@ -16,7 +23,25 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<button type="button" class="cpm-hb-membership-close" id="cpm-hb-membership-close" aria-label="<?php esc_attr_e( 'Close', 'cpm-humanblockchain' ); ?>">&times;</button>
 		<div class="cpm-hb-membership-inner">
 			<h2 id="cpm-hb-membership-title" class="cpm-hb-membership-title"><?php esc_html_e( 'Select membership', 'cpm-humanblockchain' ); ?></h2>
-			<p class="cpm-hb-membership-intro"><?php esc_html_e( 'Choose the path that fits you. You can change details later in onboarding.', 'cpm-humanblockchain' ); ?></p>
+			<p class="cpm-hb-membership-intro" id="cpm-hb-membership-intro-text"><?php esc_html_e( 'Choose the path that fits you. You can change details later in onboarding.', 'cpm-humanblockchain' ); ?></p>
+
+			<div class="cpm-hb-membership-branch-row">
+				<label for="cpm-hb-membership-branch" class="cpm-hb-membership-branch-label"><?php esc_html_e( 'Branch (select one)', 'cpm-humanblockchain' ); ?></label>
+				<select id="cpm-hb-membership-branch" class="cpm-hb-membership-branch" name="cpm_hb_branch" aria-describedby="cpm-hb-membership-intro-text" autocomplete="off">
+					<option value=""><?php esc_html_e( 'Branch (Select One)', 'cpm-humanblockchain' ); ?></option>
+					<?php
+					foreach ( $cpm_hb_membership_branches as $cpm_b_slug => $cpm_b_label ) {
+						$cpm_b_slug = sanitize_key( (string) $cpm_b_slug );
+						if ( $cpm_b_slug === '' ) {
+							continue;
+						}
+						?>
+					<option value="<?php echo esc_attr( $cpm_b_slug ); ?>"><?php echo esc_html( $cpm_b_label ); ?></option>
+						<?php
+					}
+					?>
+				</select>
+			</div>
 
 			<div id="cpm-hb-membership-success" class="cpm-hb-membership-success" hidden role="status" aria-live="polite" tabindex="-1">
 				<p class="cpm-hb-membership-success-icon" aria-hidden="true">✓</p>

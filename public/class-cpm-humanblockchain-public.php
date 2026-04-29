@@ -266,7 +266,7 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
-	 * Add "Register device NWP" button to header navigation menu.
+	 * Add "Activate Your Phone" (device registration) button to header navigation menu.
 	 *
 	 * @since    1.0.0
 	 * @param    string   $items  The HTML list content for the menu items.
@@ -291,7 +291,7 @@ class Cpm_Humanblockchain_Public {
 		} else {
 			$button = sprintf(
 				'<li class="cpm-nwp-register-btn-wrap menu-item"><a href="#" class="cpm-nwp-register-btn cpm-nwp-open-modal" data-cpm-modal="cpm-nwp-register-modal">%1$s</a></li>',
-				esc_html__( 'Register device NWP', 'cpm-humanblockchain' )
+				esc_html__( 'Activate Your Phone', 'cpm-humanblockchain' )
 			);
 		}
 		return $items . $button . $get_started;
@@ -415,16 +415,20 @@ class Cpm_Humanblockchain_Public {
 				$user_email = $u->user_email;
 			}
 		}
+		$membership_checkout_base = function_exists( 'wc_get_checkout_url' ) ? wc_get_checkout_url() : home_url( '/checkout/' );
 		wp_localize_script(
 			$this->plugin_name . '-membership-modal',
 			'cpmHbMembership',
 			array(
-				'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-				'action'      => 'cpm_hb_membership_submit',
-				'nonce'       => wp_create_nonce( 'cpm_hb_membership' ),
-				'isLoggedIn'  => (bool) $uid,
-				'userEmail'   => $user_email,
-				'userPhone'   => $user_phone,
+				'ajaxUrl'          => admin_url( 'admin-ajax.php' ),
+				'action'           => 'cpm_hb_membership_submit',
+				'nonce'            => wp_create_nonce( 'cpm_hb_membership' ),
+				'isLoggedIn'       => (bool) $uid,
+				'userEmail'        => $user_email,
+				'userPhone'        => $user_phone,
+				'checkoutBaseUrl'  => $membership_checkout_base,
+				'pmproCheckoutBaseUrl' => function_exists( 'pmpro_url' ) ? pmpro_url( 'checkout' ) : '',
+				'skipGuestContact'     => (bool) apply_filters( 'cpm_hb_skip_guest_contact_before_checkout', true ),
 				'strings'     => array(
 					'submitting'        => __( 'Submitting…', 'cpm-humanblockchain' ),
 					'continue'          => __( 'Continue', 'cpm-humanblockchain' ),
@@ -530,8 +534,8 @@ class Cpm_Humanblockchain_Public {
 					'title'                 => __( 'Your backorders', 'cpm-humanblockchain' ),
 					'empty'                 => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
 					'noPhone'               => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
-					'loginPrompt'           => __( 'Log in to load your backorders from Smallstreet (same phone as your shop account).', 'cpm-humanblockchain' ),
-					'apiMissing'            => __( 'Backorders cannot load until the Smallstreet API key is saved under Settings → NWP Gateway in WordPress.', 'cpm-humanblockchain' ),
+					'loginPrompt'           => __( 'Log in to load your backorders (same phone as your shop account).', 'cpm-humanblockchain' ),
+					'apiMissing'            => __( 'Remote shop hub backorders are not enabled. Turn on hub sync in Settings → NWP Gateway to fetch live data, or use saved rows if available.', 'cpm-humanblockchain' ),
 					'selectAll'             => __( 'Select all rows', 'cpm-humanblockchain' ),
 					'selectRow'             => __( 'Select order %s', 'cpm-humanblockchain' ),
 					'continueDelivery'      => __( 'Confirm delivery', 'cpm-humanblockchain' ),

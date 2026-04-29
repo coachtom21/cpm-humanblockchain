@@ -3,7 +3,7 @@
  * included in this file.
  */
 
-/* Register device NWP button in header */
+/* Activate Your Phone (device registration) button in header */
 .cpm-nwp-register-btn-wrap {
 	margin-left: 0.5em;
 }
@@ -11,17 +11,25 @@
 .cpm-nwp-register-btn {
 	display: inline-block;
 	padding: 0.5em 1em;
-	background: #2271b1;
-	color: #fff !important;
+	background: linear-gradient(135deg, #f5b942 0%, #ffd16c 100%);
+	color: #08111f !important;
 	text-decoration: none;
 	border-radius: 4px;
 	font-weight: 600;
-	transition: background 0.2s ease;
+	border: 1px solid rgba(255, 214, 120, 0.9);
+	box-shadow: 0 6px 18px rgba(245, 185, 66, 0.3);
+	transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease;
 }
 
 .cpm-nwp-register-btn:hover {
-	background: #135e96;
-	color: #fff !important;
+	background: linear-gradient(135deg, #e8a82a 0%, #ffc64a 100%);
+	color: #050a12 !important;
+	box-shadow: 0 8px 22px rgba(212, 150, 30, 0.38);
+}
+
+.cpm-nwp-register-btn:focus-visible {
+	outline: 2px solid #1e293b;
+	outline-offset: 2px;
 }
 
 /* Get started → membership modal (after Register device) */

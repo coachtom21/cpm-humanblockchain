@@ -5,6 +5,7 @@
 		var $modal = $( '#cpm-hb-membership-modal' );
 		var $contact = $( '#cpm-hb-membership-contact-modal' );
 		var $continue = $( '#cpm-hb-membership-continue' );
+		var $branch = $( '#cpm-hb-membership-branch' );
 		if ( ! $modal.length ) {
 			return;
 		}
@@ -12,6 +13,25 @@
 		var cfg = window.cpmHbMembership || {};
 		var selectedTier = null;
 		var contactModeGuest = false;
+
+		function tierFromElement( $el ) {
+			var t = ( $el.attr( 'data-tier' ) || $el.data( 'tier' ) || '' );
+			if ( typeof t === 'string' && t ) {
+				return t.trim() || null;
+			}
+			if ( t != null ) {
+				return String( t ).trim() || null;
+			}
+			return null;
+		}
+
+		function getBranchValue() {
+			if ( ! $branch.length ) {
+				return '';
+			}
+			var v = $branch.val();
+			return v && String( v ).trim() !== '' ? String( v ).trim() : '';
+		}
 
 		function openModal() {
 			$modal.addClass( 'is-open' ).attr( 'aria-hidden', 'false' );
@@ -22,7 +42,10 @@
 			var $success = $( '#cpm-hb-membership-success' );
 			$success.prop( 'hidden', true ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-hb-membership-success-msg' ).empty();
-			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).show();
+			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-branch-row, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).show();
+			if ( $branch.length ) {
+				$branch.val( '' );
+			}
 		}
 
 		function closeModal() {
@@ -88,7 +111,7 @@
 			$( '#cpm-hb-membership-success-msg' ).text( msg );
 			var $ok = $( '#cpm-hb-membership-success' );
 			$ok.prop( 'hidden', false ).attr( 'aria-hidden', 'false' );
-			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).hide();
+			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-branch-row, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).hide();
 			setTimeout( function() {
 				$ok.trigger( 'focus' );
 			}, 50 );
@@ -100,6 +123,7 @@
 					'cpm_hb_selected_membership_tier',
 					JSON.stringify( {
 						tier: selectedTier,
+						branch: getBranchValue(),
 						ts: Date.now()
 					} )
 				);
@@ -111,7 +135,47 @@
 			showMembershipSuccessMessage( data || {} );
 		}
 
+		function rememberTierAndGo( data ) {
+			if ( ! data || typeof data !== 'object' ) {
+				return false;
+			}
+			var url = ( typeof data.redirect_url === 'string' && data.redirect_url.trim() !== '' )
+				? data.redirect_url.trim()
+				: '';
+			if ( ! url && data.data && typeof data.data.redirect_url === 'string' ) {
+				url = data.data.redirect_url.trim();
+			}
+			if ( ! url && selectedTier ) {
+				var baseRaw = cfg.pmproCheckoutBaseUrl || cfg.checkoutBaseUrl || '';
+				var base = String( baseRaw ).split( '#' )[ 0 ];
+				if ( base ) {
+					var q = ( base.indexOf( '?' ) >= 0 ? '&' : '?' ) + 'cpm_hb_tier=' + encodeURIComponent( selectedTier );
+					var b = getBranchValue();
+					if ( b ) {
+						q += '&cpm_hb_branch=' + encodeURIComponent( b );
+					}
+					url = base + q;
+				}
+			}
+			if ( ! url ) {
+				return false;
+			}
+			try {
+				sessionStorage.setItem(
+					'cpm_hb_selected_membership_tier',
+					JSON.stringify( { tier: selectedTier, branch: getBranchValue(), ts: Date.now() } )
+				);
+			} catch ( err ) {
+				// ignore
+			}
+			window.location.href = url;
+			return true;
+		}
+
 		function showApiSuccess( data ) {
+			if ( rememberTierAndGo( data ) ) {
+				return;
+			}
 			if ( data && data.user_created && data.password_generated && data.password ) {
 				var pre = ( cfg.strings && cfg.strings.accountCreated ) || 'Save this password:';
 				window.alert( pre + '\n\n' + data.password );
@@ -127,7 +191,9 @@
 			var payload = {
 				action: cfg.action,
 				nonce: cfg.nonce,
-				tier: selectedTier
+				tier: selectedTier,
+				branch: getBranchValue(),
+				cpm_hb_branch: getBranchValue()
 			};
 			if ( extra && typeof extra === 'object' ) {
 				$.extend( payload, extra );
@@ -181,11 +247,12 @@
 		function syncSelection() {
 			$modal.find( '.cpm-hb-membership-card' ).each( function() {
 				var $c = $( this );
-				var on = $c.data( 'tier' ) === selectedTier;
-				$c.toggleClass( 'is-selected', on );
+				var t = tierFromElement( $c );
+				var on = t && selectedTier && t === selectedTier;
+				$c.toggleClass( 'is-selected', !! on );
 				$c.attr( 'aria-checked', on ? 'true' : 'false' );
 			} );
-			$continue.prop( 'disabled', ! selectedTier );
+			$continue.prop( 'disabled', ! selectedTier || ! getBranchValue() );
 		}
 
 		$( document ).on( 'click', '.cpm-hb-open-membership-modal', function( e ) {
@@ -214,8 +281,12 @@
 			}
 		} );
 
-		$( document ).on( 'click', '#cpm-hb-membership-modal .cpm-hb-membership-card', function() {
-			selectedTier = $( this ).data( 'tier' ) || null;
+		$( document ).on( 'click', '#cpm-hb-membership-modal .cpm-hb-membership-card', function( e ) {
+			selectedTier = tierFromElement( $( e.currentTarget ) );
+			syncSelection();
+		} );
+
+		$( document ).on( 'change', '#cpm-hb-membership-branch', function() {
 			syncSelection();
 		} );
 
@@ -233,10 +304,14 @@
 		} );
 
 		$( '#cpm-hb-membership-continue' ).on( 'click', function() {
-			if ( ! selectedTier ) {
+			if ( ! selectedTier || ! getBranchValue() ) {
 				return;
 			}
 			if ( cfg.isLoggedIn ) {
+				submitMembership();
+				return;
+			}
+			if ( cfg.skipGuestContact ) {
 				submitMembership();
 				return;
 			}
@@ -291,7 +366,9 @@
 					{
 						action: cfg.action,
 						nonce: cfg.nonce,
-						tier: selectedTier
+						tier: selectedTier,
+						branch: getBranchValue(),
+						cpm_hb_branch: getBranchValue()
 					},
 					extra
 				)

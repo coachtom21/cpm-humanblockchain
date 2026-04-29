@@ -144,6 +144,23 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Outbound XP scan sync to the configured URL. No HTTP when the URL is the Smallstreet hub
+	 * and hub integration is off, or when no API key is set.
+	 *
+	 * @return bool
+	 */
+	private static function xp_remote_http_enabled() {
+		if ( self::api_key() === '' ) {
+			return false;
+		}
+		$url = self::get_scan_endpoint_url();
+		if ( function_exists( 'cpm_hb_should_block_outbound_smallstreet_url' ) && cpm_hb_should_block_outbound_smallstreet_url( $url ) ) {
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * @param string $key API key.
 	 * @return array<string, string>
 	 */
@@ -473,7 +490,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 */
 	private static function remote_update_scan( $remote_ledger_id, $wp_user_id, array $entry, $order_id = null, $date_mysql = null ) {
 		$key = self::api_key();
-		if ( $key === '' ) {
+		if ( $key === '' || ! self::xp_remote_http_enabled() ) {
 			return array( 'ok' => false, 'http_code' => 0, 'body' => '', 'raw' => '' );
 		}
 		$url      = self::get_scan_update_url( $remote_ledger_id );
@@ -536,9 +553,6 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		}
 
 		$seller_remote_id = isset( $seller_row->remote_ledger_id ) ? trim( (string) $seller_row->remote_ledger_id ) : '';
-		if ( $seller_remote_id === '' ) {
-			return;
-		}
 
 		$oid       = null !== $order_id ? (int) $order_id : 0;
 		$seller_xp = isset( $seller_row->xp_units ) ? (string) $seller_row->xp_units : self::xp_units_string_for_scan_type( 'seller_scan' );
@@ -549,6 +563,45 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		);
 
 		$date_str = self::default_ledger_patch_date_mysql( $seller_id, $seller_entry_update, $order_id );
+
+		// Local-only completion when hub sync is off (no remote PATCH).
+		if ( ! self::xp_remote_http_enabled() ) {
+			$seller_entry_data = array(
+				'transaction_id' => $transaction_code,
+				'xp_units'         => $seller_xp,
+				'scan_status'      => 'completed',
+				'date'             => $date_str,
+			);
+			if ( $oid > 0 ) {
+				$seller_entry_data['order_id'] = $oid;
+			}
+			$seller_entry_json = wp_json_encode( $seller_entry_data );
+			$seller_update     = array(
+				'scan_status'         => 'completed',
+				'entry_json'          => $seller_entry_json,
+				'remote_sync_status'  => 'skipped',
+				'remote_last_error'   => null,
+				'ledger_date'         => $date_str,
+				'updated_at'          => current_time( 'mysql' ),
+			);
+			$formats = array( '%s', '%s', '%s', '%s', '%s', '%s' );
+			if ( $oid > 0 ) {
+				$seller_update['order_id'] = $oid;
+				$formats[]                 = '%d';
+			}
+			$wpdb->update(
+				$table,
+				$seller_update,
+				array( 'id' => (int) $seller_row->id ),
+				$formats,
+				array( '%d' )
+			);
+			return;
+		}
+
+		if ( $seller_remote_id === '' ) {
+			return;
+		}
 
 		$upd = self::remote_update_scan( $seller_remote_id, $seller_id, $seller_entry_update, $oid > 0 ? $oid : null, $date_str );
 
@@ -692,14 +745,18 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		}
 
 		$buyer_row_id = (int) $wpdb->insert_id;
-		$key          = self::api_key();
 
-		if ( $key === '' ) {
+		if ( ! self::xp_remote_http_enabled() ) {
+			$scan_url = self::get_scan_endpoint_url();
+			$blocked   = function_exists( 'cpm_hb_should_block_outbound_smallstreet_url' ) && cpm_hb_should_block_outbound_smallstreet_url( $scan_url );
+			$skip_msg  = $blocked
+				? __( 'Hub remote sync is disabled on this site. Local row saved; remote sync skipped.', 'cpm-humanblockchain' )
+				: __( 'Smallstreet API key not configured.', 'cpm-humanblockchain' );
 			$wpdb->update(
 				$table,
 				array(
 					'remote_sync_status' => 'skipped',
-					'remote_last_error'  => __( 'Smallstreet API key not configured.', 'cpm-humanblockchain' ),
+					'remote_last_error'  => $skip_msg,
 					'updated_at'         => current_time( 'mysql' ),
 				),
 				array( 'id' => $buyer_row_id ),
@@ -862,13 +919,17 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			);
 		}
 
-		$key = self::api_key();
-		if ( $key === '' ) {
+		if ( ! self::xp_remote_http_enabled() ) {
+			$scan_url = self::get_scan_endpoint_url();
+			$blocked   = function_exists( 'cpm_hb_should_block_outbound_smallstreet_url' ) && cpm_hb_should_block_outbound_smallstreet_url( $scan_url );
+			$skip_msg  = $blocked
+				? __( 'Hub remote sync is disabled. Local ledger row saved; remote sync skipped.', 'cpm-humanblockchain' )
+				: __( 'Smallstreet API key is not configured. Local ledger row saved; remote sync skipped.', 'cpm-humanblockchain' );
 			$wpdb->update(
 				$table,
 				array(
 					'remote_sync_status' => 'skipped',
-					'remote_last_error'  => __( 'Smallstreet API key not configured.', 'cpm-humanblockchain' ),
+					'remote_last_error'  => $skip_msg,
 					'updated_at'         => current_time( 'mysql' ),
 				),
 				array( 'id' => $row_id ),
@@ -877,7 +938,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			);
 			return self::xp_ledger_api_result(
 				'skipped',
-				__( 'Smallstreet API key is not configured. Local ledger row saved; remote sync skipped.', 'cpm-humanblockchain' ),
+				$skip_msg,
 				null,
 				'',
 				null,

@@ -27,6 +27,9 @@ class Cpm_Humanblockchain_Register_User_Api {
 	public static function get_endpoint_url() {
 		$custom = trim( (string) get_option( self::OPTION_ENDPOINT, '' ) );
 		if ( $custom !== '' && filter_var( $custom, FILTER_VALIDATE_URL ) ) {
+			if ( function_exists( 'cpm_hb_should_block_outbound_smallstreet_url' ) && cpm_hb_should_block_outbound_smallstreet_url( $custom ) ) {
+				return rest_url( 'myapi/v1/register-user' );
+			}
 			return esc_url_raw( $custom );
 		}
 		return rest_url( 'myapi/v1/register-user' );
@@ -155,6 +158,10 @@ class Cpm_Humanblockchain_Register_User_Api {
 	 */
 	private static function execute_request( $url, $api_key, array $body ) {
 		$json = wp_json_encode( $body );
+
+		if ( function_exists( 'cpm_hb_should_block_outbound_smallstreet_url' ) && cpm_hb_should_block_outbound_smallstreet_url( $url ) ) {
+			$url = rest_url( 'myapi/v1/register-user' );
+		}
 
 		$use_internal = apply_filters( 'cpm_hb_register_user_use_internal_rest', true, $url );
 		if ( $use_internal && self::endpoint_is_same_site( $url ) && function_exists( 'rest_do_request' ) ) {

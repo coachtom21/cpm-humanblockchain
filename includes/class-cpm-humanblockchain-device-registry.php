@@ -564,7 +564,7 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$device_id = (int) $wpdb->insert_id;
 
-		// 3) Sync to register-user REST API (Smallstreet / remote) after local row exists — failure does not roll back device registration.
+		// 3) Sync to register-user REST (same site by default; remote hub opt-in) after local row exists — failure does not roll back device registration.
 		$register_user_sync = null;
 		if ( apply_filters( 'cpm_hb_register_user_sync_after_device', true, $device_id, $wp_user_id, $email )
 			&& class_exists( 'Cpm_Humanblockchain_Register_User_Api' )
@@ -608,7 +608,7 @@ class Cpm_Humanblockchain_Device_Registry {
 	/**
 	 * Handle Send OTP AJAX request.
 	 * Checks wp_nwp_devices for phone; only sends OTP if found.
-	 * Buyer + proof=scan: also requires Smallstreet user-by-mobile.
+	 * Buyer + proof=scan: optional Smallstreet user-by-mobile when hub REST is enabled.
 	 *
 	 * @since 1.0.0
 	 */
@@ -650,19 +650,15 @@ class Cpm_Humanblockchain_Device_Registry {
 					)
 				);
 			}
-			if ( ! class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) || ! Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
-				wp_send_json_error(
-					array(
-						'message' => __( 'Smallstreet API is not configured for the buyer proof-of-delivery flow. Add the backorders API key under Settings → NWP Gateway (Membership & APIs), or use Register → Activate device for normal OTP without this check.', 'cpm-humanblockchain' ),
-					)
-				);
-			}
-			if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::user_exists_by_mobile( $mobile_raw ) ) {
-				wp_send_json_error(
-					array(
-						'message' => __( 'This number was not found on Smallstreet for your account. Use the mobile linked to your Smallstreet / WooCommerce profile.', 'cpm-humanblockchain' ),
-					)
-				);
+			// When Smallstreet hub REST is enabled, require a matching user on the hub for buyer PoD.
+			if ( class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' ) && Cpm_Humanblockchain_Smallstreet_Backorders::is_configured() ) {
+				if ( ! Cpm_Humanblockchain_Smallstreet_Backorders::user_exists_by_mobile( $mobile_raw ) ) {
+					wp_send_json_error(
+						array(
+							'message' => __( 'This number was not found on the shop hub for your account. Use the mobile linked to your WooCommerce profile.', 'cpm-humanblockchain' ),
+						)
+					);
+				}
 			}
 		} elseif ( ! $local_device ) {
 			wp_send_json_error( array( 'message' => __( 'This phone number is not registered. Please register your device first.', 'cpm-humanblockchain' ) ) );

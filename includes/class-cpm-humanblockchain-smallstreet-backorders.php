@@ -68,9 +68,14 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	 */
 	public static function get_endpoint_url() {
 		$default = 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/backorders-by-mobile';
-		$u       = trim( (string) get_option( self::OPTION_URL, $default ) );
+		$u       = trim( (string) get_option( self::OPTION_URL, '' ) );
 		if ( $u === '' ) {
-			$u = $default;
+			// No URL saved: only use hub default when integration is explicitly enabled.
+			if ( function_exists( 'cpm_hb_smallstreet_rest_enabled' ) && cpm_hb_smallstreet_rest_enabled() ) {
+				$u = $default;
+			} else {
+				return '';
+			}
 		}
 		return esc_url_raw( $u );
 	}
@@ -82,27 +87,21 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	 */
 	public static function get_user_by_mobile_endpoint_url() {
 		$default = 'https://www.smallstreet.app/wp-json/cpm-dongtrader/v1/user-by-mobile';
-		$u       = trim( (string) get_option( self::OPTION_USER_BY_MOBILE_URL, $default ) );
+		$u       = trim( (string) get_option( self::OPTION_USER_BY_MOBILE_URL, '' ) );
 		if ( $u === '' ) {
-			$u = $default;
+			if ( function_exists( 'cpm_hb_smallstreet_rest_enabled' ) && cpm_hb_smallstreet_rest_enabled() ) {
+				$u = $default;
+			} else {
+				return '';
+			}
 		}
 		return esc_url_raw( $u );
 	}
 
 	/**
-	 * Default key (override or clear in Settings → NWP Gateway).
-	 * Remote endpoint expects header X-Dongtrader-Backorders-Key (see backorders-by-mobile).
-	 *
-	 * @return string
-	 */
-	private static function default_api_key() {
-		return '7JTQhndCeIw4VFNMKPep7eNAOfPPDGMidfIeuLVWvj3QqwMc';
-	}
-
-	/**
 	 * API key (stored in options; not exposed to frontend).
-	 * Optional: define CPM_HB_SMALLSTREET_BACKORDERS_API_KEY in wp-config (same key as Smallstreet).
-	 * If the option was never saved, uses the built-in default. If explicitly cleared (empty string in DB), returns ''.
+	 * Optional: define CPM_HB_SMALLSTREET_BACKORDERS_API_KEY in wp-config.
+	 * No default key: save a key in Settings (or constant) to use the hub; otherwise outbound calls are disabled.
 	 *
 	 * @return string
 	 */
@@ -111,11 +110,7 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 			return self::trim_key( CPM_HB_SMALLSTREET_BACKORDERS_API_KEY );
 		}
 		$stored = get_option( self::OPTION_KEY, null );
-		if ( null === $stored ) {
-			$key = self::default_api_key();
-		} else {
-			$key = self::trim_key( (string) $stored );
-		}
+		$key    = null === $stored ? '' : self::trim_key( (string) $stored );
 		return apply_filters( 'cpm_hb_smallstreet_backorders_api_key', $key );
 	}
 
@@ -128,11 +123,14 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 	}
 
 	/**
-	 * Whether the integration can call Smallstreet.
+	 * Whether the integration can call the Smallstreet hub (opt-in + API key).
 	 *
 	 * @return bool
 	 */
 	public static function is_configured() {
+		if ( ! function_exists( 'cpm_hb_smallstreet_rest_enabled' ) || ! cpm_hb_smallstreet_rest_enabled() ) {
+			return false;
+		}
 		return self::get_api_key() !== '';
 	}
 
@@ -175,7 +173,13 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 			);
 		}
 
-		$url    = self::get_user_by_mobile_endpoint_url();
+		$url = self::get_user_by_mobile_endpoint_url();
+		if ( $url === '' ) {
+			return new WP_Error(
+				'smallstreet_no_url',
+				__( 'User-by-mobile URL is not set.', 'cpm-humanblockchain' )
+			);
+		}
 		$key    = self::get_api_key();
 		$digits = self::mobile_digits_for_json( $mobile_raw );
 		$body   = wp_json_encode( array( 'mobile' => $digits ) );
@@ -296,7 +300,13 @@ class Cpm_Humanblockchain_Smallstreet_Backorders {
 			);
 		}
 
-		$url  = self::get_endpoint_url();
+		$url = self::get_endpoint_url();
+		if ( $url === '' ) {
+			return new WP_Error(
+				'smallstreet_no_url',
+				__( 'Backorders URL is not set.', 'cpm-humanblockchain' )
+			);
+		}
 		$key  = self::get_api_key();
 		$body = wp_json_encode(
 			array(
