@@ -21,7 +21,7 @@ So the rule is:
 NWP = onboarding, identity, role readiness, print rights
 YAM-is-ON = delivery confirmation, pledge allocation, ledger event
 
- * Version:           1.0.0
+ * Version:           1.0.5
  * Author:            Codepixelz Media
  * Author URI:        https://https://codepixelzmedia.com//
  * License:           GPL-2.0+
@@ -40,7 +40,7 @@ if ( ! defined( 'WPINC' ) ) {
  * Start at version 1.0.0 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define( 'CPM_HUMANBLOCKCHAIN_VERSION', '1.0.0' );
+define( 'CPM_HUMANBLOCKCHAIN_VERSION', '1.0.5' );
 
 /**
  * The code that runs during plugin activation.

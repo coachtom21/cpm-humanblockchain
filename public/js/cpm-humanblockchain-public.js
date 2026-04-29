@@ -10,6 +10,180 @@
 		var $discordModal = $( '#cpm-nwp-discord-modal' );
 		var $sellerScanSuccessModal = $( '#cpm-hb-seller-scan-success-modal' );
 
+		/**
+		 * Country select + national digits → E.164 (server: Cpm_Humanblockchain_Otp_Service::normalize_phone_e164).
+		 */
+		function cpmNwpBuildMobileE164( countrySelector, nationalSelector ) {
+			var $sel = $( countrySelector );
+			var $nat = $( nationalSelector );
+			if ( ! $sel.length || ! $nat.length ) {
+				return '';
+			}
+			var dial = String( $sel.find( 'option:selected' ).attr( 'data-dial' ) || '1' );
+			var d = ( $nat.val() || '' ).replace( /\D/g, '' );
+			if ( ! d ) {
+				return '';
+			}
+			if ( dial === '1' ) {
+				if ( d.length > 10 && d.charAt( 0 ) === '1' ) {
+					d = d.substring( 1 );
+				}
+				if ( d.length > 10 ) {
+					d = d.substring( 0, 10 );
+				}
+				return d.length ? ( '+1' + d ) : '';
+			}
+			if ( dial === '977' ) {
+				if ( d.length > 10 ) {
+					d = d.substring( 0, 10 );
+				}
+				return '+977' + d;
+			}
+			if ( dial === '44' ) {
+				d = d.replace( /^0+/, '' );
+				return d.length ? ( '+44' + d ) : '';
+			}
+			if ( dial === '91' || dial === '61' ) {
+				return '+' + dial + d;
+			}
+			return '+' + dial + d;
+		}
+
+		function cpmNwpBuildRegisterMobileE164() {
+			return cpmNwpBuildMobileE164( '#cpm-nwp-phone-country', '#cpm-nwp-mobile-national' );
+		}
+
+		function cpmNwpBuildActivateMobileE164() {
+			return cpmNwpBuildMobileE164( '#cpm-nwp-activate-phone-country', '#cpm-nwp-activate-mobile-national' );
+		}
+
+		var cpmNwpDeviceLookupTimerReg = null;
+		var cpmNwpDeviceLookupTimerAct = null;
+		var cpmNwpApplyCountrySkip = { register: false, activate: false };
+
+		function cpmNwpGetLookupMinDigits() {
+			var n = window.cpmNwp && window.cpmNwp.lookupMinNationalDigits;
+			return typeof n === 'number' && n > 0 ? n : 7;
+		}
+
+		function cpmNwpSetLookupHint( mode, text ) {
+			if ( mode === 'activate' ) {
+				$( '#cpm-nwp-activate-lookup-hint' ).text( text || '' );
+			} else {
+				$( '#cpm-nwp-register-lookup-hint' ).text( text || '' );
+			}
+		}
+
+		function cpmNwpRunDevicePhoneLookup( mode ) {
+			if ( cpmNwpApplyCountrySkip[ mode ] ) {
+				return;
+			}
+			var e164 = mode === 'activate' ? cpmNwpBuildActivateMobileE164() : cpmNwpBuildRegisterMobileE164();
+			var nat = ( mode === 'activate'
+				? $( '#cpm-nwp-activate-mobile-national' )
+				: $( '#cpm-nwp-mobile-national' )
+			).val() || '';
+			var natD = nat.replace( /\D/g, '' );
+			if ( natD.length < cpmNwpGetLookupMinDigits() || ! e164 || e164.length < 4 ) {
+				cpmNwpSetLookupHint( mode, '' );
+				return;
+			}
+			var N = window.cpmNwp || {};
+			if ( ! N.lookupDeviceAction || ! N.lookupDeviceNonce || ! N.ajaxUrl ) {
+				return;
+			}
+			$.ajax( {
+				url: N.ajaxUrl,
+				type: 'POST',
+				data: {
+					action: N.lookupDeviceAction,
+					cpm_nwp_lookup_nonce: N.lookupDeviceNonce,
+					mobile: e164
+				},
+				dataType: 'json'
+			} )
+				.done( function( res ) {
+					if ( ! res || ! res.success || ! res.data ) {
+						cpmNwpSetLookupHint( mode, '' );
+						return;
+					}
+					var d = res.data;
+					if ( ! d.found || ! d.phone_country ) {
+						cpmNwpSetLookupHint( mode, '' );
+						return;
+					}
+					var iso = d.phone_country;
+					var $sel = mode === 'activate' ? $( '#cpm-nwp-activate-phone-country' ) : $( '#cpm-nwp-phone-country' );
+					var $opt = $sel.find( 'option[value="' + iso + '"]' );
+					if ( ! $sel.length || ! $opt.length ) {
+						cpmNwpSetLookupHint( mode, '' );
+						return;
+					}
+					var hint = ( N.phoneLookup && N.phoneLookup.matched ) ? N.phoneLookup.matched : '';
+					if ( $sel.val() !== iso ) {
+						cpmNwpApplyCountrySkip[ mode ] = true;
+						$sel.val( iso );
+						$sel.trigger( 'change' );
+						if ( mode === 'activate' ) {
+							$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+						} else {
+							$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
+						}
+						cpmNwpSetLookupHint( mode, hint );
+						setTimeout( function() { cpmNwpApplyCountrySkip[ mode ] = false; }, 50 );
+					} else {
+						cpmNwpSetLookupHint( mode, hint );
+					}
+				} )
+				.fail( function() { cpmNwpSetLookupHint( mode, '' ); } );
+		}
+
+		function cpmNwpScheduleDevicePhoneLookup( mode ) {
+			if ( cpmNwpApplyCountrySkip[ mode ] ) {
+				return;
+			}
+			if ( mode === 'activate' ) {
+				clearTimeout( cpmNwpDeviceLookupTimerAct );
+				cpmNwpDeviceLookupTimerAct = setTimeout( function() { cpmNwpRunDevicePhoneLookup( 'activate' ); }, 420 );
+			} else {
+				clearTimeout( cpmNwpDeviceLookupTimerReg );
+				cpmNwpDeviceLookupTimerReg = setTimeout( function() { cpmNwpRunDevicePhoneLookup( 'register' ); }, 420 );
+			}
+		}
+
+		function cpmNwpInitRegisterPhoneFields() {
+			if ( ! $( '#cpm-nwp-phone-country' ).length ) {
+				return;
+			}
+			if ( window.cpmNwp && window.cpmNwp.registerPhoneDefaultIso ) {
+				$( '#cpm-nwp-phone-country' ).val( window.cpmNwp.registerPhoneDefaultIso );
+			}
+			cpmNwpSetLookupHint( 'register', '' );
+			$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
+		}
+
+		function cpmNwpInitActivatePhoneFields() {
+			if ( ! $( '#cpm-nwp-activate-phone-country' ).length ) {
+				return;
+			}
+			if ( window.cpmNwp && window.cpmNwp.registerPhoneDefaultIso ) {
+				$( '#cpm-nwp-activate-phone-country' ).val( window.cpmNwp.registerPhoneDefaultIso );
+			}
+			$( '#cpm-nwp-activate-mobile-national' ).val( '' );
+			cpmNwpSetLookupHint( 'activate', '' );
+			$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+		}
+		window.cpmNwpInitActivatePhoneFields = cpmNwpInitActivatePhoneFields;
+
+		$( document ).on( 'input change', '#cpm-nwp-phone-country, #cpm-nwp-mobile-national', function() {
+			$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
+			cpmNwpScheduleDevicePhoneLookup( 'register' );
+		} );
+		$( document ).on( 'input change', '#cpm-nwp-activate-phone-country, #cpm-nwp-activate-mobile-national', function() {
+			$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+			cpmNwpScheduleDevicePhoneLookup( 'activate' );
+		} );
+
 		function closeSellerScanSuccessModal() {
 			if ( ! $sellerScanSuccessModal.length ) {
 				return;
@@ -130,6 +304,7 @@
 				$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 				$modal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 				$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+				cpmNwpInitRegisterPhoneFields();
 			}
 		} );
 
@@ -144,20 +319,32 @@
 				window.cpmHbSkipPodOtpContext = false;
 			}
 			applyProofScanContextIfNeeded();
-			var mobileVal = $( '#cpm-nwp-mobile' ).val() || '';
+			var regIso = $( '#cpm-nwp-phone-country' ).val() || '';
+			var regNat = $( '#cpm-nwp-mobile-national' ).val() || '';
 			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearInlineFeedback( $verifyFeedback );
 			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearInlineFeedback( $registerFeedback );
 			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$form[0].reset();
+			cpmNwpInitRegisterPhoneFields();
 			clearInlineFeedback( $activateFeedback );
-			$( '#cpm-nwp-activate-mobile' ).val( mobileVal );
+			if ( $( '#cpm-nwp-activate-phone-country' ).length ) {
+				cpmNwpInitActivatePhoneFields();
+				if ( regIso ) {
+					$( '#cpm-nwp-activate-phone-country' ).val( regIso );
+				}
+				$( '#cpm-nwp-activate-mobile-national' ).val( regNat );
+				$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+				if ( ( regNat || '' ).replace( /\D/g, '' ).length >= cpmNwpGetLookupMinDigits() ) {
+					cpmNwpRunDevicePhoneLookup( 'activate' );
+				}
+			}
 			window.cpmNwpActivateFromRegisterSuccess = true;
 			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 			showInlineFeedback( $activateFeedback, 'Device registered. Send OTP to verify your phone.', 'success' );
-			$( '#cpm-nwp-activate-mobile' ).trigger( 'focus' );
+			$( '#cpm-nwp-activate-mobile-national' ).trigger( 'focus' );
 		}
 
 		$( document ).on( 'click', '.cpm-nwp-modal-close, #cpm-nwp-register-modal .cpm-nwp-modal-overlay', function( e ) {
@@ -341,6 +528,19 @@
 			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearInlineFeedback( $activateFeedback );
+			if ( $( '#cpm-nwp-activate-phone-country' ).length ) {
+				var copyIso = $( '#cpm-nwp-phone-country' ).val() || '';
+				var copyNat = $( '#cpm-nwp-mobile-national' ).val() || '';
+				cpmNwpInitActivatePhoneFields();
+				if ( ( copyNat || '' ).replace( /\D/g, '' ).length ) {
+					if ( copyIso ) {
+						$( '#cpm-nwp-activate-phone-country' ).val( copyIso );
+					}
+					$( '#cpm-nwp-activate-mobile-national' ).val( copyNat );
+					$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+					cpmNwpRunDevicePhoneLookup( 'activate' );
+				}
+			}
 			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 		} );
 
@@ -348,17 +548,19 @@
 			e.preventDefault();
 			var $form = $( this );
 			var $btn = $form.find( 'button[type="submit"]' );
-			var mobile = $( '#cpm-nwp-activate-mobile' ).val();
-			var digits = mobile.replace( /\D/g, '' );
+			$( '#cpm-nwp-activate-mobile-e164' ).val( cpmNwpBuildActivateMobileE164() );
+			var mobile = $( '#cpm-nwp-activate-mobile-e164' ).val() || '';
 			var pe = window.cpmNwp && window.cpmNwp.phoneErrors ? window.cpmNwp.phoneErrors : {};
-			var shortMsg = pe.short || 'Please enter a valid mobile number (at least 10 digits, or full international +977…).';
-			if ( digits.length < 10 ) {
+			var shortMsg = pe.short || 'Please enter a valid mobile number (choose country, then at least 8 local digits).';
+			var e164Digits = mobile.replace( /\D/g, '' );
+			if ( ! mobile || e164Digits.length < 8 ) {
 				showInlineFeedback( $activateFeedback, shortMsg, 'error' );
 				return false;
 			}
-			var dc = window.cpmNwp && window.cpmNwp.defaultCountry ? window.cpmNwp.defaultCountry : 'AUTO';
-			if ( ( dc === 'NP' || dc === 'AUTO' ) && digits.length === 11 && /^9[78]/.test( digits ) ) {
-				showInlineFeedback( $activateFeedback, pe.npElevenDigits || 'Nepal numbers must be 10 digits without +977 (you have 11). Example: 9849158973 or +9779849158973.', 'error' );
+			var natD = ( $( '#cpm-nwp-activate-mobile-national' ).val() || '' ).replace( /\D/g, '' );
+			var dial = String( $( '#cpm-nwp-activate-phone-country' ).find( 'option:selected' ).attr( 'data-dial' ) || '1' );
+			if ( dial === '977' && natD.length === 11 && /^9[78]/.test( natD ) ) {
+				showInlineFeedback( $activateFeedback, pe.npElevenDigits || 'Nepal: enter 10 digits (mobile) without the country code.', 'error' );
 				return false;
 			}
 			clearInlineFeedback( $activateFeedback );
@@ -403,6 +605,7 @@
 				.done( function( res ) {
 					if ( res && res.success && res.data && res.data.message ) {
 						$( '#cpm-nwp-verify-mobile' ).val( mobile );
+						$( '#cpm-nwp-verify-phone-country' ).val( $( '#cpm-nwp-activate-phone-country' ).val() || '' );
 						$( '#cpm-nwp-verify-otp-input' ).val( '' );
 						$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 						clearInlineFeedback( $activateFeedback );
@@ -565,20 +768,24 @@
 		} );
 
 		/**
-		 * Live format: matches server normalize (10-digit 97/98… → +977 even if Default country is US; otherwise NANP +1 for US).
+		 * Optional [data-phone-mask] legacy field — activate/register use country + national fields and DB lookup in this file.
 		 */
-		$( document ).on( 'input', '[data-phone-mask], #cpm-nwp-activate-mobile, #cpm-nwp-mobile', function() {
+		$( document ).on( 'input', '[data-phone-mask]', function() {
 			var $el = $( this );
 			/* Digits only; leading 977 is stripped for Nepal so "+977" in the field is not re-encoded as 977+977+… */
 			var raw = $el.val().replace( /\D/g, '' );
-			var country = ( window.cpmNwp && window.cpmNwp.defaultCountry ) ? window.cpmNwp.defaultCountry : 'AUTO';
-			var np10 = raw.length === 10 && /^9[78]/.test( raw );
-			// Nepal mobile is 9[78] + 8 digits. Count lone "9" as possible Nepal (with Default country US, only ^9[78]… was too late — first keystroke became +1).
+			// NANP logic prepends "1" to 10-digit input. A Nepal number typed as 977·984·9158 (10 digits) then becomes
+			// 1 977 984 9158 (11 digits) and formats as +1 (977) 984-9158 — wrong. It is +977, not +1 977.
+			if ( raw.length === 11 && raw.charAt( 0 ) === '1' && raw.substring( 1, 4 ) === '977' ) {
+				raw = raw.substring( 1 );
+			}
+			// Full Nepal national mobile: same as server /^9[78]\d{8}$/
+			var np10 = raw.length === 10 && /^9[78]\d{8}$/.test( raw );
+			// Partial Nepal, or a lone 9 (could become 97/98…). US numbers (e.g. 678…) do not match.
 			var npPrefix = ( /^9[78]\d{0,8}$/.test( raw ) && raw.length < 10 ) || ( raw.length === 1 && raw === '9' ) || np10;
-			var asNepal = npPrefix || country === 'NP' || country === 'AUTO';
 			var formatted = '';
 
-			if ( asNepal ) {
+			if ( npPrefix ) {
 				var d = raw;
 				// Pasted "9779…" or the displayed "+977" re-fed: strip country code 977 from the digit string once or more, then cap 10.
 				while ( d.length > 0 && d.indexOf( '977' ) === 0 && d.length > 3 ) {
@@ -665,6 +872,7 @@
 			e.preventDefault();
 			var $form = $( this );
 			var $submitBtn = $form.find( 'button[type="submit"]' );
+			$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
 			$( '#cpm-nwp-device-hash' ).val( generateDeviceHash() );
 			$submitBtn.prop( 'disabled', true ).text( 'Processing...' );
 			clearInlineFeedback( $registerFeedback );
@@ -672,6 +880,7 @@
 			getGeoLocation().then( function( geo ) {
 				$( '#cpm-nwp-geo-lat' ).val( geo.lat || '' );
 				$( '#cpm-nwp-geo-lng' ).val( geo.lng || '' );
+				$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
 
 				var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.action ? window.cpmNwp.action : 'cpm_nwp_register_device' );
 				var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl ) ? window.cpmNwp.ajaxUrl : '';
@@ -708,6 +917,9 @@
 
 			return false;
 		} );
+
+		cpmNwpInitRegisterPhoneFields();
+		cpmNwpInitActivatePhoneFields();
 	} );
 
 })( jQuery );

@@ -242,6 +242,31 @@ body.cpm-nwp-modal-open {
 	color: #9ca3af;
 }
 
+.cpm-nwp-register-lookup-hint:empty {
+	display: none;
+}
+
+.cpm-nwp-register-lookup-hint:not(:empty) {
+	color: #86efac;
+}
+
+.cpm-nwp-phone-combo {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: stretch;
+}
+
+.cpm-nwp-phone-country {
+	flex: 0 0 min(100%, 11.5rem);
+	max-width: 100%;
+}
+
+.cpm-nwp-mobile-national {
+	flex: 1 1 11.25rem;
+	min-width: 0;
+}
+
 .cpm-nwp-form-checkbox {
 	display: flex;
 	align-items: flex-start;
@@ -366,13 +391,40 @@ body.cpm-nwp-modal-open {
 	margin: 0;
 	font-size: 1.25rem;
 	font-weight: 700;
-	color: #111;
+	/* !important: theme “page heading” rules (e.g. body class + h2 { color: #fff !important }) must not hide title on white modal */
+	color: #111 !important;
 }
 
-.cpm-nwp-activate-form .cpm-nwp-activate-field input {
+.cpm-nwp-activate-form .cpm-nwp-activate-field > label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #374151;
+}
+
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-phone-combo {
+	width: 100%;
+}
+
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-phone-country {
+	padding: 0.5rem 0.75rem;
 	background: #fff;
 	border: 1px solid #d1d5db;
 	color: #111;
+	font-size: 0.9375rem;
+}
+
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-phone-country:focus {
+	border-color: #6366f1;
+	outline: none;
+}
+
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-mobile-national {
+	background: #fff;
+	border: 1px solid #d1d5db;
+	color: #111;
+	padding: 0.5rem 0.75rem;
 	padding-left: 2.5rem;
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z'/%3E%3C/svg%3E");
 	background-repeat: no-repeat;
@@ -380,12 +432,27 @@ body.cpm-nwp-modal-open {
 	background-size: 20px 20px;
 }
 
-.cpm-nwp-activate-form .cpm-nwp-activate-field input::placeholder {
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-mobile-national::placeholder {
 	color: #9ca3af;
 }
 
-.cpm-nwp-activate-form .cpm-nwp-activate-field input:focus {
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-mobile-national:focus {
 	border-color: #6366f1;
+}
+
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-activate-field-hint,
+.cpm-nwp-activate-form .cpm-nwp-activate-field .cpm-nwp-field-note {
+	color: #6b7280;
+}
+
+.cpm-nwp-activate-lookup-hint:empty {
+	display: none;
+}
+
+.cpm-nwp-activate-lookup-hint:not(:empty) {
+	margin: 0.25rem 0 0;
+	font-size: 0.75rem;
+	color: #059669;
 }
 
 .cpm-nwp-activate-actions {
@@ -462,7 +529,7 @@ body.cpm-nwp-modal-open {
 	margin: 0.5rem 0 0;
 	font-size: 0.875rem;
 	font-weight: 400;
-	color: #6b7280;
+	color: #6b7280 !important;
 	line-height: 1.4;
 }
 

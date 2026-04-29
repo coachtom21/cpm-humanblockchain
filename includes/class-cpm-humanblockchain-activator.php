@@ -53,6 +53,7 @@ class Cpm_Humanblockchain_Activator {
 			name VARCHAR(255) DEFAULT NULL,
 			email VARCHAR(255) NOT NULL,
 			phone VARCHAR(32) DEFAULT NULL,
+			phone_country VARCHAR(8) DEFAULT NULL,
 			geo_lat DECIMAL(10,8) DEFAULT NULL,
 			geo_lng DECIMAL(11,8) DEFAULT NULL,
 			registered_at DATETIME NOT NULL,
@@ -127,6 +128,9 @@ class Cpm_Humanblockchain_Activator {
 		}
 		if ( ! in_array( 'consent_discord', $columns, true ) ) {
 			$updates[] = "ADD COLUMN consent_discord TINYINT(1) NOT NULL DEFAULT 0";
+		}
+		if ( ! in_array( 'phone_country', $columns, true ) ) {
+			$updates[] = "ADD COLUMN phone_country VARCHAR(8) DEFAULT NULL";
 		}
 
 		foreach ( $updates as $alter ) {

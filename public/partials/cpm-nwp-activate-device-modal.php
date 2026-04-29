@@ -22,9 +22,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<div id="cpm-nwp-activate-feedback" class="cpm-nwp-inline-feedback cpm-nwp-inline-feedback--hidden" role="alert" aria-live="polite"></div>
 		<form id="cpm-nwp-activate-form" class="cpm-nwp-activate-form">
 			<?php wp_nonce_field( 'cpm_nwp_send_otp', 'cpm_nwp_otp_nonce' ); ?>
-			<div class="cpm-nwp-form-field cpm-nwp-activate-field">
-				<label for="cpm-nwp-activate-mobile" class="screen-reader-text"><?php esc_html_e( 'Mobile number', 'cpm-humanblockchain' ); ?></label>
-				<input type="tel" id="cpm-nwp-activate-mobile" name="mobile" autocomplete="tel" required>
+			<div class="cpm-nwp-form-field cpm-nwp-activate-field cpm-nwp-form-field--phone">
+				<label for="cpm-nwp-activate-phone-country"><?php esc_html_e( 'Mobile number', 'cpm-humanblockchain' ); ?></label>
+				<div class="cpm-nwp-phone-combo" role="group" aria-label="<?php esc_attr_e( 'Mobile number', 'cpm-humanblockchain' ); ?>">
+					<?php
+					require __DIR__ . '/cpm-nwp-register-phone-country-options.php';
+					$act_def_iso = 'US';
+					$act_def_dc  = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ? Cpm_Humanblockchain_Otp_Service::get_default_country() : 'US';
+					if ( 'NP' === $act_def_dc ) {
+						$act_def_iso = 'NP';
+					}
+					$act_def_iso = (string) apply_filters( 'cpm_nwp_register_default_phone_country', $act_def_iso );
+					?>
+					<select id="cpm-nwp-activate-phone-country" name="phone_country" class="cpm-nwp-phone-country" autocomplete="country" required>
+						<?php
+						foreach ( $cpm_nwp_phone_countries as $iso => $info ) {
+							$sel = ( $act_def_iso === $iso ) ? ' selected="selected"' : '';
+							printf(
+								'<option value="%1$s" data-dial="%2$s"%4$s>%3$s (+%2$s)</option>',
+								esc_attr( $iso ),
+								esc_attr( $info['dial'] ),
+								esc_html( $info['label'] ),
+								$sel // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $sel is literal.
+							);
+						}
+						?>
+					</select>
+					<input type="tel" id="cpm-nwp-activate-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" required aria-describedby="cpm-nwp-activate-mobile-hint cpm-nwp-activate-lookup-hint">
+					<input type="hidden" name="mobile" id="cpm-nwp-activate-mobile-e164" value="">
+				</div>
+				<p id="cpm-nwp-activate-mobile-hint" class="cpm-nwp-field-note cpm-nwp-activate-field-hint"><?php esc_html_e( 'Choose your country, then your number without the country code. Must match a device you already registered.', 'cpm-humanblockchain' ); ?></p>
+				<p id="cpm-nwp-activate-lookup-hint" class="cpm-nwp-field-note cpm-nwp-activate-lookup-hint" aria-live="polite"></p>
 			</div>
 			<div class="cpm-nwp-activate-actions">
 				<button type="submit" class="cpm-nwp-btn cpm-nwp-btn--otp"><?php esc_html_e( 'Send OTP', 'cpm-humanblockchain' ); ?></button>

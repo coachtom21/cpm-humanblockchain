@@ -319,6 +319,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_send_otp', array( __CLASS__, 'handle_send_otp' ) );
 		add_action( 'wp_ajax_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
 		add_action( 'wp_ajax_nopriv_cpm_nwp_verify_otp', array( __CLASS__, 'handle_verify_otp' ) );
+		add_action( 'wp_ajax_cpm_nwp_lookup_device_phone', array( __CLASS__, 'handle_lookup_device_phone' ) );
+		add_action( 'wp_ajax_nopriv_cpm_nwp_lookup_device_phone', array( __CLASS__, 'handle_lookup_device_phone' ) );
 		add_action( 'wp_ajax_cpm_hb_buyer_confirm_delivery', array( __CLASS__, 'handle_buyer_confirm_delivery' ) );
 		add_action( 'wp_ajax_cpm_hb_seller_pod_logged_in', array( __CLASS__, 'handle_seller_pod_logged_in' ) );
 		// Remove NWP device rows when the WP user is removed (same user_id / email in wp_nwp_devices).
@@ -461,6 +463,11 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		$email       = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 		$mobile      = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
+		$phone_country = isset( $_POST['phone_country'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['phone_country'] ) ) ) : '';
+		$allowed_countries = apply_filters( 'cpm_nwp_register_phone_country_codes', array( 'US', 'CA', 'NP', 'GB', 'IN', 'AU' ) );
+		if ( $phone_country !== '' && ! in_array( $phone_country, $allowed_countries, true ) ) {
+			$phone_country = '';
+		}
 		$qrtiger     = isset( $_POST['qrtiger_vcard_link'] ) ? esc_url_raw( wp_unslash( $_POST['qrtiger_vcard_link'] ) ) : '';
 		$device_hash = isset( $_POST['device_hash'] ) ? sanitize_text_field( wp_unslash( $_POST['device_hash'] ) ) : '';
 		$referral    = isset( $_POST['referral_source_nwp_id'] ) ? absint( $_POST['referral_source_nwp_id'] ) : 0;
@@ -529,6 +536,9 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( ! empty( $mobile ) ) {
 			update_user_meta( $wp_user_id, 'phone', $mobile );
 		}
+		if ( $phone_country !== '' ) {
+			update_user_meta( $wp_user_id, 'nwp_phone_country', $phone_country );
+		}
 
 		$ip_address    = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : null;
 		$user_agent    = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : null;
@@ -542,6 +552,7 @@ class Cpm_Humanblockchain_Device_Registry {
 				'device_hash'            => $device_hash,
 				'email'                  => $email,
 				'phone'                  => $mobile ?: null,
+				'phone_country'          => $phone_country !== '' ? $phone_country : null,
 				'geo_lat'                => $geo_lat ?: null,
 				'geo_lng'                => $geo_lng ?: null,
 				'registered_at'          => $registered_at,
@@ -551,7 +562,7 @@ class Cpm_Humanblockchain_Device_Registry {
 				'ip_address'             => $ip_address,
 				'user_agent'             => substr( $user_agent, 0, 512 ),
 			),
-			array( '%d', '%s', '%s', '%s', '%f', '%f', '%s', '%s', '%d', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%f', '%f', '%s', '%s', '%d', '%s', '%s', '%s' )
 		);
 
 		if ( ! $inserted ) {
@@ -603,6 +614,58 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		wp_send_json_success( $response );
+	}
+
+	/**
+	 * Public AJAX: given a normalized E.164 (or value that normalizes), return phone_country if a device row exists.
+	 * Used to sync the country dropdown while the user types in activate/register.
+	 *
+	 * @since 1.0.0
+	 */
+	public static function handle_lookup_device_phone() {
+		if ( ! check_ajax_referer( 'cpm_nwp_lookup_device_phone', 'cpm_nwp_lookup_nonce', false ) ) {
+			wp_send_json_error( array( 'message' => __( 'Session expired. Reload the page and try again.', 'cpm-humanblockchain' ) ), 403 );
+		}
+		$mobile_raw = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
+		if ( $mobile_raw === '' ) {
+			wp_send_json_success( array( 'found' => false ) );
+		}
+		$phone_e164 = Cpm_Humanblockchain_Otp_Service::normalize_phone_e164( $mobile_raw );
+		if ( ! $phone_e164 ) {
+			wp_send_json_success( array( 'found' => false ) );
+		}
+		$device_id = self::find_device_id_by_phone( $phone_e164 );
+		if ( ! $device_id ) {
+			wp_send_json_success( array( 'found' => false ) );
+		}
+		global $wpdb;
+		$table = $wpdb->prefix . self::TABLE_NAME;
+		$row   = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT phone_country, user_id, phone FROM {$table} WHERE id = %d",
+				(int) $device_id
+			)
+		);
+		$iso = '';
+		if ( $row && ! empty( $row->phone_country ) && is_string( $row->phone_country ) ) {
+			$iso = strtoupper( $row->phone_country );
+		} elseif ( $row && (int) $row->user_id > 0 ) {
+			$um = get_user_meta( (int) $row->user_id, 'nwp_phone_country', true );
+			if ( is_string( $um ) && $um !== '' ) {
+				$iso = strtoupper( $um );
+			}
+		}
+		$allowed = apply_filters( 'cpm_nwp_register_phone_country_codes', array( 'US', 'CA', 'NP', 'GB', 'IN', 'AU' ) );
+		if ( $iso !== '' && ! in_array( $iso, $allowed, true ) ) {
+			$iso = '';
+		}
+		wp_send_json_success(
+			array(
+				'found'         => true,
+				'phone_e164'    => $phone_e164,
+				'phone_country' => $iso,
+			)
+		);
 	}
 
 	/**
@@ -692,8 +755,13 @@ class Cpm_Humanblockchain_Device_Registry {
 			);
 		}
 
-		$mobile_raw = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
-		$otp_code   = isset( $_POST['otp'] ) ? sanitize_text_field( wp_unslash( $_POST['otp'] ) ) : '';
+		$mobile_raw    = isset( $_POST['mobile'] ) ? sanitize_text_field( wp_unslash( $_POST['mobile'] ) ) : '';
+		$otp_code      = isset( $_POST['otp'] ) ? sanitize_text_field( wp_unslash( $_POST['otp'] ) ) : '';
+		$phone_country = isset( $_POST['phone_country'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['phone_country'] ) ) ) : '';
+		$allowed_cc    = apply_filters( 'cpm_nwp_register_phone_country_codes', array( 'US', 'CA', 'NP', 'GB', 'IN', 'AU' ) );
+		if ( $phone_country !== '' && ! in_array( $phone_country, $allowed_cc, true ) ) {
+			$phone_country = '';
+		}
 
 		if ( empty( $mobile_raw ) || $otp_code === '' ) {
 			wp_send_json_error( array( 'message' => __( 'Mobile number and verification code are required.', 'cpm-humanblockchain' ) ) );
@@ -741,19 +809,28 @@ class Cpm_Humanblockchain_Device_Registry {
 			wp_send_json_error( array( 'message' => __( 'Could not log you in. Contact support.', 'cpm-humanblockchain' ) ) );
 		}
 
+		$status_row = array(
+			'registration_status' => 'activated',
+			'updated_at'          => current_time( 'mysql' ),
+		);
+		$status_fmt = array( '%s', '%s' );
+		if ( $phone_country !== '' ) {
+			$status_row['phone_country'] = $phone_country;
+			$status_fmt[]                = '%s';
+		}
 		$updated = $wpdb->update(
 			$table_name,
-			array(
-				'registration_status' => 'activated',
-				'updated_at'          => current_time( 'mysql' ),
-			),
+			$status_row,
 			array( 'id' => (int) $device_id ),
-			array( '%s', '%s' ),
+			$status_fmt,
 			array( '%d' )
 		);
 
 		if ( false === $updated ) {
 			wp_send_json_error( array( 'message' => __( 'Could not save verification. Please try again.', 'cpm-humanblockchain' ) ) );
+		}
+		if ( $phone_country !== '' ) {
+			update_user_meta( $wp_uid, 'nwp_phone_country', $phone_country );
 		}
 
 		Cpm_Humanblockchain_Otp_Service::clear_otp_transient( $phone_e164 );

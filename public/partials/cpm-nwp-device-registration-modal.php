@@ -38,10 +38,37 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</div>
 
 			<div class="cpm-nwp-form-row">
-				<div class="cpm-nwp-form-field">
-					<label for="cpm-nwp-mobile"><?php esc_html_e( 'Mobile number', 'cpm-humanblockchain' ); ?></label>
-					<input type="tel" id="cpm-nwp-mobile" name="mobile" autocomplete="tel">
-					<p class="cpm-nwp-field-note"><?php esc_html_e( 'Required (8+ digits) when the Register User API key is saved under Settings → NWP Gateway.', 'cpm-humanblockchain' ); ?></p>
+				<div class="cpm-nwp-form-field cpm-nwp-form-field--phone">
+					<label for="cpm-nwp-phone-country"><?php esc_html_e( 'Mobile number', 'cpm-humanblockchain' ); ?></label>
+					<div class="cpm-nwp-phone-combo" role="group" aria-label="<?php esc_attr_e( 'Mobile number', 'cpm-humanblockchain' ); ?>">
+						<?php
+						require __DIR__ . '/cpm-nwp-register-phone-country-options.php';
+						$def_iso = 'US';
+						$def_dc  = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ? Cpm_Humanblockchain_Otp_Service::get_default_country() : 'US';
+						if ( 'NP' === $def_dc ) {
+							$def_iso = 'NP';
+						}
+						$def_iso = (string) apply_filters( 'cpm_nwp_register_default_phone_country', $def_iso );
+						?>
+						<select id="cpm-nwp-phone-country" name="phone_country" class="cpm-nwp-phone-country" autocomplete="country">
+							<?php
+							foreach ( $cpm_nwp_phone_countries as $iso => $info ) {
+								$sel = ( $def_iso === $iso ) ? ' selected="selected"' : '';
+								printf(
+									'<option value="%1$s" data-dial="%2$s"%4$s>%3$s (+%2$s)</option>',
+									esc_attr( $iso ),
+									esc_attr( $info['dial'] ),
+									esc_html( $info['label'] ),
+									$sel // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- safe: $sel is literal.
+								);
+							}
+							?>
+						</select>
+						<input type="tel" id="cpm-nwp-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" aria-describedby="cpm-nwp-mobile-hint">
+						<input type="hidden" name="mobile" id="cpm-nwp-mobile-e164" value="">
+					</div>
+					<p id="cpm-nwp-mobile-hint" class="cpm-nwp-field-note"><?php esc_html_e( 'Choose country, then enter your number without the country code. Required (8+ digits) when the Register User API key is saved under Settings → NWP Gateway. Your country is stored with the device record.', 'cpm-humanblockchain' ); ?></p>
+					<p id="cpm-nwp-register-lookup-hint" class="cpm-nwp-field-note cpm-nwp-register-lookup-hint" aria-live="polite"></p>
 				</div>
 			</div>
 

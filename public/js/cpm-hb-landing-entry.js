@@ -322,11 +322,16 @@
 			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearNwpFeedback( $( '#cpm-nwp-verify-feedback' ) );
 			clearNwpFeedback( $( '#cpm-nwp-activate-feedback' ) );
-			$( '#cpm-nwp-activate-mobile' ).val( '' );
+			if ( typeof window.cpmNwpInitActivatePhoneFields === 'function' ) {
+				window.cpmNwpInitActivatePhoneFields();
+			} else {
+				$( '#cpm-nwp-activate-mobile-national' ).val( '' );
+				$( '#cpm-nwp-activate-mobile-e164' ).val( '' );
+			}
 			$activate.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 			setTimeout( function() {
-				$( '#cpm-nwp-activate-mobile' ).trigger( 'focus' );
+				$( '#cpm-nwp-activate-mobile-national' ).trigger( 'focus' );
 			}, 0 );
 		}
 

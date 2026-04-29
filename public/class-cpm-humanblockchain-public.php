@@ -501,14 +501,27 @@ class Cpm_Humanblockchain_Public {
 
 		$default_country = class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ? Cpm_Humanblockchain_Otp_Service::get_default_country() : 'NP';
 
+		$register_phone_default_iso = 'US';
+		if ( 'NP' === $default_country ) {
+			$register_phone_default_iso = 'NP';
+		}
+		$register_phone_default_iso = (string) apply_filters( 'cpm_nwp_register_default_phone_country', $register_phone_default_iso );
+
 		wp_localize_script( $this->plugin_name, 'cpmNwp', array(
 			'ajaxUrl'            => admin_url( 'admin-ajax.php' ),
 			'action'             => 'cpm_nwp_register_device',
 			'sendOtpAction'      => 'cpm_nwp_send_otp',
 			'verifyOtpAction'    => 'cpm_nwp_verify_otp',
+			'lookupDeviceAction' => 'cpm_nwp_lookup_device_phone',
+			'lookupDeviceNonce'  => wp_create_nonce( 'cpm_nwp_lookup_device_phone' ),
+			'lookupMinNationalDigits' => (int) apply_filters( 'cpm_nwp_lookup_device_phone_min_national_digits', 7 ),
+			'phoneLookup'        => array(
+				'matched' => __( 'Country matched to your registered device record.', 'cpm-humanblockchain' ),
+			),
 			'homeUrl'            => home_url( '/' ),
 			'discordInviteUrl'   => esc_url_raw( $discord_invite ),
 			'defaultCountry'     => $default_country,
+			'registerPhoneDefaultIso' => $register_phone_default_iso,
 			'hasProofScan'       => $cpm_hb_has_proof_scan,
 			'proofScanNonce'     => $cpm_hb_proof_scan_nonce,
 			'proofOfDeliveryUrl' => esc_url_raw( $cpm_hb_proof_delivery_url ),
