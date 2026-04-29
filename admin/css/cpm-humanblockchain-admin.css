@@ -2,3 +2,12 @@
  * All of the CSS for your admin-specific functionality should be
  * included in this file.
  */
+
+/* NWP Gateway — settings tabs */
+.cpm-nwp-admin-settings .nav-tab-wrapper {
+	margin-bottom: 0;
+}
+
+.cpm-nwp-admin-settings .cpm-nwp-tab-panel {
+	margin-top: 0;
+}

@@ -188,6 +188,7 @@ class Cpm_Humanblockchain {
 		$this->loader->add_action( 'admin_init', $plugin_admin, 'register_settings' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
+		$this->loader->add_action( 'wp_ajax_cpm_nwp_generate_qr', $plugin_admin, 'ajax_generate_nwp_qr' );
 
 	}
 

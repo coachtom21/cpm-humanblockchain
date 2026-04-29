@@ -741,7 +741,7 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
-	 * Handle Verify OTP AJAX: check code, mark device activated, log user in, then client shows Discord (role and ?proof=scan are ignored for post-verify UI).
+	 * Handle Verify OTP AJAX: check code, mark device activated, log user in, then client shows Discord or — for seller + ?proof=scan — transaction code modal and local xp_ledger.
 	 *
 	 * @since 1.0.0
 	 */
@@ -839,6 +839,32 @@ class Cpm_Humanblockchain_Device_Registry {
 		wp_set_auth_cookie( $wp_uid, true, is_ssl() );
 		/** This action is documented in wp-includes/user.php. */
 		do_action( 'wp_login', $user->user_login, $user );
+
+		$buyer_proof_scan = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$landing_role     = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
+
+		// Guest seller + ?proof=scan OTP: transaction code + local xp_ledger (admin-ajax; no hub HTTP, no wp-json from the browser).
+		if ( ! $buyer_proof_scan && 'seller' === $landing_role && self::request_has_valid_proof_scan_nonce() ) {
+			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
+			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+				$ledger_res = Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code, false );
+				if ( is_array( $ledger_res ) && ! empty( $ledger_res['remote'] ) && 'db_failed' === $ledger_res['remote'] ) {
+					$msg = ! empty( $ledger_res['summary'] ) && is_string( $ledger_res['summary'] )
+						? $ledger_res['summary']
+						: __( 'Could not save the XP ledger entry. Please try again.', 'cpm-humanblockchain' );
+					wp_send_json_error( array( 'message' => $msg ) );
+				}
+			}
+			wp_send_json_success(
+				array(
+					'message'                 => __( 'Verification successful. Your transaction code is ready to share with the buyer.', 'cpm-humanblockchain' ),
+					'seller_scan_success'     => true,
+					'seller_transaction_code' => $seller_transaction_code,
+					'redirect_url'            => '',
+					'show_discord_modal'      => false,
+				)
+			);
+		}
 
 		// Unified outcome: logged in above; show Discord on success unless a filter sets an immediate redirect (client checks redirect first).
 		$redirect     = apply_filters( 'cpm_nwp_after_verify_redirect', '' );

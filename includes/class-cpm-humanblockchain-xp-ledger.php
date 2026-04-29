@@ -843,13 +843,14 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
-	 * After seller + ?proof=scan OTP: save row and sync to Smallstreet.
+	 * After seller + ?proof=scan OTP: save row and optionally sync to Smallstreet.
 	 *
 	 * @param int    $wp_user_id        WordPress user ID.
 	 * @param string $transaction_code  HB-… code shown in the modal.
+	 * @param bool   $sync_remote       When false, only insert into wp_xp_ledger (no outbound hub HTTP).
 	 * @return array<string,mixed> Outcome (remote, summary, http_code, body, json, success) for logging or hooks; not sent to the browser.
 	 */
-	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code ) {
+	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code, $sync_remote = true ) {
 		$wp_user_id       = (int) $wp_user_id;
 		$transaction_code = trim( (string) $transaction_code );
 		if ( $wp_user_id <= 0 || $transaction_code === '' ) {
@@ -912,6 +913,29 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			return self::xp_ledger_api_result(
 				'db_failed',
 				__( 'Could not save the XP ledger row locally.', 'cpm-humanblockchain' ),
+				null,
+				'',
+				null,
+				false
+			);
+		}
+
+		if ( ! $sync_remote ) {
+			$skip_msg = __( 'Local ledger only; hub sync skipped for this flow.', 'cpm-humanblockchain' );
+			$wpdb->update(
+				$table,
+				array(
+					'remote_sync_status' => 'skipped',
+					'remote_last_error'  => $skip_msg,
+					'updated_at'         => current_time( 'mysql' ),
+				),
+				array( 'id' => $row_id ),
+				array( '%s', '%s', '%s' ),
+				array( '%d' )
+			);
+			return self::xp_ledger_api_result(
+				'skipped',
+				$skip_msg,
 				null,
 				'',
 				null,
