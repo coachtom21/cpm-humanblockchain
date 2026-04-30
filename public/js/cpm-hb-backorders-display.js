@@ -285,34 +285,63 @@
 
 		if ( raw ) {
 			try {
-				sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
-			} catch ( err2 ) {
-				// ignore
-			}
-			try {
 				data = JSON.parse( raw );
 			} catch ( err3 ) {
 				data = null;
 			}
 		}
 
-		if ( data !== null ) {
-			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( Array.isArray( data ) ? data : [] ) );
-			return;
-		}
-
 		if ( H.isVisitor ) {
+			if ( raw ) {
+				try {
+					sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
+				} catch ( errRm ) {
+					// ignore
+				}
+			}
 			$mount.append( renderVisitorPanel( S, H.loginUrl || '' ) );
 			return;
 		}
 
 		if ( ! H.apiConfigured ) {
+			if ( raw ) {
+				try {
+					sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
+				} catch ( errRm2 ) {
+					// ignore
+				}
+			}
 			$mount.append( renderApiMissingPanel( S ) );
 			return;
 		}
 
-		if ( Object.prototype.hasOwnProperty.call( H, 'initialRows' ) ) {
-			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( Array.isArray( H.initialRows ) ? H.initialRows : [] ) );
+		/*
+		 * Server-localized initialRows includes WooCommerce + hub merge. Stale sessionStorage from an old PoD
+		 * redirect must not override it (otherwise the table shows hub column headers with empty cells).
+		 */
+		var hasServerRows = Object.prototype.hasOwnProperty.call( H, 'initialRows' );
+		var serverRows    = hasServerRows && Array.isArray( H.initialRows ) ? H.initialRows : [];
+		if ( hasServerRows ) {
+			if ( raw ) {
+				try {
+					sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
+				} catch ( errRm3 ) {
+					// ignore
+				}
+			}
+			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( serverRows ) );
+			return;
+		}
+
+		if ( data !== null ) {
+			if ( raw ) {
+				try {
+					sessionStorage.removeItem( 'cpm_hb_smallstreet_backorders' );
+				} catch ( errRm4 ) {
+					// ignore
+				}
+			}
+			mountBackordersTable( $mount, filterRowsExcludingLinkedOrders( Array.isArray( data ) ? data : [] ) );
 			return;
 		}
 

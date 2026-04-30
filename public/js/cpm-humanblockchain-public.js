@@ -254,6 +254,31 @@
 		/**
 		 * If the page was loaded with ?proof=scan but the user registered a device first, re-apply PoD context before Send OTP / verify.
 		 */
+		/**
+		 * If landing lost landingRole (e.g. only sessionStorage has it), re-read from hb_last_scan so Send OTP / Verify still post cpm_hb_user_role.
+		 */
+		function cpmNwpRefreshLandingRoleFromSessionStorage() {
+			if ( ! window.cpmHbLanding ) {
+				window.cpmHbLanding = {};
+			}
+			var H = window.cpmHbLanding;
+			if ( H.landingRole === 'seller' || H.landingRole === 'buyer' ) {
+				return;
+			}
+			try {
+				var raw = window.sessionStorage ? window.sessionStorage.getItem( 'hb_last_scan' ) : '';
+				if ( ! raw ) {
+					return;
+				}
+				var j = JSON.parse( raw );
+				if ( j && ( j.user_role === 'seller' || j.user_role === 'buyer' ) ) {
+					H.landingRole = j.user_role;
+				}
+			} catch ( err ) {
+				// ignore
+			}
+		}
+
 		function applyProofScanContextIfNeeded() {
 			if ( window.cpmHbSkipPodOtpContext ) {
 				return;
@@ -566,10 +591,14 @@
 			clearInlineFeedback( $activateFeedback );
 			applyProofScanContextIfNeeded();
 			ensureHbLandingFromNwp();
+			cpmNwpRefreshLandingRoleFromSessionStorage();
 			if ( window.cpmHbLanding && window.cpmNwp && window.cpmNwp.hasProofScan && ! window.cpmHbSkipPodOtpContext
 				&& ( window.cpmHbLanding.landingRole === 'seller' || window.cpmHbLanding.landingRole === 'buyer' ) ) {
 				window.cpmHbLanding.phoneModalFromLanding = true;
 				window.cpmHbLanding.podProofScan = true;
+				if ( window.cpmHbLanding.landingRole === 'buyer' ) {
+					window.cpmHbLanding.buyerProofScan = true;
+				}
 				if ( ! window.cpmHbLanding.proofScanNonce && window.cpmNwp.proofScanNonce ) {
 					window.cpmHbLanding.proofScanNonce = window.cpmNwp.proofScanNonce;
 				}
@@ -581,8 +610,9 @@
 			}
 			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
 				formData += '&cpm_hb_proof_scan=1';
-				if ( window.cpmHbLanding.proofScanNonce ) {
-					formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
+				var psn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
+				if ( psn ) {
+					formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( psn );
 				}
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
@@ -643,11 +673,15 @@
 			clearInlineFeedback( $verifyFeedback );
 			applyProofScanContextIfNeeded();
 			ensureHbLandingFromNwp();
+			cpmNwpRefreshLandingRoleFromSessionStorage();
 			// Seller / buyer ?proof=scan: ensure landing flags so verify always posts cpm_hb_verify_redirect + proof nonce (server needs these for transaction code + XP API).
 			if ( window.cpmHbLanding && window.cpmNwp && window.cpmNwp.hasProofScan && ! window.cpmHbSkipPodOtpContext
 				&& ( window.cpmHbLanding.landingRole === 'seller' || window.cpmHbLanding.landingRole === 'buyer' ) ) {
 				window.cpmHbLanding.phoneModalFromLanding = true;
 				window.cpmHbLanding.podProofScan = true;
+				if ( window.cpmHbLanding.landingRole === 'buyer' ) {
+					window.cpmHbLanding.buyerProofScan = true;
+				}
 				if ( ! window.cpmHbLanding.proofScanNonce && window.cpmNwp.proofScanNonce ) {
 					window.cpmHbLanding.proofScanNonce = window.cpmNwp.proofScanNonce;
 				}
@@ -662,8 +696,9 @@
 			}
 			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
 				payload += '&cpm_hb_proof_scan=1';
-				if ( window.cpmHbLanding.proofScanNonce ) {
-					payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( window.cpmHbLanding.proofScanNonce );
+				var pvn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
+				if ( pvn ) {
+					payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( pvn );
 				}
 			}
 			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
@@ -717,6 +752,17 @@
 							showSellerScanSuccessModal( res.data.seller_transaction_code );
 							return;
 						}
+						// PoD buyer path: must run before Discord — otherwise pendingOtpRedirect is cleared and users never reach backorders.
+						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
+							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
+							window.cpmHbLanding.pendingOtpRedirect = '';
+							window.cpmHbLanding.phoneModalFromLanding = false;
+							window.cpmHbLanding.buyerProofScan = false;
+							window.cpmHbLanding.podProofScan = false;
+							window.cpmHbLanding.landingRole = '';
+							window.location.href = postUrl;
+							return;
+						}
 						if ( res.data.show_discord_modal ) {
 							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 							clearInlineFeedback( $verifyFeedback );
@@ -728,16 +774,6 @@
 							}
 							$discordModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
-							return;
-						}
-						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
-							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
-							window.cpmHbLanding.pendingOtpRedirect = '';
-							window.cpmHbLanding.phoneModalFromLanding = false;
-							window.cpmHbLanding.buyerProofScan = false;
-							window.cpmHbLanding.podProofScan = false;
-							window.cpmHbLanding.landingRole = '';
-							window.location.href = postUrl;
 							return;
 						}
 						window.location.reload();

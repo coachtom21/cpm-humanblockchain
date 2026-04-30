@@ -542,10 +542,45 @@ class Cpm_Humanblockchain_Public {
 			$api_ok = class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
 				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured();
 
+			$woo_rows = array();
+			if ( is_user_logged_in() && class_exists( 'Cpm_Humanblockchain_Woo_Backorders' ) && function_exists( 'wc_get_orders' ) ) {
+				$woo_rows = Cpm_Humanblockchain_Woo_Backorders::get_display_rows_for_customer( (int) get_current_user_id() );
+			}
+
+			$hub_rows = array();
+			if ( is_user_logged_in() && $api_ok ) {
+				$uid_fetch = (int) get_current_user_id();
+				$phone     = apply_filters(
+					'cpm_hb_phone_for_backorders_lookup',
+					Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid_fetch ),
+					$uid_fetch
+				);
+				if ( is_string( $phone ) && $phone !== '' ) {
+					$hub_rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
+					if ( ! empty( $hub_rows ) ) {
+						Cpm_Humanblockchain_Smallstreet_Backorders::save_user_backorders_cache( $uid_fetch, $hub_rows );
+					} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid_fetch ) ) {
+						$hub_rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid_fetch );
+					}
+				} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid_fetch ) ) {
+					$hub_rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid_fetch );
+				}
+				$hub_rows = is_array( $hub_rows ) ? $hub_rows : array();
+			}
+
+			$merged_rows = class_exists( 'Cpm_Humanblockchain_Woo_Backorders' )
+				? Cpm_Humanblockchain_Woo_Backorders::merge_with_hub_rows( $woo_rows, $hub_rows )
+				: $hub_rows;
+			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+				$merged_rows = Cpm_Humanblockchain_Xp_Ledger::filter_backorder_rows_excluding_linked_orders( $merged_rows );
+			}
+
+			$table_via_woo = is_user_logged_in() && function_exists( 'wc_get_orders' );
+
 			$backorders_localize = array(
 				'strings' => array(
 					'title'                 => __( 'Your backorders', 'cpm-humanblockchain' ),
-					'empty'                 => __( 'No backorder data returned.', 'cpm-humanblockchain' ),
+					'empty'                 => __( 'No open shop orders or hub backorders to show.', 'cpm-humanblockchain' ),
 					'noPhone'               => __( 'No phone number is on file for your account. Add one when you register your device or in your billing profile, then reload this page.', 'cpm-humanblockchain' ),
 					'loginPrompt'           => __( 'Log in to load your backorders (same phone as your shop account).', 'cpm-humanblockchain' ),
 					'apiMissing'            => __( 'Remote shop hub backorders are not enabled. Turn on hub sync in Settings → NWP Gateway to fetch live data, or use saved rows if available.', 'cpm-humanblockchain' ),
@@ -563,7 +598,7 @@ class Cpm_Humanblockchain_Public {
 				),
 				'loginUrl'             => wp_login_url( get_permalink() ),
 				'isVisitor'            => ! is_user_logged_in(),
-				'apiConfigured'        => $api_ok,
+				'apiConfigured'        => $api_ok || $table_via_woo,
 				'canConfirmDelivery'   => is_user_logged_in(),
 				'ajaxUrl'              => admin_url( 'admin-ajax.php' ),
 				'confirmAction'        => 'cpm_hb_buyer_confirm_delivery',
@@ -574,27 +609,15 @@ class Cpm_Humanblockchain_Public {
 			if ( is_user_logged_in() && class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 				$backorders_localize['linkedOrderIds'] = Cpm_Humanblockchain_Xp_Ledger::get_linked_order_ids_for_backorders_display();
 			}
-			// Logged-in + API: load rows by phone; persist successful responses in user meta so refresh still shows data if API is empty.
-			if ( is_user_logged_in() && $api_ok ) {
-				$uid   = (int) get_current_user_id();
-				$phone = apply_filters(
+			if ( is_user_logged_in() ) {
+				$backorders_localize['initialRows'] = $merged_rows;
+				$uid                                  = (int) get_current_user_id();
+				$phone                                = apply_filters(
 					'cpm_hb_phone_for_backorders_lookup',
 					Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $uid ),
 					$uid
 				);
-				$rows = array();
-				if ( is_string( $phone ) && $phone !== '' ) {
-					$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
-					if ( ! empty( $rows ) ) {
-						Cpm_Humanblockchain_Smallstreet_Backorders::save_user_backorders_cache( $uid, $rows );
-					} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid ) ) {
-						$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid );
-					}
-				} elseif ( (bool) apply_filters( 'cpm_hb_backorders_fallback_to_user_cache', true, $uid ) ) {
-					$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_user_backorders_cache( $uid );
-				}
-				$backorders_localize['initialRows'] = is_array( $rows ) ? $rows : array();
-				if ( ( ! is_string( $phone ) || $phone === '' ) && empty( $backorders_localize['initialRows'] ) ) {
+				if ( empty( $merged_rows ) && $api_ok && ( ! is_string( $phone ) || $phone === '' ) && empty( $woo_rows ) ) {
 					$backorders_localize['showNoPhone'] = true;
 				}
 			}

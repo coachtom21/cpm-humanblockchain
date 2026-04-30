@@ -220,7 +220,9 @@
 		function skipOtpAndGoProofOfDelivery() {
 			markProofScanLandingDismissed();
 			var H = window.cpmHbLanding || {};
-			var base = H.proofOfDeliveryUrl || H.homeUrl || '/';
+			var N = window.cpmNwp || {};
+			/* Fallback: main plugin always localizes cpmNwp.proofOfDeliveryUrl; landing script may load without cpmHbLanding keys in edge builds. */
+			var base = H.proofOfDeliveryUrl || N.proofOfDeliveryUrl || H.homeUrl || '/';
 			try {
 				var u = new URL( base, window.location.href );
 				u.searchParams.set( 'proof', 'scan' );
@@ -297,8 +299,9 @@
 			}
 			var $activate = $( '#cpm-nwp-activate-modal' );
 			if ( ! $activate.length ) {
-				if ( H.proofOfDeliveryUrl ) {
-					window.location.href = H.proofOfDeliveryUrl;
+				var podFallback = H.proofOfDeliveryUrl || N.proofOfDeliveryUrl || '';
+				if ( podFallback ) {
+					window.location.href = podFallback;
 				}
 				return;
 			}
@@ -308,7 +311,7 @@
 			// PoD flags: URL/server hasProofScan, or minted cpmNwp nonces, or explicit gate (seller OTP must always send proof nonce for transaction code + API).
 			H.podProofScan = proofScanInUrlOrFromServer() || ( !! N.hasProofScan && !! N.proofScanNonce ) || !! opts.fromProofScanPod;
 			if ( opts.buyerProofScan && H.proofScanNonce ) {
-				H.pendingOtpRedirect = H.proofOfDeliveryUrl || '';
+				H.pendingOtpRedirect = H.proofOfDeliveryUrl || N.proofOfDeliveryUrl || '';
 			} else {
 				H.pendingOtpRedirect = '';
 			}

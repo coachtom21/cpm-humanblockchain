@@ -844,7 +844,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		$landing_role     = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
 
 		// Guest seller + ?proof=scan OTP: transaction code + local xp_ledger (admin-ajax; no hub HTTP, no wp-json from the browser).
-		if ( ! $buyer_proof_scan && 'seller' === $landing_role && self::request_has_valid_proof_scan_nonce() ) {
+		// Use proof-scan *intent* (cpm_hb_proof_scan=1 and/or valid nonce) — not only a fresh nonce, so the modal still works if the user was on the OTP step a while.
+		if ( ! $buyer_proof_scan && 'seller' === $landing_role && self::request_has_proof_scan_intent() ) {
 			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
 			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 				$ledger_res = Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code, false );
@@ -864,6 +865,33 @@ class Cpm_Humanblockchain_Device_Registry {
 					'show_discord_modal'      => false,
 				)
 			);
+		}
+
+		// Buyer + proof=scan after OTP: send user to backorders / PoD URL. Default verify response enables Discord, which the client handled before pendingOtpRedirect — buyers never reached backorders.
+		if ( $buyer_proof_scan && 'buyer' === $landing_role && self::request_has_proof_scan_intent() ) {
+			$pod_url = apply_filters( 'cpm_hb_proof_of_delivery_url', self::get_backorder_page_url() );
+			$pod_url = add_query_arg( 'proof', 'scan', $pod_url );
+
+			$payload = array(
+				'message'              => $check['message'],
+				'redirect_url'         => esc_url_raw( $pod_url ),
+				'show_discord_modal'   => false,
+				'smallstreet_backorders' => null,
+			);
+
+			if ( class_exists( 'Cpm_Humanblockchain_Smallstreet_Backorders' )
+				&& Cpm_Humanblockchain_Smallstreet_Backorders::is_configured()
+				&& class_exists( 'Cpm_Humanblockchain_Device_Registry' ) ) {
+				$phone = Cpm_Humanblockchain_Device_Registry::get_phone_for_user( $wp_uid );
+				if ( is_string( $phone ) && $phone !== '' ) {
+					$rows = Cpm_Humanblockchain_Smallstreet_Backorders::get_backorders_for_display( $phone );
+					if ( is_array( $rows ) && array() !== $rows ) {
+						$payload['smallstreet_backorders'] = $rows;
+					}
+				}
+			}
+
+			wp_send_json_success( $payload );
 		}
 
 		// Unified outcome: logged in above; show Discord on success unless a filter sets an immediate redirect (client checks redirect first).

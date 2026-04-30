@@ -540,8 +540,9 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 * @param string   $transaction_code HB-… code.
 	 * @param int      $seller_id        Seller WP user id.
 	 * @param int|null $order_id         Primary order id from buyer confirmation (stored on seller row + PATCH).
+	 * @param int|null $buyer_id         Buyer WP user id (stored as counterparty + entry_json buyer_wp_user_id).
 	 */
-	private static function complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id, $order_id = null ) {
+	private static function complete_seller_ledger_row_after_buyer_remote( $transaction_code, $seller_id, $order_id = null, $buyer_id = null ) {
 		global $wpdb;
 		$table      = self::table_name();
 		$seller_row = self::get_seller_ledger_row( $transaction_code, $seller_id );
@@ -553,6 +554,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		}
 
 		$seller_remote_id = isset( $seller_row->remote_ledger_id ) ? trim( (string) $seller_row->remote_ledger_id ) : '';
+		$buyer_id         = null !== $buyer_id ? (int) $buyer_id : 0;
 
 		$oid       = null !== $order_id ? (int) $order_id : 0;
 		$seller_xp = isset( $seller_row->xp_units ) ? (string) $seller_row->xp_units : self::xp_units_string_for_scan_type( 'seller_scan' );
@@ -564,30 +566,47 @@ class Cpm_Humanblockchain_Xp_Ledger {
 
 		$date_str = self::default_ledger_patch_date_mysql( $seller_id, $seller_entry_update, $order_id );
 
-		// Local-only completion when hub sync is off (no remote PATCH).
-		if ( ! self::xp_remote_http_enabled() ) {
-			$seller_entry_data = array(
-				'transaction_id' => $transaction_code,
-				'xp_units'         => $seller_xp,
-				'scan_status'      => 'completed',
-				'date'             => $date_str,
+		$seller_entry_data = array(
+			'transaction_id' => $transaction_code,
+			'xp_units'       => $seller_xp,
+			'scan_status'    => 'completed',
+			'date'           => $date_str,
+		);
+		if ( $oid > 0 ) {
+			$seller_entry_data['order_id'] = $oid;
+		}
+		if ( $buyer_id > 0 ) {
+			$seller_entry_data['buyer_wp_user_id'] = $buyer_id;
+		}
+		$seller_entry_json = wp_json_encode( $seller_entry_data );
+
+		/**
+		 * Apply completed seller row locally (pending → completed, optional order_id + buyer counterparty).
+		 *
+		 * @param string $remote_status remote_sync_status value.
+		 * @param string|null $remote_err remote_last_error (null to clear).
+		 */
+		$apply_local_seller_completed = static function ( $remote_status, $remote_err ) use ( $wpdb, $table, $seller_row, $seller_entry_json, $date_str, $oid, $buyer_id ) {
+			$seller_update = array(
+				'scan_status'        => 'completed',
+				'entry_json'         => $seller_entry_json,
+				'ledger_date'        => $date_str,
+				'updated_at'         => current_time( 'mysql' ),
+				'remote_sync_status' => $remote_status,
+				'remote_last_error'  => $remote_err,
 			);
-			if ( $oid > 0 ) {
-				$seller_entry_data['order_id'] = $oid;
-			}
-			$seller_entry_json = wp_json_encode( $seller_entry_data );
-			$seller_update     = array(
-				'scan_status'         => 'completed',
-				'entry_json'          => $seller_entry_json,
-				'remote_sync_status'  => 'skipped',
-				'remote_last_error'   => null,
-				'ledger_date'         => $date_str,
-				'updated_at'          => current_time( 'mysql' ),
-			);
-			$formats = array( '%s', '%s', '%s', '%s', '%s', '%s' );
 			if ( $oid > 0 ) {
 				$seller_update['order_id'] = $oid;
-				$formats[]                 = '%d';
+			}
+			if ( $buyer_id > 0 ) {
+				$seller_update['counterparty_wp_user_id'] = $buyer_id;
+			}
+			$formats = array( '%s', '%s', '%s', '%s', '%s', '%s' );
+			if ( $oid > 0 ) {
+				$formats[] = '%d';
+			}
+			if ( $buyer_id > 0 ) {
+				$formats[] = '%d';
 			}
 			$wpdb->update(
 				$table,
@@ -596,27 +615,24 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				$formats,
 				array( '%d' )
 			);
+		};
+
+		// Local-only completion when hub sync is off (no remote PATCH).
+		if ( ! self::xp_remote_http_enabled() ) {
+			$apply_local_seller_completed( 'skipped', null );
 			return;
 		}
 
+		// No remote ledger id: still close PoD locally and link buyer.
 		if ( $seller_remote_id === '' ) {
+			$apply_local_seller_completed( 'skipped', null );
 			return;
 		}
 
 		$upd = self::remote_update_scan( $seller_remote_id, $seller_id, $seller_entry_update, $oid > 0 ? $oid : null, $date_str );
 
 		if ( $upd['ok'] ) {
-			$seller_entry_data = array(
-				'transaction_id' => $transaction_code,
-				'xp_units'       => $seller_xp,
-				'scan_status'    => 'completed',
-				'date'           => $date_str,
-			);
-			if ( $oid > 0 ) {
-				$seller_entry_data['order_id'] = $oid;
-			}
-			$seller_entry_json = wp_json_encode( $seller_entry_data );
-			$seller_update     = array(
+			$seller_update = array(
 				'scan_status'        => 'completed',
 				'entry_json'         => $seller_entry_json,
 				'remote_sync_status' => 'synced',
@@ -627,9 +643,15 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			if ( $oid > 0 ) {
 				$seller_update['order_id'] = $oid;
 			}
+			if ( $buyer_id > 0 ) {
+				$seller_update['counterparty_wp_user_id'] = $buyer_id;
+			}
 			$formats = array( '%s', '%s', '%s', '%s', '%s', '%s' );
 			if ( $oid > 0 ) {
-				$formats[] = '%s';
+				$formats[] = '%d';
+			}
+			if ( $buyer_id > 0 ) {
+				$formats[] = '%d';
 			}
 			$wpdb->update(
 				$table,
@@ -639,15 +661,10 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%d' )
 			);
 		} else {
-			$wpdb->update(
-				$table,
-				array(
-					'remote_last_error' => substr( $upd['body'] !== '' ? $upd['body'] : 'PATCH failed', 0, 500 ),
-					'updated_at'        => current_time( 'mysql' ),
-				),
-				array( 'id' => (int) $seller_row->id ),
-				array( '%s', '%s' ),
-				array( '%d' )
+			// Remote PATCH failed: still mark seller completed locally with buyer link so PoD is not stuck pending.
+			$apply_local_seller_completed(
+				'failed',
+				substr( $upd['body'] !== '' ? $upd['body'] : 'PATCH failed', 0, 500 )
 			);
 		}
 	}
@@ -692,8 +709,9 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		$entry_local = array_merge(
 			$entry,
 			array(
-				'order_ids' => $order_ids_clean,
-				'date'      => $ledger_date,
+				'order_ids'          => $order_ids_clean,
+				'date'               => $ledger_date,
+				'seller_wp_user_id'  => $seller_id,
 			)
 		);
 
@@ -709,35 +727,32 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			)
 		);
 		if ( $existing_buyer ) {
-			$prev = $wpdb->get_row(
-				$wpdb->prepare( "SELECT remote_sync_status FROM {$table} WHERE id = %d", (int) $existing_buyer )
+			self::complete_seller_ledger_row_after_buyer_remote(
+				$transaction_code,
+				$seller_id,
+				$primary_order_id > 0 ? $primary_order_id : null,
+				$buyer_id
 			);
-			if ( $prev && isset( $prev->remote_sync_status ) && 'synced' === $prev->remote_sync_status ) {
-				self::complete_seller_ledger_row_after_buyer_remote(
-					$transaction_code,
-					$seller_id,
-					$primary_order_id > 0 ? $primary_order_id : null
-				);
-			}
 			return;
 		}
 
 		$inserted = $wpdb->insert(
 			$table,
 			array(
-				'wp_user_id'         => $buyer_id,
-				'scan_type'          => $scan_type,
-				'transaction_id'     => $transaction_code,
-				'order_id'           => $primary_order_id > 0 ? $primary_order_id : null,
-				'xp_units'           => $xp_units,
-				'scan_status'        => 'completed',
-				'entry_json'         => wp_json_encode( $entry_local ),
-				'remote_sync_status' => 'pending',
-				'ledger_date'        => $ledger_date,
-				'created_at'         => current_time( 'mysql' ),
-				'updated_at'         => current_time( 'mysql' ),
+				'wp_user_id'               => $buyer_id,
+				'scan_type'                => $scan_type,
+				'transaction_id'           => $transaction_code,
+				'order_id'                 => $primary_order_id > 0 ? $primary_order_id : null,
+				'xp_units'                 => $xp_units,
+				'scan_status'              => 'completed',
+				'entry_json'               => wp_json_encode( $entry_local ),
+				'counterparty_wp_user_id'  => $seller_id,
+				'remote_sync_status'       => 'pending',
+				'ledger_date'              => $ledger_date,
+				'created_at'               => current_time( 'mysql' ),
+				'updated_at'               => current_time( 'mysql' ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s' )
 		);
 
 		if ( false === $inserted ) {
@@ -763,8 +778,16 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%s', '%s', '%s' ),
 				array( '%d' )
 			);
+			self::complete_seller_ledger_row_after_buyer_remote(
+				$transaction_code,
+				$seller_id,
+				$primary_order_id > 0 ? $primary_order_id : null,
+				$buyer_id
+			);
 			return;
 		}
+
+		$key = self::api_key();
 
 		$post_payload = self::build_xp_ledger_scan_payload(
 			$buyer_id,
@@ -799,6 +822,12 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%s', '%s', '%s' ),
 				array( '%d' )
 			);
+			self::complete_seller_ledger_row_after_buyer_remote(
+				$transaction_code,
+				$seller_id,
+				$primary_order_id > 0 ? $primary_order_id : null,
+				$buyer_id
+			);
 			return;
 		}
 
@@ -832,13 +861,20 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( '%s', '%s', '%s' ),
 				array( '%d' )
 			);
+			self::complete_seller_ledger_row_after_buyer_remote(
+				$transaction_code,
+				$seller_id,
+				$primary_order_id > 0 ? $primary_order_id : null,
+				$buyer_id
+			);
 			return;
 		}
 
 		self::complete_seller_ledger_row_after_buyer_remote(
 			$transaction_code,
 			$seller_id,
-			$primary_order_id > 0 ? $primary_order_id : null
+			$primary_order_id > 0 ? $primary_order_id : null,
+			$buyer_id
 		);
 	}
 

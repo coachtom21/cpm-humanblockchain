@@ -140,6 +140,8 @@ class Cpm_Humanblockchain {
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-smallstreet-backorders.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-woo-backorders.php';
+
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-xp-ledger.php';
 
 		/**

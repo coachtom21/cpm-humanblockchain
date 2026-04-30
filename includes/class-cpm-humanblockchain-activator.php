@@ -162,6 +162,7 @@ class Cpm_Humanblockchain_Activator {
 			remote_sync_status VARCHAR(32) NOT NULL DEFAULT 'pending',
 			remote_last_error TEXT NULL,
 			ledger_date DATETIME DEFAULT NULL,
+			counterparty_wp_user_id BIGINT UNSIGNED DEFAULT NULL,
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME DEFAULT NULL,
 			PRIMARY KEY (id),
@@ -169,7 +170,8 @@ class Cpm_Humanblockchain_Activator {
 			KEY scan_type (scan_type),
 			KEY transaction_id (transaction_id),
 			KEY order_id (order_id),
-			KEY remote_sync_status (remote_sync_status)
+			KEY remote_sync_status (remote_sync_status),
+			KEY counterparty_wp_user_id (counterparty_wp_user_id)
 		) $charset_collate;";
 
 		$wpdb->query( $sql );
@@ -199,6 +201,9 @@ class Cpm_Humanblockchain_Activator {
 		}
 		if ( ! in_array( 'ledger_date', $columns, true ) ) {
 			$wpdb->query( "ALTER TABLE `{$table_name}` ADD COLUMN ledger_date DATETIME DEFAULT NULL" );
+		}
+		if ( ! in_array( 'counterparty_wp_user_id', $columns, true ) ) {
+			$wpdb->query( "ALTER TABLE `{$table_name}` ADD COLUMN counterparty_wp_user_id BIGINT UNSIGNED DEFAULT NULL, ADD KEY counterparty_wp_user_id (counterparty_wp_user_id)" );
 		}
 	}
 }
