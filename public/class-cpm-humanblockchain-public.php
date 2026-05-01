@@ -177,6 +177,11 @@ class Cpm_Humanblockchain_Public {
 	 * @return bool
 	 */
 	public function should_show_landing_entry_modal() {
+		// Dedicated backorders / PoD page: never stack the global “Enter Website” gate (e.g. /backorders/?proof=scan).
+		if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) && Cpm_Humanblockchain_Device_Registry::is_backorder_page_view() ) {
+			return (bool) apply_filters( 'cpm_hb_show_landing_entry_modal_on_backorder_page', false );
+		}
+
 		$proof_scan = $this->request_has_proof_scan_param();
 
 		// Do not suppress a fresh ?proof=scan using an old ack cookie (e.g. user dismissed the gate on Home earlier, then opens a PoD link on /nwp-landing/?proof=scan). JS still sets the cookie on dismiss to pair with history.replaceState on the same page; full reloads after dismiss usually have no ?proof=scan in the request.
