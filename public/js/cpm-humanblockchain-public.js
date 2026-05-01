@@ -11,6 +11,46 @@
 		var $sellerScanSuccessModal = $( '#cpm-hb-seller-scan-success-modal' );
 
 		/**
+		 * Pull new Send OTP / Verify OTP nonces from the server (avoids stale HTML from cache or expired WP nonce ticks).
+		 *
+		 * @param {function()} done Callback after request finishes (success or fail).
+		 */
+		function cpmHbFetchFreshOtpNonces( done ) {
+			done = typeof done === 'function' ? done : function() {};
+			var ajaxUrl = window.cpmNwp && window.cpmNwp.ajaxUrl;
+			var rn = window.cpmNwp && window.cpmNwp.refreshOtpNoncesNonce;
+			var action = window.cpmNwp && window.cpmNwp.refreshOtpNoncesAction;
+			if ( ! ajaxUrl || ! rn || ! action ) {
+				done();
+				return;
+			}
+			$.ajax( {
+				url: ajaxUrl,
+				type: 'POST',
+				dataType: 'json',
+				data: {
+					action: action,
+					nonce: rn
+				}
+			} )
+				.done( function( res ) {
+					if ( res && res.success && res.data ) {
+						if ( res.data.send_otp_nonce ) {
+							$( 'input[name="cpm_nwp_otp_nonce"]' ).val( res.data.send_otp_nonce );
+						}
+						if ( res.data.verify_otp_nonce ) {
+							$( 'input[name="cpm_nwp_verify_nonce"]' ).val( res.data.verify_otp_nonce );
+						}
+					}
+				} )
+				.always( function() {
+					done();
+				} );
+		}
+
+		window.cpmHbFetchFreshOtpNonces = cpmHbFetchFreshOtpNonces;
+
+		/**
 		 * Country select + national digits → E.164 (server: Cpm_Humanblockchain_Otp_Service::normalize_phone_e164).
 		 */
 		function cpmNwpBuildMobileE164( countrySelector, nationalSelector ) {
@@ -613,7 +653,25 @@
 				return false;
 			}
 
-			function runSendOtpAjax() {
+			var otpSendRetryScheduled = false;
+
+			function maybeRetrySendOtpAfterStaleNonce( isNonceRetry, errMsg ) {
+				if ( isNonceRetry || typeof window.cpmHbFetchFreshOtpNonces !== 'function' ) {
+					return false;
+				}
+				if ( ! /session expired|page is outdated/i.test( String( errMsg || '' ) ) ) {
+					return false;
+				}
+				otpSendRetryScheduled = true;
+				$btn.prop( 'disabled', true ).text( 'Updating form…' );
+				window.cpmHbFetchFreshOtpNonces( function() {
+					otpSendRetryScheduled = false;
+					runSendOtpAjax( true );
+				} );
+				return true;
+			}
+
+			function runSendOtpAjax( isNonceRetry ) {
 				var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
 				if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
 					formData += '&cpm_hb_buyer_proof_scan=1';
@@ -649,6 +707,9 @@
 							$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
 						} else {
 							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+							if ( maybeRetrySendOtpAfterStaleNonce( isNonceRetry, err ) ) {
+								return;
+							}
 							showInlineFeedback( $activateFeedback, err, 'error' );
 						}
 					} )
@@ -657,9 +718,15 @@
 						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
 							msg = xhr.responseJSON.data.message;
 						}
+						if ( maybeRetrySendOtpAfterStaleNonce( isNonceRetry, msg ) ) {
+							return;
+						}
 						showInlineFeedback( $activateFeedback, msg, 'error' );
 					} )
 					.always( function() {
+						if ( otpSendRetryScheduled ) {
+							return;
+						}
 						$btn.prop( 'disabled', false ).text( 'Send OTP' );
 					} );
 			}
@@ -747,7 +814,25 @@
 				return payload;
 			}
 
-			function runVerifyOtpAjax() {
+			var otpVerifyRetryScheduled = false;
+
+			function maybeRetryVerifyOtpAfterStaleNonce( isNonceRetry, errMsg ) {
+				if ( isNonceRetry || typeof window.cpmHbFetchFreshOtpNonces !== 'function' ) {
+					return false;
+				}
+				if ( ! /session expired|page is outdated/i.test( String( errMsg || '' ) ) ) {
+					return false;
+				}
+				otpVerifyRetryScheduled = true;
+				$btn.prop( 'disabled', true ).text( 'Updating form…' );
+				window.cpmHbFetchFreshOtpNonces( function() {
+					otpVerifyRetryScheduled = false;
+					runVerifyOtpAjax( true );
+				} );
+				return true;
+			}
+
+			function runVerifyOtpAjax( isNonceRetry ) {
 				var payload = buildVerifyPayload();
 				$.ajax( {
 					url: verifyAjaxUrl,
@@ -815,7 +900,11 @@
 						}
 						window.location.reload();
 					} else {
-						showInlineFeedback( $verifyFeedback, ( res && res.data && res.data.message ) ? res.data.message : 'Verification failed.', 'error' );
+						var verr = ( res && res.data && res.data.message ) ? res.data.message : 'Verification failed.';
+						if ( maybeRetryVerifyOtpAfterStaleNonce( isNonceRetry, verr ) ) {
+							return;
+						}
+						showInlineFeedback( $verifyFeedback, verr, 'error' );
 					}
 				} )
 				.fail( function( xhr ) {
@@ -827,9 +916,15 @@
 							vmsg = xhr.responseJSON.data.message;
 						}
 					}
+					if ( maybeRetryVerifyOtpAfterStaleNonce( isNonceRetry, vmsg ) ) {
+						return;
+					}
 					showInlineFeedback( $verifyFeedback, vmsg, 'error' );
 				} )
 				.always( function() {
+					if ( otpVerifyRetryScheduled ) {
+						return;
+					}
 					$btn.prop( 'disabled', false ).text( 'Verify & continue' );
 				} );
 			}

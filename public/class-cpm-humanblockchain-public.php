@@ -512,6 +512,8 @@ class Cpm_Humanblockchain_Public {
 			'action'             => 'cpm_nwp_register_device',
 			'sendOtpAction'      => 'cpm_nwp_send_otp',
 			'verifyOtpAction'    => 'cpm_nwp_verify_otp',
+			'refreshOtpNoncesAction' => 'cpm_hb_refresh_otp_nonces',
+			'refreshOtpNoncesNonce'  => wp_create_nonce( 'cpm_hb_refresh_otp_nonces' ),
 			'lookupDeviceAction' => 'cpm_nwp_lookup_device_phone',
 			'lookupDeviceNonce'  => wp_create_nonce( 'cpm_nwp_lookup_device_phone' ),
 			'lookupMinNationalDigits' => (int) apply_filters( 'cpm_nwp_lookup_device_phone_min_national_digits', 7 ),

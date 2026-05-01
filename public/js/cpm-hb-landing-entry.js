@@ -339,33 +339,41 @@
 			H.landingRole = role;
 			window.cpmHbSkipPodOtpContext = false;
 
-			$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			clearNwpFeedback( $( '#cpm-nwp-verify-feedback' ) );
-			clearNwpFeedback( $( '#cpm-nwp-activate-feedback' ) );
-			var $txField = $( '#cpm-hb-pod-tx-field' );
-			if ( $txField.length ) {
-				if ( opts.buyerProofScan ) {
-					$txField.removeAttr( 'hidden' );
-				} else {
-					$txField.attr( 'hidden', 'hidden' );
-					$( '#cpm-hb-seller-tx-code-input' ).val( '' );
+			function finishShowPhoneOtpModal() {
+				$( '#cpm-nwp-verify-otp-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				$( '#cpm-nwp-discord-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+				clearNwpFeedback( $( '#cpm-nwp-verify-feedback' ) );
+				clearNwpFeedback( $( '#cpm-nwp-activate-feedback' ) );
+				var $txField = $( '#cpm-hb-pod-tx-field' );
+				if ( $txField.length ) {
+					if ( opts.buyerProofScan ) {
+						$txField.removeAttr( 'hidden' );
+					} else {
+						$txField.attr( 'hidden', 'hidden' );
+						$( '#cpm-hb-seller-tx-code-input' ).val( '' );
+					}
 				}
+				$( '#cpm-nwp-verify-seller-tx-code' ).val( '' );
+				$( '#cpm-hb-pod-geo-lat-verify, #cpm-hb-pod-geo-lng-verify, #cpm-hb-pod-geo-lat-activate, #cpm-hb-pod-geo-lng-activate' ).val( '' );
+				if ( typeof window.cpmNwpInitActivatePhoneFields === 'function' ) {
+					window.cpmNwpInitActivatePhoneFields();
+				} else {
+					$( '#cpm-nwp-activate-mobile-national' ).val( '' );
+					$( '#cpm-nwp-activate-mobile-e164' ).val( '' );
+				}
+				$activate.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+				$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+				setTimeout( function() {
+					$( '#cpm-nwp-activate-mobile-national' ).trigger( 'focus' );
+				}, 0 );
 			}
-			$( '#cpm-nwp-verify-seller-tx-code' ).val( '' );
-			$( '#cpm-hb-pod-geo-lat-verify, #cpm-hb-pod-geo-lng-verify, #cpm-hb-pod-geo-lat-activate, #cpm-hb-pod-geo-lng-activate' ).val( '' );
-			if ( typeof window.cpmNwpInitActivatePhoneFields === 'function' ) {
-				window.cpmNwpInitActivatePhoneFields();
+
+			if ( typeof window.cpmHbFetchFreshOtpNonces === 'function' ) {
+				window.cpmHbFetchFreshOtpNonces( finishShowPhoneOtpModal );
 			} else {
-				$( '#cpm-nwp-activate-mobile-national' ).val( '' );
-				$( '#cpm-nwp-activate-mobile-e164' ).val( '' );
+				finishShowPhoneOtpModal();
 			}
-			$activate.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
-			setTimeout( function() {
-				$( '#cpm-nwp-activate-mobile-national' ).trigger( 'focus' );
-			}, 0 );
 		}
 
 		$( '#cpm-hb-enter-website' ).on( 'click', function() {

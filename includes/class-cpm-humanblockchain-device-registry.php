@@ -323,6 +323,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		add_action( 'wp_ajax_nopriv_cpm_nwp_lookup_device_phone', array( __CLASS__, 'handle_lookup_device_phone' ) );
 		add_action( 'wp_ajax_cpm_hb_buyer_confirm_delivery', array( __CLASS__, 'handle_buyer_confirm_delivery' ) );
 		add_action( 'wp_ajax_cpm_hb_seller_pod_logged_in', array( __CLASS__, 'handle_seller_pod_logged_in' ) );
+		add_action( 'wp_ajax_cpm_hb_refresh_otp_nonces', array( __CLASS__, 'handle_refresh_otp_nonces' ) );
+		add_action( 'wp_ajax_nopriv_cpm_hb_refresh_otp_nonces', array( __CLASS__, 'handle_refresh_otp_nonces' ) );
 		// Remove NWP device rows when the WP user is removed (same user_id / email in wp_nwp_devices).
 		add_action( 'delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 3 );
 		add_action( 'wpmu_delete_user', array( __CLASS__, 'delete_devices_on_user_delete' ), 10, 1 );
@@ -664,6 +666,30 @@ class Cpm_Humanblockchain_Device_Registry {
 				'found'         => true,
 				'phone_e164'    => $phone_e164,
 				'phone_country' => $iso,
+			)
+		);
+	}
+
+	/**
+	 * Mint fresh Send OTP / Verify OTP field nonces (fixes stale cached HTML or expired nonce ticks).
+	 *
+	 * @since 1.0.0
+	 */
+	public static function handle_refresh_otp_nonces() {
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'cpm_hb_refresh_otp_nonces' ) ) {
+			wp_send_json_error(
+				array(
+					'message' => __( 'Could not refresh form tokens. Reload the page and try again.', 'cpm-humanblockchain' ),
+				),
+				403
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'send_otp_nonce'   => wp_create_nonce( 'cpm_nwp_send_otp' ),
+				'verify_otp_nonce' => wp_create_nonce( 'cpm_nwp_verify_otp' ),
 			)
 		);
 	}
