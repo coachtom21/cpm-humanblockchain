@@ -990,6 +990,13 @@ class Cpm_Humanblockchain_Device_Registry {
 		// Buyer + proof=scan after OTP: send user to backorders / PoD URL. Default verify response enables Discord, which the client handled before pendingOtpRedirect — buyers never reached backorders.
 		if ( $buyer_proof_scan && 'buyer' === $landing_role && self::request_has_proof_scan_intent() ) {
 			self::store_buyer_pod_session_transaction_code_from_post( $wp_uid );
+			if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
+				$raw_saved_tx = isset( $_POST['cpm_hb_seller_transaction_code'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_seller_transaction_code'] ) ) : '';
+				$saved_tx     = strtoupper( trim( preg_replace( '/\s+/', '', $raw_saved_tx ) ) );
+				if ( preg_match( '/^HB-[A-F0-9]{16}$/', $saved_tx ) ) {
+					Cpm_Humanblockchain_Two_Scan_Validator::remember_buyer_two_scan_passed_at_otp( $wp_uid, $saved_tx );
+				}
+			}
 			$pod_url = apply_filters( 'cpm_hb_proof_of_delivery_url', self::get_backorder_page_url() );
 			$pod_url = add_query_arg( 'proof', 'scan', $pod_url );
 
@@ -1148,6 +1155,16 @@ class Cpm_Humanblockchain_Device_Registry {
 			? array( 'lat' => (float) $b_lat, 'lng' => (float) $b_lng )
 			: null;
 
+		if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
+			$otp_covers = Cpm_Humanblockchain_Two_Scan_Validator::buyer_otp_two_scan_covers_confirm( $buyer_id, $code );
+			if ( ! $otp_covers ) {
+				$two_chk = Cpm_Humanblockchain_Two_Scan_Validator::validate_buyer_two_scan( $code, $b_lat, $b_lng, 'confirm' );
+				if ( is_wp_error( $two_chk ) ) {
+					wp_send_json_error( array( 'message' => $two_chk->get_error_message() ) );
+				}
+			}
+		}
+
 		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 			Cpm_Humanblockchain_Xp_Ledger::record_buyer_scan_after_confirm( $buyer_id, $seller_id, $code, $order_ids, $buyer_scan_loc );
 		}
@@ -1173,7 +1190,14 @@ class Cpm_Humanblockchain_Device_Registry {
 			)
 		);
 
-		$redirect = esc_url_raw( apply_filters( 'cpm_hb_buyer_confirm_redirect_url', home_url( '/' ) ) );
+		$default_redirect = home_url( '/' );
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$myaccount = wc_get_page_permalink( 'myaccount' );
+			if ( is_string( $myaccount ) && $myaccount !== '' ) {
+				$default_redirect = $myaccount;
+			}
+		}
+		$redirect = esc_url_raw( apply_filters( 'cpm_hb_buyer_confirm_redirect_url', $default_redirect ) );
 
 		self::clear_buyer_pod_session_transaction_code( $buyer_id );
 

@@ -111,12 +111,69 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 	}
 
 	/**
-	 * Validate buyer ?proof=scan handoff: time + distance vs seller anchor (posted transaction code + geo).
-	 * Called from verify-OTP handler before the SMS code is consumed so a failed check does not burn the OTP.
+	 * Transient: buyer already passed two-scan at OTP verify for this HB code (grace window for backorders confirm).
 	 *
+	 * @param int    $buyer_wp_user_id Buyer user ID.
+	 * @param string $transaction_code HB-… code.
+	 * @return string
+	 */
+	private static function buyer_otp_two_scan_ok_transient_key( $buyer_wp_user_id, $transaction_code ) {
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', (string) $transaction_code ) ) );
+
+		return 'cpm_hb_pod2_otp_' . md5( $code ) . '_' . (int) $buyer_wp_user_id;
+	}
+
+	/**
+	 * After buyer OTP + two-scan succeeds, allow confirm-delivery without re-checking seller-anchor elapsed time
+	 * (buyer may pick orders after the short two-scan window).
+	 *
+	 * @param int    $buyer_wp_user_id Buyer WordPress user ID.
+	 * @param string $transaction_code HB-… code used at OTP.
+	 */
+	public static function remember_buyer_two_scan_passed_at_otp( $buyer_wp_user_id, $transaction_code ) {
+		if ( ! apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) ) {
+			return;
+		}
+		$buyer_wp_user_id = (int) $buyer_wp_user_id;
+		$code             = strtoupper( trim( preg_replace( '/\s+/', '', (string) $transaction_code ) ) );
+		if ( $buyer_wp_user_id <= 0 || ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
+			return;
+		}
+		$ttl = (int) apply_filters( 'cpm_hb_buyer_otp_two_scan_confirm_grace_ttl', 24 * HOUR_IN_SECONDS );
+		$ttl = min( 7 * DAY_IN_SECONDS, max( 600, $ttl ) );
+		set_transient( self::buyer_otp_two_scan_ok_transient_key( $buyer_wp_user_id, $code ), time(), $ttl );
+	}
+
+	/**
+	 * Whether buyer already satisfied two-scan at OTP for this code within the grace TTL.
+	 *
+	 * @param int    $buyer_wp_user_id Buyer user ID.
+	 * @param string $transaction_code HB-… code.
+	 * @return bool
+	 */
+	public static function buyer_otp_two_scan_covers_confirm( $buyer_wp_user_id, $transaction_code ) {
+		$buyer_wp_user_id = (int) $buyer_wp_user_id;
+		$code             = strtoupper( trim( preg_replace( '/\s+/', '', (string) $transaction_code ) ) );
+		if ( $buyer_wp_user_id <= 0 || ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
+			return false;
+		}
+		$ts = get_transient( self::buyer_otp_two_scan_ok_transient_key( $buyer_wp_user_id, $code ) );
+
+		return is_numeric( $ts );
+	}
+
+	/**
+	 * Validate buyer scan-2 vs seller anchor: elapsed time + distance (and buyer geo when enabled).
+	 *
+	 * Used for OTP verify (guest/logged-out path) and for logged-in backorders confirm when OTP grace does not apply.
+	 *
+	 * @param string   $transaction_code Normalized or raw HB-… code.
+	 * @param float|null $buyer_lat       Buyer WGS84 latitude or null if missing.
+	 * @param float|null $buyer_lng       Buyer WGS84 longitude or null if missing.
+	 * @param string   $geo_error_context Optional: 'otp' | 'confirm' for message wording.
 	 * @return true|WP_Error
 	 */
-	public static function validate_buyer_after_otp() {
+	public static function validate_buyer_two_scan( $transaction_code, $buyer_lat, $buyer_lng, $geo_error_context = 'otp' ) {
 		if ( ! apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) ) {
 			return true;
 		}
@@ -128,8 +185,7 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 		$max_sec = Cpm_Humanblockchain_Nwp_Gateway_Config::get_two_scan_max_seconds();
 		$max_m   = Cpm_Humanblockchain_Nwp_Gateway_Config::get_two_scan_max_distance_m();
 
-		$raw = isset( $_POST['cpm_hb_seller_transaction_code'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_seller_transaction_code'] ) ) : '';
-		$code = strtoupper( trim( preg_replace( '/\s+/', '', $raw ) ) );
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', (string) $transaction_code ) ) );
 
 		if ( ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
 			return new WP_Error(
@@ -146,13 +202,12 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 			);
 		}
 
-		$buyer_lat = self::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lat' );
-		$buyer_lng = self::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lng' );
 		if ( null === $buyer_lat || null === $buyer_lng ) {
-			return new WP_Error(
-				'cpm_hb_pod_geo',
-				__( 'Location is required for delivery proof. Allow location access on this device, then verify again.', 'cpm-humanblockchain' )
-			);
+			$geo_msg = 'confirm' === $geo_error_context
+				? __( 'Location is required for delivery proof. Allow location access on this device, then confirm delivery again.', 'cpm-humanblockchain' )
+				: __( 'Location is required for delivery proof. Allow location access on this device, then verify again.', 'cpm-humanblockchain' );
+
+			return new WP_Error( 'cpm_hb_pod_geo', $geo_msg );
 		}
 
 		$elapsed = time() - (int) $anchor['ts'];
@@ -189,5 +244,21 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Validate buyer ?proof=scan handoff: time + distance vs seller anchor (posted transaction code + geo).
+	 * Called from verify-OTP handler before the SMS code is consumed so a failed check does not burn the OTP.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function validate_buyer_after_otp() {
+		$raw = isset( $_POST['cpm_hb_seller_transaction_code'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_seller_transaction_code'] ) ) : '';
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', $raw ) ) );
+
+		$buyer_lat = self::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lat' );
+		$buyer_lng = self::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lng' );
+
+		return self::validate_buyer_two_scan( $code, $buyer_lat, $buyer_lng, 'otp' );
 	}
 }
