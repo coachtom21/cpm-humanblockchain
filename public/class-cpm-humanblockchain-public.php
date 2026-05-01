@@ -622,6 +622,16 @@ class Cpm_Humanblockchain_Public {
 				if ( empty( $merged_rows ) && $api_ok && ( ! is_string( $phone ) || $phone === '' ) && empty( $woo_rows ) ) {
 					$backorders_localize['showNoPhone'] = true;
 				}
+
+				if ( class_exists( 'Cpm_Humanblockchain_Device_Registry' ) ) {
+					$session_tx = Cpm_Humanblockchain_Device_Registry::get_backorders_prefill_pod_transaction_code( $uid );
+					if ( is_string( $session_tx ) && $session_tx !== '' ) {
+						$backorders_localize['verifiedPodTransactionCode'] = $session_tx;
+						if ( isset( $backorders_localize['strings'] ) && is_array( $backorders_localize['strings'] ) ) {
+							$backorders_localize['strings']['continueDeliveryHint'] = __( 'Select one or more orders to confirm delivery. Your seller transaction code was already verified at sign-in.', 'cpm-humanblockchain' );
+						}
+					}
+				}
 			}
 			wp_localize_script(
 				$this->plugin_name . '-backorders-display',

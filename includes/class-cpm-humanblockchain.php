@@ -157,6 +157,7 @@ class Cpm_Humanblockchain {
 
 		Cpm_Humanblockchain_Device_Registry::init();
 		Cpm_Humanblockchain_Membership::init();
+		Cpm_Humanblockchain_Woo_Backorders::init();
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_nwp_devices', 5 );
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_xp_ledger', 5 );
 

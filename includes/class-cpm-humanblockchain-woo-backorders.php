@@ -15,6 +15,126 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Cpm_Humanblockchain_Woo_Backorders {
 
 	/**
+	 * Register PoD / backorders integration hooks.
+	 *
+	 * @since 1.0.0
+	 */
+	public static function init() {
+		add_action( 'cpm_hb_buyer_confirmed_delivery', array( __CLASS__, 'maybe_mark_woo_orders_after_pod_confirm' ), 10, 4 );
+	}
+
+	/**
+	 * After buyer PoD confirm (transaction code + selected rows), set matching WooCommerce orders to the target status.
+	 *
+	 * Default status is `completed` (WooCommerce’s fulfilled state). Use filter `cpm_hb_pod_confirm_woo_order_status`
+	 * to use a custom status such as `delivered` when it is registered for WooCommerce.
+	 *
+	 * @param int    $buyer_id   Buyer WP user ID.
+	 * @param int    $seller_id  Seller WP user ID (from HB code lookup).
+	 * @param int[]  $order_ids  Order IDs from the backorders table (Woo + hub merged; only WC orders are updated).
+	 * @param string $code       HB transaction code.
+	 */
+	public static function maybe_mark_woo_orders_after_pod_confirm( $buyer_id, $seller_id, $order_ids, $code ) {
+		$buyer_id  = (int) $buyer_id;
+		$seller_id = (int) $seller_id;
+		$code      = is_string( $code ) ? $code : '';
+
+		if ( ! function_exists( 'wc_get_order' ) || $buyer_id <= 0 || ! is_array( $order_ids ) || empty( $order_ids ) ) {
+			return;
+		}
+
+		if ( ! (bool) apply_filters( 'cpm_hb_pod_confirm_update_woo_order_status', true, $buyer_id, $seller_id, $order_ids, $code ) ) {
+			return;
+		}
+
+		$allowed_from = apply_filters(
+			'cpm_hb_pod_confirm_woo_allowed_from_statuses',
+			self::get_order_statuses(),
+			$buyer_id,
+			$seller_id,
+			$order_ids,
+			$code
+		);
+		if ( ! is_array( $allowed_from ) ) {
+			$allowed_from = self::get_order_statuses();
+		}
+
+		foreach ( $order_ids as $oid ) {
+			$oid = (int) $oid;
+			if ( $oid <= 0 ) {
+				continue;
+			}
+			$order = wc_get_order( $oid );
+			if ( ! $order instanceof WC_Order ) {
+				continue;
+			}
+			if ( ! self::buyer_owns_wc_order( $order, $buyer_id ) ) {
+				continue;
+			}
+			$current = $order->get_status();
+			if ( ! in_array( $current, $allowed_from, true ) ) {
+				continue;
+			}
+
+			$new_status = apply_filters( 'cpm_hb_pod_confirm_woo_order_status', 'completed', $order, $buyer_id, $seller_id, $code );
+			$new_status = is_string( $new_status ) ? sanitize_key( $new_status ) : 'completed';
+			if ( $new_status === '' ) {
+				$new_status = 'completed';
+			}
+			$status_check = ( 0 === strpos( $new_status, 'wc-' ) ) ? $new_status : 'wc-' . $new_status;
+			if ( function_exists( 'wc_is_order_status' ) && ! wc_is_order_status( $status_check ) ) {
+				$new_status = 'completed';
+			}
+			if ( $current === $new_status ) {
+				continue;
+			}
+
+			$note = (string) apply_filters(
+				'cpm_hb_pod_confirm_woo_order_note',
+				__( 'Order marked after buyer proof-of-delivery confirmation (Human Blockchain).', 'cpm-humanblockchain' ),
+				$order,
+				$buyer_id,
+				$seller_id,
+				$code
+			);
+
+			if ( $note !== '' ) {
+				$order->update_status( $new_status, $note );
+			} else {
+				$order->update_status( $new_status );
+			}
+		}
+	}
+
+	/**
+	 * Whether the given user is allowed to complete this order via PoD (customer ID or billing email match).
+	 *
+	 * @param WC_Order $order    Order.
+	 * @param int      $buyer_id WP user ID.
+	 * @return bool
+	 */
+	private static function buyer_owns_wc_order( $order, $buyer_id ) {
+		if ( ! $order instanceof WC_Order ) {
+			return false;
+		}
+		$buyer_id = (int) $buyer_id;
+		if ( $buyer_id <= 0 ) {
+			return false;
+		}
+		if ( (int) $order->get_customer_id() === $buyer_id ) {
+			return true;
+		}
+		$user = get_userdata( $buyer_id );
+		if ( $user && is_email( $user->user_email ) ) {
+			$bill = $order->get_billing_email();
+			if ( is_string( $bill ) && $bill !== '' && strtolower( $bill ) === strtolower( $user->user_email ) ) {
+				return true;
+			}
+		}
+		return (bool) apply_filters( 'cpm_hb_pod_confirm_buyer_owns_order', false, $order, $buyer_id );
+	}
+
+	/**
 	 * Order statuses to include (open / fulfillment queue).
 	 *
 	 * @return string[]

@@ -123,6 +123,68 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * After buyer OTP + PoD validates the HB code, stash it so backorders confirm can skip asking again.
+	 *
+	 * @param int $wp_user_id Logged-in buyer user ID.
+	 */
+	public static function store_buyer_pod_session_transaction_code_from_post( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+		if ( $wp_user_id <= 0 ) {
+			return;
+		}
+		$raw  = isset( $_POST['cpm_hb_seller_transaction_code'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_seller_transaction_code'] ) ) : '';
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', $raw ) ) );
+		if ( ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
+			return;
+		}
+		update_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_code', $code );
+		update_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_at', time() );
+	}
+
+	/**
+	 * HB code captured at buyer OTP verify — used to prefill/skip modal on backorders.
+	 *
+	 * @param int $wp_user_id Buyer user ID.
+	 * @return string Normalized HB-… or '' if none / expired.
+	 */
+	public static function get_backorders_prefill_pod_transaction_code( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+		if ( $wp_user_id <= 0 ) {
+			return '';
+		}
+		$code = get_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_code', true );
+		if ( ! is_string( $code ) || '' === $code ) {
+			return '';
+		}
+		$code = strtoupper( trim( preg_replace( '/\s+/', '', $code ) ) );
+		if ( ! preg_match( '/^HB-[A-F0-9]{16}$/', $code ) ) {
+			self::clear_buyer_pod_session_transaction_code( $wp_user_id );
+			return '';
+		}
+		$at = (int) get_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_at', true );
+		$ttl = (int) apply_filters( 'cpm_hb_seller_pod_transaction_code_ttl', 7 * DAY_IN_SECONDS );
+		if ( $at > 0 && $ttl > 0 && ( time() - $at ) > $ttl ) {
+			self::clear_buyer_pod_session_transaction_code( $wp_user_id );
+			return '';
+		}
+		return $code;
+	}
+
+	/**
+	 * Clear session HB code after backorders confirm succeeds (or to reset bad state).
+	 *
+	 * @param int $wp_user_id Buyer user ID.
+	 */
+	public static function clear_buyer_pod_session_transaction_code( $wp_user_id ) {
+		$wp_user_id = (int) $wp_user_id;
+		if ( $wp_user_id <= 0 ) {
+			return;
+		}
+		delete_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_code' );
+		delete_user_meta( $wp_user_id, 'cpm_hb_buyer_pod_session_tx_at' );
+	}
+
+	/**
 	 * Whether a WordPress user has at least one NWP device with status "activated".
 	 *
 	 * @param int $user_id WordPress user ID.
@@ -927,6 +989,7 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		// Buyer + proof=scan after OTP: send user to backorders / PoD URL. Default verify response enables Discord, which the client handled before pendingOtpRedirect — buyers never reached backorders.
 		if ( $buyer_proof_scan && 'buyer' === $landing_role && self::request_has_proof_scan_intent() ) {
+			self::store_buyer_pod_session_transaction_code_from_post( $wp_uid );
 			$pod_url = apply_filters( 'cpm_hb_proof_of_delivery_url', self::get_backorder_page_url() );
 			$pod_url = add_query_arg( 'proof', 'scan', $pod_url );
 
@@ -1111,6 +1174,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		);
 
 		$redirect = esc_url_raw( apply_filters( 'cpm_hb_buyer_confirm_redirect_url', home_url( '/' ) ) );
+
+		self::clear_buyer_pod_session_transaction_code( $buyer_id );
 
 		wp_send_json_success(
 			array(

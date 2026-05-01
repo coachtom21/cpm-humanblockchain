@@ -114,6 +114,13 @@
 		return $box;
 	}
 
+	function normalizedVerifiedPodCode( H ) {
+		var raw = H && typeof H.verifiedPodTransactionCode === 'string'
+			? H.verifiedPodTransactionCode.trim().replace( /\s+/g, '' ).toUpperCase()
+			: '';
+		return /^HB-[A-F0-9]{16}$/.test( raw ) ? raw : '';
+	}
+
 	function attachBuyerDeliveryFlow( $panel ) {
 		var H = window.cpmHbBackorders;
 		var S = ( H && H.strings ) ? H.strings : {};
@@ -121,10 +128,14 @@
 			return;
 		}
 
+		var continueMainLabel = S.continueDelivery || 'Confirm delivery';
+		var sessionTxOk = normalizedVerifiedPodCode( H );
+
 		var $actions = $( '<div class="cpm-hb-backorders-actions" />' );
 		var $hint = $( '<p class="cpm-hb-backorders-actions-hint" />' ).text( S.continueDeliveryHint || '' );
-		var $btn = $( '<button type="button" class="cpm-hb-backorders-continue" disabled />' ).text( S.continueDelivery || 'Confirm delivery' );
-		$actions.append( $hint ).append( $btn );
+		var $inlineFeedback = $( '<p class="cpm-hb-backorders-inline-feedback cpm-hb-backorders-modal-feedback" role="alert" aria-live="polite" />' );
+		var $btn = $( '<button type="button" class="cpm-hb-backorders-continue" disabled />' ).text( continueMainLabel );
+		$actions.append( $hint ).append( $inlineFeedback ).append( $btn );
 		$panel.append( $actions );
 
 		var $modal = $( '<div class="cpm-hb-backorders-modal cpm-hb-backorders-modal--hidden" role="dialog" aria-modal="true" aria-hidden="true" />' );
@@ -152,7 +163,83 @@
 		$panel.on( 'cpmHbBackordersSelectionChange', syncContinueButton );
 		syncContinueButton();
 
-		function openModal() {
+		function collectCheckedOrderIds() {
+			var orderIds = [];
+			$panel.find( '.cpm-hb-backorders-row-select:checked' ).closest( 'tr' ).each( function() {
+				var row = $( this ).data( 'cpmHbRow' );
+				var oid = getOrderIdFromRow( row );
+				if ( oid > 0 ) {
+					orderIds.push( oid );
+				}
+			} );
+			return orderIds;
+		}
+
+		function runBuyerConfirmAjax( orderIds, code, $fb, ui ) {
+			var payload = {
+				action: H.confirmAction,
+				nonce: H.confirmNonce,
+				transaction_code: code,
+				order_ids: JSON.stringify( orderIds )
+			};
+
+			function postBuyerConfirm( lat, lng ) {
+				if ( typeof lat === 'number' && typeof lng === 'number' && ! isNaN( lat ) && ! isNaN( lng ) ) {
+					payload.cpm_hb_pod_geo_lat = String( lat );
+					payload.cpm_hb_pod_geo_lng = String( lng );
+				}
+				$.ajax( {
+					url: H.ajaxUrl,
+					type: 'POST',
+					dataType: 'json',
+					data: payload
+				} )
+					.done( function( res ) {
+						if ( res && res.success && res.data && res.data.message ) {
+							$fb.text( res.data.message ).removeClass( 'cpm-hb-backorders-modal-feedback--error' ).addClass( 'cpm-hb-backorders-modal-feedback--ok' );
+							var dest = ( res.data.redirect_url && typeof res.data.redirect_url === 'string' )
+								? res.data.redirect_url
+								: ( H && H.homeUrl ? H.homeUrl : '/' );
+							setTimeout( function() {
+								window.location.href = dest;
+							}, 900 );
+						} else {
+							var errDone = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+							$fb.text( errDone ).removeClass( 'cpm-hb-backorders-modal-feedback--ok' ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
+						}
+					} )
+					.fail( function( xhr ) {
+						var msg = 'Request failed.';
+						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+							msg = xhr.responseJSON.data.message;
+						}
+						$fb.text( msg ).removeClass( 'cpm-hb-backorders-modal-feedback--ok' ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
+					} )
+					.always( function() {
+						if ( ui.modalSubmitBtn && ui.modalSubmitBtn.length ) {
+							ui.modalSubmitBtn.prop( 'disabled', false ).text( ui.modalSubmitOriginal || ( S.submitConfirm || 'Submit' ) );
+						}
+						if ( ui.mainContinueBtn && ui.mainContinueBtn.length ) {
+							ui.mainContinueBtn.prop( 'disabled', false ).text( ui.mainContinueOriginal || continueMainLabel );
+						}
+					} );
+			}
+
+			if ( typeof window.cpmHbRequestGeolocationForPod === 'function' ) {
+				window.cpmHbRequestGeolocationForPod(
+					function( lat, lng ) {
+						postBuyerConfirm( lat, lng );
+					},
+					function() {
+						postBuyerConfirm();
+					}
+				);
+			} else {
+				postBuyerConfirm();
+			}
+		}
+
+		function openModalForCodeEntry() {
 			if ( $btn.prop( 'disabled' ) ) {
 				return;
 			}
@@ -170,82 +257,44 @@
 			$( 'body' ).removeClass( 'cpm-hb-backorders-modal-open' );
 		}
 
-		$btn.on( 'click', openModal );
+		$btn.on( 'click', function() {
+			if ( $btn.prop( 'disabled' ) ) {
+				return;
+			}
+			var orderIds = collectCheckedOrderIds();
+			if ( orderIds.length === 0 ) {
+				return;
+			}
+			if ( sessionTxOk !== '' ) {
+				$inlineFeedback.text( '' ).removeClass( 'cpm-hb-backorders-modal-feedback--error cpm-hb-backorders-modal-feedback--ok' );
+				$btn.prop( 'disabled', true ).text( S.submitting || '…' );
+				runBuyerConfirmAjax( orderIds, sessionTxOk, $inlineFeedback, {
+					mainContinueBtn: $btn,
+					mainContinueOriginal: continueMainLabel,
+					modalSubmitBtn: null
+				} );
+				return;
+			}
+			openModalForCodeEntry();
+		} );
+
 		$close.on( 'click', closeModal );
 		$btnCancel.on( 'click', closeModal );
 		$backdrop.on( 'click', closeModal );
 
 		$btnSubmit.on( 'click', function() {
-			var orderIds = [];
-			$panel.find( '.cpm-hb-backorders-row-select:checked' ).closest( 'tr' ).each( function() {
-				var row = $( this ).data( 'cpmHbRow' );
-				var oid = getOrderIdFromRow( row );
-				if ( oid > 0 ) {
-					orderIds.push( oid );
-				}
-			} );
+			var orderIds = collectCheckedOrderIds();
 			var code = ( $input.val() || '' ).trim();
 			if ( orderIds.length === 0 || ! code ) {
 				$feedback.text( S.enterCodeAndOrders || '' ).removeClass( 'cpm-hb-backorders-modal-feedback--ok' ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
 				return;
 			}
 			$btnSubmit.prop( 'disabled', true ).text( S.submitting || '…' );
-
-			function postBuyerConfirm( lat, lng ) {
-				var payload = {
-					action: H.confirmAction,
-					nonce: H.confirmNonce,
-					transaction_code: code,
-					order_ids: JSON.stringify( orderIds )
-				};
-				if ( typeof lat === 'number' && typeof lng === 'number' && ! isNaN( lat ) && ! isNaN( lng ) ) {
-					payload.cpm_hb_pod_geo_lat = String( lat );
-					payload.cpm_hb_pod_geo_lng = String( lng );
-				}
-				$.ajax( {
-					url: H.ajaxUrl,
-					type: 'POST',
-					dataType: 'json',
-					data: payload
-				} )
-					.done( function( res ) {
-						if ( res && res.success && res.data && res.data.message ) {
-							$feedback.text( res.data.message ).removeClass( 'cpm-hb-backorders-modal-feedback--error' ).addClass( 'cpm-hb-backorders-modal-feedback--ok' );
-							var dest = ( res.data.redirect_url && typeof res.data.redirect_url === 'string' )
-								? res.data.redirect_url
-								: ( H && H.homeUrl ? H.homeUrl : '/' );
-							setTimeout( function() {
-								window.location.href = dest;
-							}, 900 );
-						} else {
-							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
-							$feedback.text( err ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
-						}
-					} )
-					.fail( function( xhr ) {
-						var msg = 'Request failed.';
-						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
-							msg = xhr.responseJSON.data.message;
-						}
-						$feedback.text( msg ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
-					} )
-					.always( function() {
-						$btnSubmit.prop( 'disabled', false ).text( S.submitConfirm || 'Submit' );
-					} );
-			}
-
-			if ( typeof window.cpmHbRequestGeolocationForPod === 'function' ) {
-				window.cpmHbRequestGeolocationForPod(
-					function( lat, lng ) {
-						postBuyerConfirm( lat, lng );
-					},
-					function() {
-						postBuyerConfirm();
-					}
-				);
-			} else {
-				postBuyerConfirm();
-			}
+			runBuyerConfirmAjax( orderIds, code, $feedback, {
+				mainContinueBtn: null,
+				modalSubmitBtn: $btnSubmit,
+				modalSubmitOriginal: S.submitConfirm || 'Submit'
+			} );
 		} );
 	}
 
