@@ -190,41 +190,62 @@
 				return;
 			}
 			$btnSubmit.prop( 'disabled', true ).text( S.submitting || '…' );
-			$.ajax( {
-				url: H.ajaxUrl,
-				type: 'POST',
-				dataType: 'json',
-				data: {
+
+			function postBuyerConfirm( lat, lng ) {
+				var payload = {
 					action: H.confirmAction,
 					nonce: H.confirmNonce,
 					transaction_code: code,
 					order_ids: JSON.stringify( orderIds )
+				};
+				if ( typeof lat === 'number' && typeof lng === 'number' && ! isNaN( lat ) && ! isNaN( lng ) ) {
+					payload.cpm_hb_pod_geo_lat = String( lat );
+					payload.cpm_hb_pod_geo_lng = String( lng );
 				}
-			} )
-				.done( function( res ) {
-					if ( res && res.success && res.data && res.data.message ) {
-						$feedback.text( res.data.message ).removeClass( 'cpm-hb-backorders-modal-feedback--error' ).addClass( 'cpm-hb-backorders-modal-feedback--ok' );
-						var dest = ( res.data.redirect_url && typeof res.data.redirect_url === 'string' )
-							? res.data.redirect_url
-							: ( H && H.homeUrl ? H.homeUrl : '/' );
-						setTimeout( function() {
-							window.location.href = dest;
-						}, 900 );
-					} else {
-						var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
-						$feedback.text( err ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
-					}
+				$.ajax( {
+					url: H.ajaxUrl,
+					type: 'POST',
+					dataType: 'json',
+					data: payload
 				} )
-				.fail( function( xhr ) {
-					var msg = 'Request failed.';
-					if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
-						msg = xhr.responseJSON.data.message;
+					.done( function( res ) {
+						if ( res && res.success && res.data && res.data.message ) {
+							$feedback.text( res.data.message ).removeClass( 'cpm-hb-backorders-modal-feedback--error' ).addClass( 'cpm-hb-backorders-modal-feedback--ok' );
+							var dest = ( res.data.redirect_url && typeof res.data.redirect_url === 'string' )
+								? res.data.redirect_url
+								: ( H && H.homeUrl ? H.homeUrl : '/' );
+							setTimeout( function() {
+								window.location.href = dest;
+							}, 900 );
+						} else {
+							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+							$feedback.text( err ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
+						}
+					} )
+					.fail( function( xhr ) {
+						var msg = 'Request failed.';
+						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+							msg = xhr.responseJSON.data.message;
+						}
+						$feedback.text( msg ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
+					} )
+					.always( function() {
+						$btnSubmit.prop( 'disabled', false ).text( S.submitConfirm || 'Submit' );
+					} );
+			}
+
+			if ( typeof window.cpmHbRequestGeolocationForPod === 'function' ) {
+				window.cpmHbRequestGeolocationForPod(
+					function( lat, lng ) {
+						postBuyerConfirm( lat, lng );
+					},
+					function() {
+						postBuyerConfirm();
 					}
-					$feedback.text( msg ).addClass( 'cpm-hb-backorders-modal-feedback--error' );
-				} )
-				.always( function() {
-					$btnSubmit.prop( 'disabled', false ).text( S.submitConfirm || 'Submit' );
-				} );
+				);
+			} else {
+				postBuyerConfirm();
+			}
 		} );
 	}
 

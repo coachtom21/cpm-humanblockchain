@@ -88,18 +88,20 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 	 * @param float|null  $lat               WGS84 latitude.
 	 * @param float|null  $lng               WGS84 longitude.
 	 */
-	public static function record_seller_scan_anchor( $seller_wp_user_id, $transaction_code, $lat, $lng ) {
+	public static function record_seller_scan_anchor( $seller_wp_user_id, $transaction_code, $lat, $lng, $anchor_unix_ts = null ) {
 		$seller_wp_user_id = (int) $seller_wp_user_id;
 		$transaction_code  = strtoupper( trim( preg_replace( '/\s+/', '', (string) $transaction_code ) ) );
 		if ( $seller_wp_user_id <= 0 || ! preg_match( '/^HB-[A-F0-9]{16}$/', $transaction_code ) ) {
 			return;
 		}
 
+		$ts = null !== $anchor_unix_ts ? (int) $anchor_unix_ts : time();
+
 		$data = array(
 			'seller_id' => $seller_wp_user_id,
 			'lat'       => null !== $lat ? (float) $lat : null,
 			'lng'       => null !== $lng ? (float) $lng : null,
-			'ts'        => time(),
+			'ts'        => $ts,
 		);
 
 		$ttl = (int) apply_filters( 'cpm_hb_pod_scan1_transient_ttl', 7 * DAY_IN_SECONDS );

@@ -389,6 +389,27 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Preserve PoD keys from an existing entry_json string when rebuilding ledger JSON (e.g. seller completed PATCH).
+	 *
+	 * @param array<string,mixed> $entry_data             New entry payload.
+	 * @param string              $previous_entry_json    Raw entry_json from DB.
+	 * @return array<string,mixed>
+	 */
+	private static function merge_pod_scan_fields_from_previous_entry( array $entry_data, $previous_entry_json ) {
+		$prev = json_decode( (string) $previous_entry_json, true );
+		if ( ! is_array( $prev ) ) {
+			return $entry_data;
+		}
+		foreach ( array( 'scan_location', 'scan_time' ) as $k ) {
+			if ( ! isset( $entry_data[ $k ] ) && isset( $prev[ $k ] ) ) {
+				$entry_data[ $k ] = $prev[ $k ];
+			}
+		}
+
+		return $entry_data;
+	}
+
+	/**
 	 * Default MySQL datetime for PATCH `date` (site timezone).
 	 *
 	 * @param int|null $wp_user_id Context user.
@@ -578,6 +599,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		if ( $buyer_id > 0 ) {
 			$seller_entry_data['buyer_wp_user_id'] = $buyer_id;
 		}
+		$seller_entry_data = self::merge_pod_scan_fields_from_previous_entry( $seller_entry_data, isset( $seller_row->entry_json ) ? (string) $seller_row->entry_json : '' );
 		$seller_entry_json = wp_json_encode( $seller_entry_data );
 
 		/**
@@ -676,8 +698,9 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 * @param int    $seller_id Seller WP user id.
 	 * @param string $transaction_code HB-… code.
 	 * @param int[]  $order_ids Woo / Smallstreet order ids.
+	 * @param array<string,mixed>|null $buyer_scan_location Optional `lat`/`lng` from client (stored in entry_json as scan_location + scan_time).
 	 */
-	public static function record_buyer_scan_after_confirm( $buyer_id, $seller_id, $transaction_code, array $order_ids ) {
+	public static function record_buyer_scan_after_confirm( $buyer_id, $seller_id, $transaction_code, array $order_ids, $buyer_scan_location = null ) {
 		$buyer_id = (int) $buyer_id;
 		$seller_id = (int) $seller_id;
 		$transaction_code = trim( (string) $transaction_code );
@@ -688,11 +711,24 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		$scan_type = 'buyer_scan';
 		$xp_units  = self::resolve_xp_units_string( $scan_type, $buyer_id, $transaction_code );
 
+		$buyer_scan_ts = time();
+
 		$entry = array(
 			'transaction_id' => $transaction_code,
 			'xp_units'       => $xp_units,
 			'scan_status'    => 'completed',
+			'scan_time'      => $buyer_scan_ts,
 		);
+
+		if ( is_array( $buyer_scan_location )
+			&& isset( $buyer_scan_location['lat'], $buyer_scan_location['lng'] )
+			&& is_numeric( $buyer_scan_location['lat'] )
+			&& is_numeric( $buyer_scan_location['lng'] ) ) {
+			$entry['scan_location'] = array(
+				'lat' => round( (float) $buyer_scan_location['lat'], 7 ),
+				'lng' => round( (float) $buyer_scan_location['lng'], 7 ),
+			);
+		}
 
 		$order_ids_clean = array_values( array_filter( array_map( 'intval', $order_ids ) ) );
 		$primary_order_id = 0;
@@ -883,10 +919,12 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	 *
 	 * @param int    $wp_user_id        WordPress user ID.
 	 * @param string $transaction_code  HB-… code shown in the modal.
-	 * @param bool   $sync_remote       When false, only insert into wp_xp_ledger (no outbound hub HTTP).
+	 * @param bool                     $sync_remote       When false, only insert into wp_xp_ledger (no outbound hub HTTP).
+	 * @param array<string,float>|null $pod_scan_location Optional `lat`/`lng` for PoD (stored in entry_json as scan_location + scan_time).
+	 * @param int|null                 $pod_scan_time     Unix timestamp for PoD anchor (defaults to now).
 	 * @return array<string,mixed> Outcome (remote, summary, http_code, body, json, success) for logging or hooks; not sent to the browser.
 	 */
-	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code, $sync_remote = true ) {
+	public static function record_seller_scan_after_verification( $wp_user_id, $transaction_code, $sync_remote = true, $pod_scan_location = null, $pod_scan_time = null ) {
 		$wp_user_id       = (int) $wp_user_id;
 		$transaction_code = trim( (string) $transaction_code );
 		if ( $wp_user_id <= 0 || $transaction_code === '' ) {
@@ -903,11 +941,24 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		$scan_type = 'seller_scan';
 		$xp_units  = self::resolve_xp_units_string( $scan_type, $wp_user_id, $transaction_code );
 
+		$pod_ts = null !== $pod_scan_time ? (int) $pod_scan_time : time();
+
 		$entry = array(
 			'transaction_id' => $transaction_code,
 			'xp_units'       => $xp_units,
 			'scan_status'    => 'pending',
+			'scan_time'      => $pod_ts,
 		);
+
+		if ( is_array( $pod_scan_location )
+			&& isset( $pod_scan_location['lat'], $pod_scan_location['lng'] )
+			&& is_numeric( $pod_scan_location['lat'] )
+			&& is_numeric( $pod_scan_location['lng'] ) ) {
+			$entry['scan_location'] = array(
+				'lat' => round( (float) $pod_scan_location['lat'], 7 ),
+				'lng' => round( (float) $pod_scan_location['lng'], 7 ),
+			);
+		}
 
 		$ledger_date = self::default_ledger_patch_date_mysql( $wp_user_id, $entry, null );
 		$entry_store = array_merge( $entry, array( 'date' => $ledger_date ) );

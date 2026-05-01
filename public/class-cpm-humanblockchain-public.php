@@ -537,7 +537,7 @@ class Cpm_Humanblockchain_Public {
 			wp_enqueue_script(
 				$this->plugin_name . '-backorders-display',
 				plugin_dir_url( __FILE__ ) . 'js/cpm-hb-backorders-display.js',
-				array( 'jquery' ),
+				array( 'jquery', $this->plugin_name ),
 				$this->version,
 				true
 			);
