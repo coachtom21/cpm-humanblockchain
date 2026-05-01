@@ -604,20 +604,6 @@
 				}
 			}
 			$btn.prop( 'disabled', true ).text( 'Sending...' );
-			var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
-			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				formData += '&cpm_hb_buyer_proof_scan=1';
-			}
-			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
-				formData += '&cpm_hb_proof_scan=1';
-				var psn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
-				if ( psn ) {
-					formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( psn );
-				}
-			}
-			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
-				formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
-			}
 			var ajaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl )
 				? window.cpmNwp.ajaxUrl
 				: ( typeof window.ajaxurl === 'string' && window.ajaxurl ? window.ajaxurl : '' );
@@ -626,37 +612,81 @@
 				$btn.prop( 'disabled', false ).text( 'Send OTP' );
 				return false;
 			}
-			$.ajax( {
-				url: ajaxUrl,
-				type: 'POST',
-				data: formData,
-				dataType: 'json'
-			} )
-				.done( function( res ) {
-					if ( res && res.success && res.data && res.data.message ) {
-						$( '#cpm-nwp-verify-mobile' ).val( mobile );
-						$( '#cpm-nwp-verify-phone-country' ).val( $( '#cpm-nwp-activate-phone-country' ).val() || '' );
-						$( '#cpm-nwp-verify-otp-input' ).val( '' );
-						$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-						clearInlineFeedback( $activateFeedback );
-						$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-						showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
-						$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
-					} else {
-						var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
-						showInlineFeedback( $activateFeedback, err, 'error' );
+
+			function runSendOtpAjax() {
+				var formData = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.sendOtpAction ? window.cpmNwp.sendOtpAction : 'cpm_nwp_send_otp' );
+				if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
+					formData += '&cpm_hb_buyer_proof_scan=1';
+				}
+				if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
+					formData += '&cpm_hb_proof_scan=1';
+					var psn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
+					if ( psn ) {
+						formData += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( psn );
 					}
+				}
+				if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
+					formData += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
+				}
+				$.ajax( {
+					url: ajaxUrl,
+					type: 'POST',
+					data: formData,
+					dataType: 'json'
 				} )
-				.fail( function( xhr ) {
-					var msg = 'Request failed. Please check your connection and try again.';
-					if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
-						msg = xhr.responseJSON.data.message;
+					.done( function( res ) {
+						if ( res && res.success && res.data && res.data.message ) {
+							$( '#cpm-nwp-verify-mobile' ).val( mobile );
+							$( '#cpm-nwp-verify-phone-country' ).val( $( '#cpm-nwp-activate-phone-country' ).val() || '' );
+							$( '#cpm-nwp-verify-otp-input' ).val( '' );
+							$( '#cpm-nwp-verify-seller-tx-code' ).val( $( '#cpm-hb-seller-tx-code-input' ).val() || '' );
+							$( '#cpm-hb-pod-geo-lat-verify' ).val( $( '#cpm-hb-pod-geo-lat-activate' ).val() || '' );
+							$( '#cpm-hb-pod-geo-lng-verify' ).val( $( '#cpm-hb-pod-geo-lng-activate' ).val() || '' );
+							$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+							clearInlineFeedback( $activateFeedback );
+							$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+							showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
+							$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
+						} else {
+							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+							showInlineFeedback( $activateFeedback, err, 'error' );
+						}
+					} )
+					.fail( function( xhr ) {
+						var msg = 'Request failed. Please check your connection and try again.';
+						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+							msg = xhr.responseJSON.data.message;
+						}
+						showInlineFeedback( $activateFeedback, msg, 'error' );
+					} )
+					.always( function() {
+						$btn.prop( 'disabled', false ).text( 'Send OTP' );
+					} );
+			}
+
+			if ( cpmHbPodOtpNeedsGeo() ) {
+				if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
+					var txPre = String( $( '#cpm-hb-seller-tx-code-input' ).val() || '' ).replace( /\s+/g, '' ).trim();
+					if ( ! /^HB-[A-Fa-f0-9]{16}$/.test( txPre ) ) {
+						showInlineFeedback( $activateFeedback, 'Enter the seller delivery code (HB- followed by 16 characters).', 'error' );
+						$btn.prop( 'disabled', false ).text( 'Send OTP' );
+						return false;
 					}
-					showInlineFeedback( $activateFeedback, msg, 'error' );
-				} )
-				.always( function() {
-					$btn.prop( 'disabled', false ).text( 'Send OTP' );
-				} );
+				}
+				cpmHbRequestGeolocationForPod(
+					function( lat, lng ) {
+						$( '#cpm-hb-pod-geo-lat-activate' ).val( String( lat ) );
+						$( '#cpm-hb-pod-geo-lng-activate' ).val( String( lng ) );
+						runSendOtpAjax();
+					},
+					function( reason ) {
+						showInlineFeedback( $activateFeedback, cpmHbPodGeolocationUserMessage( reason ), 'error' );
+						$btn.prop( 'disabled', false ).text( 'Send OTP' );
+					}
+				);
+			} else {
+				runSendOtpAjax();
+			}
 			return false;
 		} );
 
@@ -687,23 +717,6 @@
 				}
 			}
 			$btn.prop( 'disabled', true ).text( 'Verifying...' );
-			var payload = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.verifyOtpAction ? window.cpmNwp.verifyOtpAction : 'cpm_nwp_verify_otp' );
-			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
-				payload += '&cpm_hb_verify_redirect=1';
-			}
-			if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
-				payload += '&cpm_hb_buyer_proof_scan=1';
-			}
-			if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
-				payload += '&cpm_hb_proof_scan=1';
-				var pvn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
-				if ( pvn ) {
-					payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( pvn );
-				}
-			}
-			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
-				payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
-			}
 			var verifyAjaxUrl = ( window.cpmNwp && window.cpmNwp.ajaxUrl )
 				? window.cpmNwp.ajaxUrl
 				: ( typeof window.ajaxurl === 'string' && window.ajaxurl ? window.ajaxurl : '' );
@@ -712,12 +725,36 @@
 				$btn.prop( 'disabled', false ).text( 'Verify & continue' );
 				return false;
 			}
-			$.ajax( {
-				url: verifyAjaxUrl,
-				type: 'POST',
-				data: payload,
-				dataType: 'json'
-			} )
+
+			function buildVerifyPayload() {
+				var payload = $form.serialize() + '&action=' + ( window.cpmNwp && window.cpmNwp.verifyOtpAction ? window.cpmNwp.verifyOtpAction : 'cpm_nwp_verify_otp' );
+				if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding ) {
+					payload += '&cpm_hb_verify_redirect=1';
+				}
+				if ( window.cpmHbLanding && window.cpmHbLanding.buyerProofScan ) {
+					payload += '&cpm_hb_buyer_proof_scan=1';
+				}
+				if ( window.cpmHbLanding && ( window.cpmHbLanding.buyerProofScan || window.cpmHbLanding.podProofScan ) ) {
+					payload += '&cpm_hb_proof_scan=1';
+					var pvn = ( window.cpmHbLanding && window.cpmHbLanding.proofScanNonce ) || ( window.cpmNwp && window.cpmNwp.proofScanNonce ) || '';
+					if ( pvn ) {
+						payload += '&cpm_hb_proof_scan_nonce=' + encodeURIComponent( pvn );
+					}
+				}
+				if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromLanding && window.cpmHbLanding.landingRole ) {
+					payload += '&cpm_hb_user_role=' + encodeURIComponent( window.cpmHbLanding.landingRole );
+				}
+				return payload;
+			}
+
+			function runVerifyOtpAjax() {
+				var payload = buildVerifyPayload();
+				$.ajax( {
+					url: verifyAjaxUrl,
+					type: 'POST',
+					data: payload,
+					dataType: 'json'
+				} )
 				.done( function( res ) {
 					if ( res && res.success && res.data ) {
 						if ( res.data.redirect_url ) {
@@ -795,6 +832,23 @@
 				.always( function() {
 					$btn.prop( 'disabled', false ).text( 'Verify & continue' );
 				} );
+			}
+
+			if ( cpmHbPodOtpNeedsGeo() ) {
+				cpmHbRequestGeolocationForPod(
+					function( lat, lng ) {
+						$( '#cpm-hb-pod-geo-lat-verify' ).val( String( lat ) );
+						$( '#cpm-hb-pod-geo-lng-verify' ).val( String( lng ) );
+						runVerifyOtpAjax();
+					},
+					function( reason ) {
+						showInlineFeedback( $verifyFeedback, cpmHbPodGeolocationUserMessage( reason ), 'error' );
+						$btn.prop( 'disabled', false ).text( 'Verify & continue' );
+					}
+				);
+			} else {
+				runVerifyOtpAjax();
+			}
 			return false;
 		} );
 
@@ -886,7 +940,7 @@
 			return 'd' + Math.abs( h ).toString( 16 );
 		}
 
-		function getGeoLocation() {
+				function getGeoLocation() {
 			return new Promise( function( resolve ) {
 				if ( ! navigator.geolocation ) {
 					resolve( { lat: null, lng: null } );
@@ -903,6 +957,78 @@
 				);
 			} );
 		}
+
+		window.cpmHbGetGeoLocation = getGeoLocation;
+
+		function cpmHbPodOtpNeedsGeo() {
+			return window.cpmHbLanding && window.cpmHbLanding.podProofScan && ( window.cpmHbLanding.landingRole === 'seller' || window.cpmHbLanding.landingRole === 'buyer' );
+		}
+
+		/**
+		 * Human-readable geolocation failure for PoD flows (shared with activate + verify handlers).
+		 *
+		 * @param {string} reason denied|unavailable|timeout|not_supported|unknown|insecure
+		 * @return {string}
+		 */
+		function cpmHbPodGeolocationUserMessage( reason ) {
+			if ( reason === 'insecure' ) {
+				return 'This page is not a secure context for GPS. Open the site with https:// (Local: enable SSL in Local and use the https URL, or use http://localhost). Then try again.';
+			}
+			if ( reason === 'denied' ) {
+				return 'Location was blocked or not granted. If you never saw a prompt: switch to https:// first. Otherwise: tap the lock or site icon next to the address → Site settings → Location → Allow → try again.';
+			}
+			if ( reason === 'timeout' ) {
+				return 'Could not get a GPS fix in time. Try near a window, turn on Wi‑Fi/location services, then try again.';
+			}
+			if ( reason === 'unavailable' ) {
+				return 'Location is unavailable. Confirm device location/GPS is on, use https://, or try another browser.';
+			}
+			if ( reason === 'not_supported' ) {
+				return 'This browser does not support location. Try Chrome or Safari on a phone, then try again.';
+			}
+			return 'Could not read your location. Check browser location permission for this site and try again.';
+		}
+
+		window.cpmHbPodGeolocationUserMessage = cpmHbPodGeolocationUserMessage;
+
+		/**
+		 * Request device location in the same synchronous turn as a user gesture (submit/click).
+		 * Wrapping geolocation in Promise.then() often prevents the browser permission prompt.
+		 *
+		 * @param {function(number, number)} onSuccess lat, lng in decimal degrees.
+		 * @param {function(string)}         onError   reason: denied|unavailable|timeout|not_supported|unknown|insecure
+		 */
+		function cpmHbRequestGeolocationForPod( onSuccess, onError ) {
+			if ( ! navigator.geolocation ) {
+				onError( 'not_supported' );
+				return;
+			}
+			if ( typeof window.isSecureContext === 'boolean' && ! window.isSecureContext ) {
+				onError( 'insecure' );
+				return;
+			}
+
+			navigator.geolocation.getCurrentPosition(
+				function( pos ) {
+					onSuccess( pos.coords.latitude, pos.coords.longitude );
+				},
+				function( err ) {
+					var c = err && typeof err.code === 'number' ? err.code : 0;
+					if ( c === 1 ) {
+						onError( 'denied' );
+					} else if ( c === 2 ) {
+						onError( 'unavailable' );
+					} else if ( c === 3 ) {
+						onError( 'timeout' );
+					} else {
+						onError( 'unknown' );
+					}
+				},
+				{ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+			);
+		}
+
+		window.cpmHbRequestGeolocationForPod = cpmHbRequestGeolocationForPod;
 
 		$( document ).on( 'submit', '#cpm-nwp-register-form', function( e ) {
 			e.preventDefault();

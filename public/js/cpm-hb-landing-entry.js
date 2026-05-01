@@ -243,34 +243,53 @@
 				window.alert( 'Reload the page from a link that includes ?proof=scan, then try again.' );
 				return;
 			}
-			$.ajax( {
-				url: ajaxUrl,
-				type: 'POST',
-				dataType: 'json',
-				data: {
-					action: 'cpm_hb_seller_pod_logged_in',
-					nonce: H.proofScanNonce
-				}
-			} )
-				.done( function( res ) {
-					if ( res && res.success && res.data && res.data.seller_transaction_code ) {
-						if ( typeof window.cpmHbShowSellerPodSuccess === 'function' ) {
-							window.cpmHbShowSellerPodSuccess( res.data.seller_transaction_code );
-						} else {
-							window.alert( res.data.seller_transaction_code );
-						}
-						return;
+			var send = function( lat, lng ) {
+				$.ajax( {
+					url: ajaxUrl,
+					type: 'POST',
+					dataType: 'json',
+					data: {
+						action: 'cpm_hb_seller_pod_logged_in',
+						nonce: H.proofScanNonce,
+						cpm_hb_pod_geo_lat: lat != null ? String( lat ) : '',
+						cpm_hb_pod_geo_lng: lng != null ? String( lng ) : ''
 					}
-					var msg = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
-					window.alert( msg );
 				} )
-				.fail( function( xhr ) {
-					var msg = 'Request failed.';
-					if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
-						msg = xhr.responseJSON.data.message;
+					.done( function( res ) {
+						if ( res && res.success && res.data && res.data.seller_transaction_code ) {
+							if ( typeof window.cpmHbShowSellerPodSuccess === 'function' ) {
+								window.cpmHbShowSellerPodSuccess( res.data.seller_transaction_code );
+							} else {
+								window.alert( res.data.seller_transaction_code );
+							}
+							return;
+						}
+						var msg = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
+						window.alert( msg );
+					} )
+					.fail( function( xhr ) {
+						var msg = 'Request failed.';
+						if ( xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message ) {
+							msg = xhr.responseJSON.data.message;
+						}
+						window.alert( msg );
+					} );
+			};
+			if ( typeof window.cpmHbRequestGeolocationForPod === 'function' ) {
+				window.cpmHbRequestGeolocationForPod(
+					function( lat, lng ) {
+						send( lat, lng );
+					},
+					function( reason ) {
+						var msg = typeof window.cpmHbPodGeolocationUserMessage === 'function'
+							? window.cpmHbPodGeolocationUserMessage( reason )
+							: 'Location is required. Allow location for this site or use https:// and try again.';
+						window.alert( msg );
 					}
-					window.alert( msg );
-				} );
+				);
+			} else {
+				send( null, null );
+			}
 		}
 
 		/**
@@ -325,6 +344,17 @@
 			$( '#cpm-nwp-register-modal' ).addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			clearNwpFeedback( $( '#cpm-nwp-verify-feedback' ) );
 			clearNwpFeedback( $( '#cpm-nwp-activate-feedback' ) );
+			var $txField = $( '#cpm-hb-pod-tx-field' );
+			if ( $txField.length ) {
+				if ( opts.buyerProofScan ) {
+					$txField.removeAttr( 'hidden' );
+				} else {
+					$txField.attr( 'hidden', 'hidden' );
+					$( '#cpm-hb-seller-tx-code-input' ).val( '' );
+				}
+			}
+			$( '#cpm-nwp-verify-seller-tx-code' ).val( '' );
+			$( '#cpm-hb-pod-geo-lat-verify, #cpm-hb-pod-geo-lng-verify, #cpm-hb-pod-geo-lat-activate, #cpm-hb-pod-geo-lng-activate' ).val( '' );
 			if ( typeof window.cpmNwpInitActivatePhoneFields === 'function' ) {
 				window.cpmNwpInitActivatePhoneFields();
 			} else {

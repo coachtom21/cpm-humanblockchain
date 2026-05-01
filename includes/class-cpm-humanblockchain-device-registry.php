@@ -777,6 +777,17 @@ class Cpm_Humanblockchain_Device_Registry {
 			wp_send_json_error( array( 'message' => __( 'This phone number is not registered.', 'cpm-humanblockchain' ) ) );
 		}
 
+		$buyer_proof_scan_early = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
+		$landing_role_early     = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
+		if ( $buyer_proof_scan_early && 'buyer' === $landing_role_early && self::request_has_proof_scan_intent() ) {
+			if ( class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
+				$two_scan = Cpm_Humanblockchain_Two_Scan_Validator::validate_buyer_after_otp();
+				if ( is_wp_error( $two_scan ) ) {
+					wp_send_json_error( array( 'message' => $two_scan->get_error_message() ) );
+				}
+			}
+		}
+
 		$check = Cpm_Humanblockchain_Otp_Service::verify_otp( $phone_e164, $otp_code, false );
 		if ( ! $check['success'] ) {
 			wp_send_json_error( array( 'message' => $check['message'] ) );
@@ -846,6 +857,20 @@ class Cpm_Humanblockchain_Device_Registry {
 		// Guest seller + ?proof=scan OTP: transaction code + local xp_ledger (admin-ajax; no hub HTTP, no wp-json from the browser).
 		// Use proof-scan *intent* (cpm_hb_proof_scan=1 and/or valid nonce) — not only a fresh nonce, so the modal still works if the user was on the OTP step a while.
 		if ( ! $buyer_proof_scan && 'seller' === $landing_role && self::request_has_proof_scan_intent() ) {
+			$s_lat = class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+				? Cpm_Humanblockchain_Two_Scan_Validator::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lat' )
+				: null;
+			$s_lng = class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+				? Cpm_Humanblockchain_Two_Scan_Validator::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lng' )
+				: null;
+			if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+				&& ( null === $s_lat || null === $s_lng ) ) {
+				wp_send_json_error(
+					array(
+						'message' => __( 'Location is required for delivery proof. Allow location access on this device, then verify again.', 'cpm-humanblockchain' ),
+					)
+				);
+			}
 			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
 			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 				$ledger_res = Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code, false );
@@ -855,6 +880,9 @@ class Cpm_Humanblockchain_Device_Registry {
 						: __( 'Could not save the XP ledger entry. Please try again.', 'cpm-humanblockchain' );
 					wp_send_json_error( array( 'message' => $msg ) );
 				}
+			}
+			if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
+				Cpm_Humanblockchain_Two_Scan_Validator::record_seller_scan_anchor( $wp_uid, $seller_transaction_code, $s_lat, $s_lng );
 			}
 			wp_send_json_success(
 				array(
@@ -928,9 +956,26 @@ class Cpm_Humanblockchain_Device_Registry {
 			wp_send_json_error( array( 'message' => __( 'Invalid user.', 'cpm-humanblockchain' ) ), 403 );
 		}
 
+		$s_lat = class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+			? Cpm_Humanblockchain_Two_Scan_Validator::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lat' )
+			: null;
+		$s_lng = class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+			? Cpm_Humanblockchain_Two_Scan_Validator::parse_pod_geo_from_post( 'cpm_hb_pod_geo_lng' )
+			: null;
+		if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' )
+			&& ( null === $s_lat || null === $s_lng ) ) {
+			wp_send_json_error(
+				array( 'message' => __( 'Location is required for delivery proof. Allow location access on this device, then try again.', 'cpm-humanblockchain' ) ),
+				400
+			);
+		}
+
 		$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
 		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 			Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code );
+		}
+		if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
+			Cpm_Humanblockchain_Two_Scan_Validator::record_seller_scan_anchor( $wp_uid, $seller_transaction_code, $s_lat, $s_lng );
 		}
 
 		wp_send_json_success(

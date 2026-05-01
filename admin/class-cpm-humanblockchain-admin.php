@@ -80,6 +80,14 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_discord_invite_url' ),
 		) );
+		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_max_seconds', array(
+			'type'              => 'integer',
+			'sanitize_callback' => array( $this, 'sanitize_two_scan_max_seconds' ),
+		) );
+		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_max_distance_m', array(
+			'type'              => 'integer',
+			'sanitize_callback' => array( $this, 'sanitize_two_scan_max_distance_m' ),
+		) );
 		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qr_url', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_nwp_qr_url' ),
@@ -182,6 +190,38 @@ class Cpm_Humanblockchain_Admin {
 			$v = 'https://discord.com/invite/g5jreAPbra';
 		}
 		return $v;
+	}
+
+	/**
+	 * Max seconds between first and second scan (two-scan / PoD validation).
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public function sanitize_two_scan_max_seconds( $value ) {
+		$n = absint( $value );
+		$min = 30;
+		$max = 86400;
+		if ( $n < 1 ) {
+			$n = Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_SECONDS;
+		}
+		return max( $min, min( $max, $n ) );
+	}
+
+	/**
+	 * Max distance in meters between scan locations.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public function sanitize_two_scan_max_distance_m( $value ) {
+		$n = absint( $value );
+		$min = 5;
+		$max = 50000;
+		if ( $n < 1 ) {
+			$n = Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M;
+		}
+		return max( $min, min( $max, $n ) );
 	}
 
 	/**
@@ -330,6 +370,14 @@ class Cpm_Humanblockchain_Admin {
 			return;
 		}
 		$discord_invite   = get_option( 'cpm_nwp_discord_invite_url', 'https://discord.com/invite/g5jreAPbra' );
+		$two_scan_secs    = (int) get_option(
+			Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_TWO_SCAN_MAX_SECONDS,
+			Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_SECONDS
+		);
+		$two_scan_m       = (int) get_option(
+			Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_TWO_SCAN_MAX_DISTANCE_M,
+			Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M
+		);
 		$nwp_qr_url       = get_option( 'cpm_nwp_qr_url', '' );
 		$nwp_qr_att       = (int) get_option( 'cpm_nwp_qr_attachment_id', 0 );
 		$nwp_qr_image     = ( $nwp_qr_att > 0 ) ? wp_get_attachment_image_url( $nwp_qr_att, 'full' ) : '';
@@ -385,6 +433,49 @@ class Cpm_Humanblockchain_Admin {
 								<input type="url" class="large-text" id="cpm_nwp_discord_invite_url" name="cpm_nwp_discord_invite_url" value="<?php echo esc_attr( $discord_invite ); ?>" placeholder="https://discord.com/invite/…">
 								<p class="description">
 									<?php esc_html_e( 'Used in the “Join Gracebook Discord” step after a user verifies their phone. Shown in the CTA from the NWP / HumanBlockchain modals on the site.', 'cpm-humanblockchain' ); ?>
+								</p>
+							</td>
+						</tr>
+					</table>
+
+					<h2 class="title" style="margin-top:2em;"><?php esc_html_e( '2-scan validation', 'cpm-humanblockchain' ); ?></h2>
+					<p class="description">
+						<?php esc_html_e( 'Limits used when validating proof-of-delivery style flows (seller scan vs buyer scan): maximum elapsed time and maximum distance between the two reported locations.', 'cpm-humanblockchain' ); ?>
+					</p>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th scope="row"><label for="cpm_nwp_two_scan_max_seconds"><?php esc_html_e( 'Maximum time between scans', 'cpm-humanblockchain' ); ?></label></th>
+							<td>
+								<input type="number" class="small-text" id="cpm_nwp_two_scan_max_seconds" name="cpm_nwp_two_scan_max_seconds" value="<?php echo esc_attr( (string) $two_scan_secs ); ?>" min="30" max="86400" step="1">
+								<span class="description"><?php esc_html_e( 'seconds', 'cpm-humanblockchain' ); ?></span>
+								<p class="description">
+									<?php
+									echo esc_html(
+										sprintf(
+											/* translators: %d: default seconds (e.g. 180) */
+											__( 'Default %d (3 minutes). Allowed range: 30–86400 seconds.', 'cpm-humanblockchain' ),
+											Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_SECONDS
+										)
+									);
+									?>
+								</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="cpm_nwp_two_scan_max_distance_m"><?php esc_html_e( 'Maximum distance between scans', 'cpm-humanblockchain' ); ?></label></th>
+							<td>
+								<input type="number" class="small-text" id="cpm_nwp_two_scan_max_distance_m" name="cpm_nwp_two_scan_max_distance_m" value="<?php echo esc_attr( (string) $two_scan_m ); ?>" min="5" max="50000" step="1">
+								<span class="description"><?php esc_html_e( 'meters', 'cpm-humanblockchain' ); ?></span>
+								<p class="description">
+									<?php
+									echo esc_html(
+										sprintf(
+											/* translators: %d: default meters (e.g. 50) */
+											__( 'Haversine distance between latitude/longitude fixes. Default %d m. Allowed range: 5–50000 m.', 'cpm-humanblockchain' ),
+											Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M
+										)
+									);
+									?>
 								</p>
 							</td>
 						</tr>

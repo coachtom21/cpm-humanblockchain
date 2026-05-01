@@ -54,6 +54,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 				<p id="cpm-nwp-activate-mobile-hint" class="cpm-nwp-field-note cpm-nwp-activate-field-hint"><?php esc_html_e( 'Choose your country, then your number without the country code. Must match a device you already registered.', 'cpm-humanblockchain' ); ?></p>
 				<p id="cpm-nwp-activate-lookup-hint" class="cpm-nwp-field-note cpm-nwp-activate-lookup-hint" aria-live="polite"></p>
 			</div>
+			<div class="cpm-nwp-form-field cpm-nwp-activate-field" id="cpm-hb-pod-tx-field" hidden>
+				<label for="cpm-hb-seller-tx-code-input"><?php esc_html_e( 'Seller delivery code', 'cpm-humanblockchain' ); ?></label>
+				<input type="text" id="cpm-hb-seller-tx-code-input" name="cpm_hb_seller_transaction_code" class="cpm-nwp-mobile-national" autocomplete="off" placeholder="<?php esc_attr_e( 'HB-… (from seller)', 'cpm-humanblockchain' ); ?>" maxlength="24" aria-describedby="cpm-hb-pod-tx-hint">
+				<p id="cpm-hb-pod-tx-hint" class="cpm-nwp-field-note cpm-nwp-activate-field-hint"><?php esc_html_e( 'Ask the seller for the code shown after they verify their phone. Required for buyer delivery proof.', 'cpm-humanblockchain' ); ?></p>
+			</div>
+			<input type="hidden" name="cpm_hb_pod_geo_lat" id="cpm-hb-pod-geo-lat-activate" value="">
+			<input type="hidden" name="cpm_hb_pod_geo_lng" id="cpm-hb-pod-geo-lng-activate" value="">
 			<div class="cpm-nwp-activate-actions">
 				<button type="submit" class="cpm-nwp-btn cpm-nwp-btn--otp"><?php esc_html_e( 'Send OTP', 'cpm-humanblockchain' ); ?></button>
 			</div>

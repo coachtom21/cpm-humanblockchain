@@ -25,6 +25,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<?php wp_nonce_field( 'cpm_nwp_verify_otp', 'cpm_nwp_verify_nonce' ); ?>
 			<input type="hidden" name="mobile" id="cpm-nwp-verify-mobile" value="">
 			<input type="hidden" name="phone_country" id="cpm-nwp-verify-phone-country" value="">
+			<input type="hidden" name="cpm_hb_seller_transaction_code" id="cpm-nwp-verify-seller-tx-code" value="">
+			<input type="hidden" name="cpm_hb_pod_geo_lat" id="cpm-hb-pod-geo-lat-verify" value="">
+			<input type="hidden" name="cpm_hb_pod_geo_lng" id="cpm-hb-pod-geo-lng-verify" value="">
 			<div class="cpm-nwp-form-field cpm-nwp-activate-field">
 				<label for="cpm-nwp-verify-otp-input" class="screen-reader-text"><?php esc_html_e( '6-digit code', 'cpm-humanblockchain' ); ?></label>
 				<input type="text" id="cpm-nwp-verify-otp-input" name="otp" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="<?php esc_attr_e( '000000', 'cpm-humanblockchain' ); ?>" required>
