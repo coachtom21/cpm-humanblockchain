@@ -15,6 +15,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Cpm_Humanblockchain_Woo_Backorders {
 
 	/**
+	 * Minimum units per cart line when set on the product (Inventory tab).
+	 *
+	 * @var string
+	 */
+	const META_MIN_ORDER_QTY = '_cpm_hb_min_order_qty';
+
+	/**
 	 * Register PoD / backorders integration hooks.
 	 *
 	 * @since 1.0.0
@@ -29,6 +36,17 @@ class Cpm_Humanblockchain_Woo_Backorders {
 
 		add_action( 'woocommerce_checkout_order_processed', array( __CLASS__, 'maybe_auto_tag_order_nwp_daily_cap_on_checkout' ), 25, 3 );
 		add_action( 'woocommerce_store_api_checkout_order_processed', array( __CLASS__, 'maybe_auto_tag_order_nwp_daily_cap_blocks' ), 25, 1 );
+
+		add_action( 'woocommerce_product_options_inventory_product_data', array( __CLASS__, 'render_product_min_order_qty_field' ) );
+		add_action( 'woocommerce_process_product_meta', array( __CLASS__, 'save_product_min_order_qty_field' ), 10, 1 );
+		add_action( 'woocommerce_variation_options_inventory', array( __CLASS__, 'render_variation_min_order_qty_field' ), 10, 3 );
+		add_action( 'woocommerce_save_product_variation', array( __CLASS__, 'save_variation_min_order_qty_field' ), 10, 2 );
+
+		add_action( 'woocommerce_check_cart_items', array( __CLASS__, 'validate_cart_min_order_quantities' ), 10 );
+		add_filter( 'woocommerce_add_to_cart_validation', array( __CLASS__, 'validate_add_to_cart_min_qty' ), 10, 4 );
+		add_filter( 'woocommerce_update_cart_validation', array( __CLASS__, 'validate_update_cart_min_qty' ), 10, 4 );
+		add_filter( 'woocommerce_quantity_input_min', array( __CLASS__, 'filter_quantity_input_min' ), 10, 2 );
+		add_filter( 'woocommerce_quantity_input_args', array( __CLASS__, 'filter_quantity_input_args' ), 20, 2 );
 	}
 
 	/**
@@ -774,5 +792,347 @@ class Cpm_Humanblockchain_Woo_Backorders {
 			}
 		}
 		return array_values( $by_id );
+	}
+
+	/**
+	 * SKUs that require at least 10 units per cart line (matched case-insensitively on the variation or product).
+	 *
+	 * @return string[] Uppercased SKUs.
+	 */
+	private static function get_skus_requiring_min_ten() {
+		$list = apply_filters(
+			'cpm_hb_variable_product_skus_min_qty_10',
+			array( 'YAM-STICKER', 'HANG-TAG' )
+		);
+		if ( ! is_array( $list ) ) {
+			$list = array();
+		}
+		$out = array();
+		foreach ( $list as $s ) {
+			$s = strtoupper( trim( (string) $s ) );
+			if ( $s !== '' ) {
+				$out[] = $s;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * @param WC_Product $product Variation, simple, or variable (parent checks children).
+	 * @return bool
+	 */
+	private static function product_sku_requires_min_ten( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return false;
+		}
+		$sku = strtoupper( trim( (string) $product->get_sku() ) );
+		if ( $sku !== '' && in_array( $sku, self::get_skus_requiring_min_ten(), true ) ) {
+			return true;
+		}
+		if ( $product->is_type( 'variable' ) ) {
+			foreach ( $product->get_children() as $child_id ) {
+				$c = wc_get_product( (int) $child_id );
+				if ( $c instanceof WC_Product && self::product_sku_requires_min_ten( $c ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Minimum quantity from SKU rules (10) or 0 if not applicable.
+	 *
+	 * @param WC_Product $product Product or variation.
+	 * @return int
+	 */
+	private static function sku_rule_min_qty( $product ) {
+		return self::product_sku_requires_min_ten( $product ) ? 10 : 0;
+	}
+
+	/**
+	 * @param WC_Product $product Product or variation.
+	 * @return int 0 if unset.
+	 */
+	private static function get_explicit_min_order_meta( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return 0;
+		}
+		$v = (int) $product->get_meta( self::META_MIN_ORDER_QTY, true );
+		if ( $v >= 1 ) {
+			return $v;
+		}
+		if ( $product->is_type( 'variation' ) ) {
+			$parent = wc_get_product( $product->get_parent_id() );
+			if ( $parent instanceof WC_Product ) {
+				$v = (int) $parent->get_meta( self::META_MIN_ORDER_QTY, true );
+				if ( $v >= 1 ) {
+					return $v;
+				}
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Minimum units per cart line: higher of Inventory meta, SKU rule (YAM-STICKER / HANG-TAG = 10), or 1.
+	 *
+	 * @param WC_Product|null $product Product or variation.
+	 * @return int
+	 */
+	public static function get_effective_min_order_qty_for_product( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return 1;
+		}
+		$explicit = self::get_explicit_min_order_meta( $product );
+		$sku_min  = self::sku_rule_min_qty( $product );
+		$out      = max( 1, $explicit, $sku_min );
+		return (int) apply_filters( 'cpm_hb_effective_min_order_qty', $out, $product );
+	}
+
+	/**
+	 * @param array<string, mixed> $cart_item Cart row.
+	 * @return int
+	 */
+	private static function get_effective_min_order_qty_for_cart_item( array $cart_item ) {
+		$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+		return self::get_effective_min_order_qty_for_product( $product );
+	}
+
+	/**
+	 * Inventory tab — simple / grouped products only (variable uses per-variation row).
+	 */
+	public static function render_product_min_order_qty_field() {
+		global $post;
+		if ( ! $post || ! function_exists( 'wc_get_product' ) ) {
+			return;
+		}
+		$product = wc_get_product( $post );
+		if ( ! $product || $product->is_type( 'variable' ) ) {
+			return;
+		}
+		echo '<div class="options_group">';
+		woocommerce_wp_text_input(
+			array(
+				'id'                => self::META_MIN_ORDER_QTY,
+				'name'              => self::META_MIN_ORDER_QTY,
+				'type'              => 'number',
+				'value'             => $product->get_meta( self::META_MIN_ORDER_QTY, true ),
+				'label'             => __( 'Min order quantity (Human Blockchain)', 'cpm-humanblockchain' ),
+				'placeholder'       => '',
+				'desc_tip'          => true,
+				'description'       => __( 'Optional minimum units per cart line. SKUs YAM-STICKER and HANG-TAG always require at least 10 regardless of this field.', 'cpm-humanblockchain' ),
+				'custom_attributes' => array(
+					'min'  => '1',
+					'step' => '1',
+				),
+			)
+		);
+		echo '</div>';
+	}
+
+	/**
+	 * @param int $post_id Product post ID.
+	 */
+	public static function save_product_min_order_qty_field( $post_id ) {
+		$post_id = (int) $post_id;
+		if ( $post_id <= 0 || ! isset( $_POST['woocommerce_meta_nonce'] ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woocommerce_meta_nonce'] ) ), 'woocommerce_save_data' ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+		$product = wc_get_product( $post_id );
+		if ( ! $product || $product->is_type( 'variable' ) ) {
+			return;
+		}
+		if ( ! isset( $_POST[ self::META_MIN_ORDER_QTY ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return;
+		}
+		$raw = sanitize_text_field( wp_unslash( $_POST[ self::META_MIN_ORDER_QTY ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( $raw === '' ) {
+			$product->delete_meta_data( self::META_MIN_ORDER_QTY );
+		} else {
+			$product->update_meta_data( self::META_MIN_ORDER_QTY, (string) max( 1, absint( $raw ) ) );
+		}
+		$product->save();
+	}
+
+	/**
+	 * @param int               $loop           Variation loop index.
+	 * @param array<string,mixed> $variation_data Variation data (unused).
+	 * @param WP_Post           $variation      Variation post.
+	 */
+	public static function render_variation_min_order_qty_field( $loop, $variation_data, $variation ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		unset( $variation_data );
+		if ( ! $variation instanceof WP_Post ) {
+			return;
+		}
+		$val = get_post_meta( $variation->ID, self::META_MIN_ORDER_QTY, true );
+		echo '<p class="form-row form-row-full">';
+		echo '<label for="cpm_hb_min_order_qty_var_' . esc_attr( (string) (int) $loop ) . '">';
+		echo esc_html__( 'HB min order qty (optional)', 'cpm-humanblockchain' );
+		echo '</label> ';
+		echo '<span class="description">' . esc_html__( 'Optional extra minimum. SKUs YAM-STICKER and HANG-TAG always require at least 10.', 'cpm-humanblockchain' ) . '</span>';
+		echo '<input type="number" min="1" step="1" class="short" style="width:5em" id="cpm_hb_min_order_qty_var_' . esc_attr( (string) (int) $loop ) . '" name="cpm_hb_min_order_qty_var[' . esc_attr( (string) (int) $loop ) . ']" value="' . esc_attr( is_scalar( $val ) ? (string) $val : '' ) . '" placeholder="" />';
+		echo '</p>';
+	}
+
+	/**
+	 * @param int $variation_id Variation post ID.
+	 * @param int $i            Loop index.
+	 */
+	public static function save_variation_min_order_qty_field( $variation_id, $i ) {
+		$variation_id = (int) $variation_id;
+		if ( $variation_id <= 0 || ! isset( $_POST['cpm_hb_min_order_qty_var'][ $i ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $variation_id ) ) {
+			return;
+		}
+		$raw = sanitize_text_field( wp_unslash( $_POST['cpm_hb_min_order_qty_var'][ $i ] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		if ( $raw === '' ) {
+			delete_post_meta( $variation_id, self::META_MIN_ORDER_QTY );
+			return;
+		}
+		update_post_meta( $variation_id, self::META_MIN_ORDER_QTY, (string) max( 1, absint( $raw ) ) );
+	}
+
+	/**
+	 * Block checkout and cart page: enforce min qty per line.
+	 */
+	public static function validate_cart_min_order_quantities() {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
+		foreach ( WC()->cart->get_cart() as $cart_item ) {
+			$min = self::get_effective_min_order_qty_for_cart_item( $cart_item );
+			if ( $min <= 1 ) {
+				continue;
+			}
+			$qty = isset( $cart_item['quantity'] ) ? (int) $cart_item['quantity'] : 0;
+			if ( $qty < $min ) {
+				$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+				$name    = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+				wc_add_notice(
+					sprintf(
+						/* translators: 1: product name, 2: minimum quantity, 3: current quantity */
+						__( '“%1$s” must be purchased in a minimum quantity of %2$d. Your cart has %3$d.', 'cpm-humanblockchain' ),
+						wp_strip_all_tags( $name ),
+						$min,
+						$qty
+					),
+					'error'
+				);
+			}
+		}
+	}
+
+	/**
+	 * @param bool $passed       Validation passed.
+	 * @param int  $product_id   Product ID.
+	 * @param int  $quantity     Quantity being added.
+	 * @param int  $variation_id Variation ID (0 for simple).
+	 * @return bool
+	 */
+	public static function validate_add_to_cart_min_qty( $passed, $product_id, $quantity, $variation_id = 0 ) {
+		if ( ! $passed || ! function_exists( 'wc_get_product' ) || ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return $passed;
+		}
+		$product_id   = (int) $product_id;
+		$variation_id = (int) $variation_id;
+		$quantity     = (int) $quantity;
+		$product      = wc_get_product( $variation_id > 0 ? $variation_id : $product_id );
+		$min          = self::get_effective_min_order_qty_for_product( $product );
+		if ( $min <= 1 ) {
+			return $passed;
+		}
+		$existing = 0;
+		foreach ( WC()->cart->get_cart() as $row ) {
+			if ( (int) $row['product_id'] === $product_id && (int) $row['variation_id'] === $variation_id ) {
+				$existing += (int) $row['quantity'];
+			}
+		}
+		if ( $existing + $quantity < $min ) {
+			$name = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+			wc_add_notice(
+				sprintf(
+					/* translators: 1: product name, 2: minimum quantity */
+					__( '“%1$s” must be added in a minimum quantity of %2$d per line.', 'cpm-humanblockchain' ),
+					wp_strip_all_tags( $name ),
+					$min
+				),
+				'error'
+			);
+			return false;
+		}
+		return $passed;
+	}
+
+	/**
+	 * @param bool   $passed        Passed.
+	 * @param string $cart_item_key Key.
+	 * @param array  $values        Cart row.
+	 * @param int    $quantity      New quantity.
+	 * @return bool
+	 */
+	public static function validate_update_cart_min_qty( $passed, $cart_item_key, $values, $quantity ) {
+		unset( $cart_item_key );
+		if ( ! $passed || ! is_array( $values ) ) {
+			return $passed;
+		}
+		$min = self::get_effective_min_order_qty_for_cart_item( $values );
+		if ( $min <= 1 ) {
+			return $passed;
+		}
+		if ( (int) $quantity < $min ) {
+			$product = isset( $values['data'] ) ? $values['data'] : null;
+			$name    = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+			wc_add_notice(
+				sprintf(
+					/* translators: 1: product name, 2: minimum quantity */
+					__( '“%1$s” cannot be updated below the minimum quantity of %2$d.', 'cpm-humanblockchain' ),
+					wp_strip_all_tags( $name ),
+					$min
+				),
+				'error'
+			);
+			return false;
+		}
+		return $passed;
+	}
+
+	/**
+	 * @param int        $min     Existing min.
+	 * @param WC_Product $product Product.
+	 * @return int
+	 */
+	public static function filter_quantity_input_min( $min, $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return (int) $min;
+		}
+		$eff = self::get_effective_min_order_qty_for_product( $product );
+		return max( (int) $min, $eff );
+	}
+
+	/**
+	 * Default quantity input to at least the effective minimum (Woo defaults input to 1 otherwise).
+	 *
+	 * @param array<string,mixed> $args    Quantity args.
+	 * @param WC_Product|null     $product Product.
+	 * @return array<string,mixed>
+	 */
+	public static function filter_quantity_input_args( $args, $product ) {
+		if ( ! $product instanceof WC_Product || ! is_array( $args ) ) {
+			return $args;
+		}
+		$min = self::get_effective_min_order_qty_for_product( $product );
+		if ( $min <= 1 ) {
+			return $args;
+		}
+		$args['min_value']   = isset( $args['min_value'] ) ? max( (int) $args['min_value'], $min ) : $min;
+		$args['input_value'] = isset( $args['input_value'] ) ? max( (int) $args['input_value'], $min ) : $min;
+		return $args;
 	}
 }

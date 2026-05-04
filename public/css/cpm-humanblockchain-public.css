@@ -692,3 +692,67 @@ body.cpm-nwp-modal-open {
 	line-height: 1.45;
 	color: #50575e !important;
 }
+
+/*
+ * WooCommerce single product — quantity field readable + aligned with Add to cart.
+ * Themes/Elementor often set .qty width:100% or flex-shrink, which squeezes the number + spinners.
+ */
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .woocommerce-variation-add-to-cart {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.65rem 0.75rem;
+}
+
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart .quantity,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .woocommerce-variation-add-to-cart .quantity {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	min-width: 0;
+	margin: 0;
+}
+
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart .quantity .qty,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .woocommerce-variation-add-to-cart .quantity .qty,
+body.single-product .elementor-widget-container .woocommerce-variation-add-to-cart .quantity .qty,
+body.woocommerce.single-product div.product form.cart:not(.grouped_form) .quantity .qty {
+	box-sizing: border-box;
+	width: 5.75rem !important;
+	min-width: 5.75rem !important;
+	max-width: 12rem;
+	min-height: 2.75rem;
+	padding: 0.5rem 0.65rem !important;
+	font-size: 1rem !important;
+	line-height: 1.35 !important;
+	text-align: center;
+}
+
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart .single_add_to_cart_button,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .single_add_to_cart_button,
+body.woocommerce.single-product div.product form.cart:not(.grouped_form) .single_add_to_cart_button {
+	min-height: 2.75rem;
+	align-self: center;
+}
+
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart .quantity .qty::-webkit-outer-spin-button,
+body.woocommerce.single-product div.product .woocommerce-variation-add-to-cart .quantity .qty::-webkit-inner-spin-button,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .quantity .qty::-webkit-outer-spin-button,
+body.single-product .elementor-widget-woocommerce-product-add-to-cart .quantity .qty::-webkit-inner-spin-button {
+	height: 2.25rem;
+	margin: 0;
+	opacity: 1;
+}
+
+/* Elementor (and similar) wrappers that constrain flex children */
+body.single-product .elementor-widget-container .woocommerce-variation-add-to-cart {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.65rem 0.75rem;
+}
+
+body.single-product .elementor-widget-container .woocommerce-variation-add-to-cart .quantity {
+	flex: 0 0 auto;
+}
