@@ -816,7 +816,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		if ( ! Cpm_Humanblockchain_Otp_Service::is_configured() ) {
-			wp_send_json_error( array( 'message' => __( 'SMS service is not configured. Contact the administrator.', 'cpm-humanblockchain' ) ) );
+			wp_send_json_error( array( 'message' => Cpm_Humanblockchain_Otp_Service::get_sms_not_configured_message() ) );
 		}
 
 		$result = Cpm_Humanblockchain_Otp_Service::send_otp_sms( $phone_e164 );

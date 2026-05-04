@@ -346,11 +346,26 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Whether the Verify Service SID is taken from wp-config (not the settings field).
+	 *
+	 * @return bool
+	 */
+	public static function verify_service_sid_is_from_constant() {
+		if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && self::trim_twilio_secret( CPM_TWILIO_VERIFY_SERVICE_SID ) !== '' ) {
+			return true;
+		}
+		if ( defined( 'CPM_NWP_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) && self::trim_twilio_secret( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) !== '' ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Twilio Verify Service SID (VA…). Same account as Account SID / Auth Token.
 	 *
 	 * @return string
 	 */
-	private static function get_verify_service_sid() {
+	public static function get_verify_service_sid() {
 		if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && CPM_TWILIO_VERIFY_SERVICE_SID !== '' ) {
 			return self::trim_twilio_secret( CPM_TWILIO_VERIFY_SERVICE_SID );
 		}
@@ -371,19 +386,57 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Which Twilio requirements are still missing (for admin hints / support).
+	 *
+	 * @since 1.0.0
+	 * @return string[] Stable keys: account_sid, auth_token, verify_or_from.
+	 */
+	public static function get_twilio_configuration_gaps() {
+		$gaps  = array();
+		$creds = self::get_credentials();
+		if ( $creds['sid'] === '' ) {
+			$gaps[] = 'account_sid';
+		}
+		if ( $creds['token'] === '' ) {
+			$gaps[] = 'auth_token';
+		}
+		if ( ! self::uses_twilio_verify() && $creds['from'] === '' ) {
+			$gaps[] = 'verify_or_from';
+		}
+		return $gaps;
+	}
+
+	/**
+	 * User-facing explanation when OTP cannot run (no secrets exposed).
+	 *
+	 * @return string
+	 */
+	public static function get_sms_not_configured_message() {
+		$gaps = self::get_twilio_configuration_gaps();
+		if ( array() === $gaps ) {
+			return __( 'SMS service is not configured. Contact the administrator.', 'cpm-humanblockchain' );
+		}
+		$hints = array();
+		if ( in_array( 'account_sid', $gaps, true ) ) {
+			$hints[] = __( 'Twilio Account SID (AC…).', 'cpm-humanblockchain' );
+		}
+		if ( in_array( 'auth_token', $gaps, true ) ) {
+			$hints[] = __( 'Twilio Auth Token from Twilio Console — paste it again if the setting was cleared (the password field is empty after save).', 'cpm-humanblockchain' );
+		}
+		if ( in_array( 'verify_or_from', $gaps, true ) ) {
+			$hints[] = __( 'Either a Verify Service SID (VA…) or a From phone number for classic SMS.', 'cpm-humanblockchain' );
+		}
+		$lead = __( 'SMS is not set up on this site. Under Settings → NWP Gateway → Integration, save:', 'cpm-humanblockchain' );
+		return $lead . ' ' . implode( ' ', $hints );
+	}
+
+	/**
 	 * Check if Twilio is configured.
 	 *
 	 * @return bool
 	 */
 	public static function is_configured() {
-		$creds = self::get_credentials();
-		if ( empty( $creds['sid'] ) || empty( $creds['token'] ) ) {
-			return false;
-		}
-		if ( self::uses_twilio_verify() ) {
-			return true;
-		}
-		return ! empty( $creds['from'] );
+		return array() === self::get_twilio_configuration_gaps();
 	}
 
 	/**
@@ -535,7 +588,7 @@ class Cpm_Humanblockchain_Otp_Service {
 		if ( empty( $sid ) || empty( $token ) || empty( $from ) ) {
 			return array(
 				'success' => false,
-				'message' => __( 'SMS service is not configured. Contact the administrator.', 'cpm-humanblockchain' ),
+				'message' => self::get_sms_not_configured_message(),
 				'error'   => 'twilio_not_configured',
 			);
 		}
