@@ -326,15 +326,15 @@ class Cpm_Humanblockchain_Pod_Wallet {
 			}
 			return '$' . number_format_i18n( $usd, 2 );
 		};
-		echo '<div class="cpm-hb-pod-wallet-dashboard" style="margin-bottom:1.5em;padding:12px 14px;border:1px solid #e0e0e0;border-radius:6px;background:#fafafa;">';
-		echo '<p style="margin:0 0 0.35em 0;font-weight:600;">' . esc_html__( 'Human Blockchain wallets', 'cpm-humanblockchain' ) . '</p>';
+		echo '<section class="cpm-hb-pod-wallet-dashboard" aria-label="' . esc_attr__( 'Human Blockchain wallets', 'cpm-humanblockchain' ) . '">';
+		echo '<p class="cpm-hb-pod-wallet-dashboard__title">' . esc_html__( 'Human Blockchain wallets', 'cpm-humanblockchain' ) . '</p>';
 		if ( $reb > 0 ) {
-			echo '<p style="margin:0.25em 0;">' . esc_html__( 'Buyer rebate balance:', 'cpm-humanblockchain' ) . ' <strong>' . esc_html( $fmt( $reb ) ) . '</strong></p>';
+			echo '<p class="cpm-hb-pod-wallet-dashboard__line">' . esc_html__( 'Buyer rebate balance:', 'cpm-humanblockchain' ) . ' <strong class="cpm-hb-pod-wallet-dashboard__amount">' . esc_html( $fmt( $reb ) ) . '</strong></p>';
 		}
 		if ( $tc > 0 ) {
-			echo '<p style="margin:0.25em 0;">' . esc_html__( 'Seller trade credit balance:', 'cpm-humanblockchain' ) . ' <strong>' . esc_html( $fmt( $tc ) ) . '</strong></p>';
+			echo '<p class="cpm-hb-pod-wallet-dashboard__line">' . esc_html__( 'Seller trade credit balance:', 'cpm-humanblockchain' ) . ' <strong class="cpm-hb-pod-wallet-dashboard__amount">' . esc_html( $fmt( $tc ) ) . '</strong></p>';
 		}
-		echo '<p class="description" style="margin:0.5em 0 0 0;">' . esc_html__( 'Balances accrue when a delivery is confirmed on the backorders flow; XP rewards are separate.', 'cpm-humanblockchain' ) . '</p>';
-		echo '</div>';
+		echo '<p class="cpm-hb-pod-wallet-dashboard__desc">' . esc_html__( 'Balances accrue when a delivery is confirmed on the backorders flow; XP rewards are separate.', 'cpm-humanblockchain' ) . '</p>';
+		echo '</section>';
 	}
 }
