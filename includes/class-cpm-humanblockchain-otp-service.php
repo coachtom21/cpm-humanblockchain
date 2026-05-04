@@ -4,8 +4,8 @@
  * OTP Service - Twilio SMS integration for device activation.
  *
  * Supports two modes (same Twilio Account SID + Auth Token):
- * 1) Twilio Verify API — optional Verify Service SID (VA…) via CPM_TWILIO_VERIFY_SERVICE_SID or
- *    cpm_nwp_twilio_verify_service_sid (matches Smallstreet / cpm-twilio). No "From" number required.
+ * 1) Twilio Verify API — Verify Service SID (VA…) via CPM_TWILIO_VERIFY_SERVICE_SID, CPM_NWP_TWILIO_VERIFY_SERVICE_SID,
+ *    or legacy option cpm_nwp_twilio_verify_service_sid (no UI; use constants or DB). No "From" number required.
  * 2) Classic Messages API — wp_options cpm_nwp_twilio_sid, cpm_nwp_twilio_token, cpm_nwp_twilio_from
  *    (or CPM_NWP_TWILIO_* / CPM_TWILIO_ACCOUNT_SID + CPM_TWILIO_AUTH_TOKEN aliases) plus local OTP in transients.
  *
@@ -346,21 +346,6 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
-	 * Whether the Verify Service SID is taken from wp-config (not the settings field).
-	 *
-	 * @return bool
-	 */
-	public static function verify_service_sid_is_from_constant() {
-		if ( defined( 'CPM_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_TWILIO_VERIFY_SERVICE_SID ) && self::trim_twilio_secret( CPM_TWILIO_VERIFY_SERVICE_SID ) !== '' ) {
-			return true;
-		}
-		if ( defined( 'CPM_NWP_TWILIO_VERIFY_SERVICE_SID' ) && is_string( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) && self::trim_twilio_secret( CPM_NWP_TWILIO_VERIFY_SERVICE_SID ) !== '' ) {
-			return true;
-		}
-		return false;
-	}
-
-	/**
 	 * Twilio Verify Service SID (VA…). Same account as Account SID / Auth Token.
 	 *
 	 * @return string
@@ -424,7 +409,7 @@ class Cpm_Humanblockchain_Otp_Service {
 			$hints[] = __( 'Twilio Auth Token from Twilio Console — paste it again if the setting was cleared (the password field is empty after save).', 'cpm-humanblockchain' );
 		}
 		if ( in_array( 'verify_or_from', $gaps, true ) ) {
-			$hints[] = __( 'Either a Verify Service SID (VA…) or a From phone number for classic SMS.', 'cpm-humanblockchain' );
+			$hints[] = __( 'Either define CPM_TWILIO_VERIFY_SERVICE_SID or CPM_NWP_TWILIO_VERIFY_SERVICE_SID (VA…) in wp-config.php for Twilio Verify, or set a From phone number for classic SMS.', 'cpm-humanblockchain' );
 		}
 		$lead = __( 'SMS is not set up on this site. Under Settings → NWP Gateway → Integration, save:', 'cpm-humanblockchain' );
 		return $lead . ' ' . implode( ' ', $hints );
@@ -739,26 +724,63 @@ class Cpm_Humanblockchain_Otp_Service {
 			);
 		}
 
-		if ( $parsed['http_code'] >= 200 && $parsed['http_code'] < 300 ) {
-			$st = isset( $parsed['data']['status'] ) ? (string) $parsed['data']['status'] : '';
-			if ( in_array( $st, array( 'pending', 'queued' ), true ) || $st === '' ) {
+		if ( $parsed['http_code'] >= 200 && $parsed['http_code'] < 300 && is_array( $parsed['data'] ) ) {
+			$st      = isset( $parsed['data']['status'] ) ? (string) $parsed['data']['status'] : '';
+			$has_sid = ! empty( $parsed['data']['sid'] );
+			// Twilio usually returns status "pending" (or "queued"); some payloads omit status but include the Verification SID (VE…).
+			if ( in_array( $st, array( 'pending', 'queued' ), true ) || ( $st === '' && $has_sid ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log(
+						'cpm_nwp twilio verify OK http=' . (string) $parsed['http_code'] . ' to=' . $phone_e164
+						. ' status=' . ( $st !== '' ? $st : '(empty)' ) . ' sid=' . ( $has_sid ? (string) $parsed['data']['sid'] : '-' )
+					);
+				}
 				return array(
 					'success' => true,
 					'message' => __( 'SMS sent successfully.', 'cpm-humanblockchain' ),
 					'error'   => null,
 				);
 			}
+			if ( $st !== '' ) {
+				$err_msg = sprintf(
+					/* translators: %s: Twilio verification status string */
+					__( 'Twilio Verify returned status “%s” when starting SMS (unexpected). Check Twilio Console → Monitor → Logs → Verify for this number.', 'cpm-humanblockchain' ),
+					$st
+				);
+			} else {
+				$err_msg = __( 'Twilio Verify returned success but no usable verification data. Check Twilio Console → Monitor → Logs → Verify, and confirm the Verify Service SID (VA…) matches this Twilio account.', 'cpm-humanblockchain' );
+			}
+		} else {
+			$d       = is_array( $parsed['data'] ) ? $parsed['data'] : array();
+			$err_msg = isset( $d['message'] ) ? (string) $d['message'] : '';
+			if ( $err_msg === '' && $parsed['raw'] !== '' && strlen( $parsed['raw'] ) < 400 ) {
+				$err_msg = trim( $parsed['raw'] );
+			}
+			if ( $err_msg === '' ) {
+				$err_msg = sprintf(
+					/* translators: %d: HTTP status code */
+					__( 'Twilio Verify request failed (HTTP %d). Open Twilio Console → Monitor → Logs → Verify — SMS attempts do not appear under Messaging logs.', 'cpm-humanblockchain' ),
+					(int) $parsed['http_code']
+				);
+			} else {
+				$err_msg = self::maybe_append_twilio_auth_help( self::maybe_append_geo_permission_help( $err_msg, $d ) );
+			}
 		}
 
-		$err_msg = isset( $parsed['data']['message'] ) ? (string) $parsed['data']['message'] : __( 'SMS delivery failed.', 'cpm-humanblockchain' );
-		$err_msg = self::maybe_append_twilio_auth_help( self::maybe_append_geo_permission_help( $err_msg, is_array( $parsed['data'] ) ? $parsed['data'] : array() ) );
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( 'cpm_nwp twilio verify start HTTP ' . (string) $parsed['http_code'] . ' to=' . $phone_e164 . ' response=' . $parsed['raw'] );
 		}
+		$err_code = (string) $parsed['http_code'];
+		if ( is_array( $parsed['data'] ) && isset( $parsed['data']['code'] ) && is_scalar( $parsed['data']['code'] ) ) {
+			$err_code = (string) $parsed['data']['code'];
+		}
+
 		return array(
 			'success' => false,
-			'message' => $err_msg,
-			'error'   => isset( $parsed['data']['code'] ) ? (string) $parsed['data']['code'] : (string) $parsed['http_code'],
+			'message' => isset( $err_msg ) ? $err_msg : __( 'SMS delivery failed.', 'cpm-humanblockchain' ),
+			'error'   => $err_code,
 		);
 	}
 

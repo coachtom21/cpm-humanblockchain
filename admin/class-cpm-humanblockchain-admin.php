@@ -123,10 +123,6 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
-		register_setting( $i, 'cpm_nwp_twilio_verify_service_sid', array(
-			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
-		) );
 		register_setting( $i, 'cpm_nwp_default_country', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_default_country' ),
@@ -552,7 +548,6 @@ class Cpm_Humanblockchain_Admin {
 		$sid              = get_option( 'cpm_nwp_twilio_sid', '' );
 		$token            = get_option( 'cpm_nwp_twilio_token', '' );
 		$from             = get_option( 'cpm_nwp_twilio_from', '' );
-		$verify_service   = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
 		$country          = get_option( 'cpm_nwp_default_country', 'AUTO' );
 		$qrtiger_key      = get_option( 'cpm_nwp_qrtiger_api_key', '' );
 		$qrtiger_url      = get_option( 'cpm_nwp_qrtiger_api_url', '' );
@@ -754,7 +749,7 @@ class Cpm_Humanblockchain_Admin {
 							<?php esc_html_e( '(Twilio Verify — no “From” number needed.)', 'cpm-humanblockchain' ); ?>
 						<?php endif; ?>
 					<?php else : ?>
-						<span style="color:#d63638;"><?php esc_html_e( 'Not configured — add Account SID and Auth Token, then either a Twilio Verify Service SID (VA…) or a From number for the Messages API.', 'cpm-humanblockchain' ); ?></span>
+						<span style="color:#d63638;"><?php esc_html_e( 'Not configured — add Account SID and Auth Token, then either define a Twilio Verify Service SID (VA…) in wp-config.php or add a From number for the Messages API.', 'cpm-humanblockchain' ); ?></span>
 					<?php endif; ?>
 				</p>
 				<?php
@@ -769,7 +764,7 @@ class Cpm_Humanblockchain_Admin {
 							echo '<li>' . esc_html__( 'Auth Token is missing — paste it from Twilio Console. “Leave blank to keep” only works if a token is already stored; re-paste after it was cleared.', 'cpm-humanblockchain' ) . '</li>';
 						}
 						if ( in_array( 'verify_or_from', $gaps, true ) ) {
-							echo '<li>' . esc_html__( 'Add a Verify Service SID (VA…) or a From number — one of the two is required.', 'cpm-humanblockchain' ) . '</li>';
+							echo '<li>' . esc_html__( 'Define CPM_TWILIO_VERIFY_SERVICE_SID or CPM_NWP_TWILIO_VERIFY_SERVICE_SID (VA…) in wp-config.php for Verify, or set a From number for classic SMS — one of the two is required.', 'cpm-humanblockchain' ) . '</li>';
 						}
 						echo '</ul>';
 					}
@@ -790,7 +785,7 @@ class Cpm_Humanblockchain_Admin {
 					<?php esc_html_e( 'If Twilio message logs show error 30006 (landline or unreachable carrier), the destination cannot receive SMS: use a real mobile number. Ten-digit numbers starting with 97/98 are sent as Nepal (+977) before +1. Prefer Automatic or Nepal in Default country, or type +977… explicitly.', 'cpm-humanblockchain' ); ?>
 				</p>
 				<p class="description">
-					<?php esc_html_e( 'If you use Twilio Verify, set the Verify Service SID (VA…) in the field below or define CPM_TWILIO_VERIFY_SERVICE_SID in wp-config.php.', 'cpm-humanblockchain' ); ?>
+					<?php esc_html_e( 'If you use Twilio Verify, define CPM_TWILIO_VERIFY_SERVICE_SID or CPM_NWP_TWILIO_VERIFY_SERVICE_SID in wp-config.php (VA… from Twilio Console → Verify → Services).', 'cpm-humanblockchain' ); ?>
 				</p>
 			</div>
 
@@ -820,19 +815,6 @@ class Cpm_Humanblockchain_Admin {
 						<td>
 							<input type="password" id="cpm_nwp_twilio_token" name="cpm_nwp_twilio_token" value="" autocomplete="new-password" class="regular-text" placeholder="<?php echo esc_attr( $token !== '' ? __( 'Leave blank to keep saved token', 'cpm-humanblockchain' ) : __( 'Paste Auth Token from Twilio Console', 'cpm-humanblockchain' ) ); ?>">
 							<p class="description"><?php esc_html_e( 'Must match the Auth Token in Twilio Console. Leave blank when saving other settings to keep the current token.', 'cpm-humanblockchain' ); ?></p>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="cpm_nwp_twilio_verify_service_sid"><?php esc_html_e( 'Verify Service SID (optional)', 'cpm-humanblockchain' ); ?></label></th>
-						<td>
-							<?php if ( class_exists( 'Cpm_Humanblockchain_Otp_Service' ) && Cpm_Humanblockchain_Otp_Service::verify_service_sid_is_from_constant() ) : ?>
-								<code><?php echo esc_html( Cpm_Humanblockchain_Otp_Service::get_verify_service_sid() ); ?></code>
-								<input type="hidden" name="cpm_nwp_twilio_verify_service_sid" value="<?php echo esc_attr( $verify_service ); ?>" />
-								<p class="description"><?php esc_html_e( 'Loaded from wp-config.php (CPM_TWILIO_VERIFY_SERVICE_SID or CPM_NWP_TWILIO_VERIFY_SERVICE_SID). The hidden field keeps your database copy when you save this tab. Remove the constant to edit the SID in the UI.', 'cpm-humanblockchain' ); ?></p>
-							<?php else : ?>
-								<input type="text" id="cpm_nwp_twilio_verify_service_sid" name="cpm_nwp_twilio_verify_service_sid" value="<?php echo esc_attr( $verify_service ); ?>" class="regular-text" placeholder="VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
-								<p class="description"><?php esc_html_e( 'When set, OTP can use the Twilio Verify API and you do not need a “From” number. Leave empty to use the classic Messages API + From number instead.', 'cpm-humanblockchain' ); ?></p>
-							<?php endif; ?>
 						</td>
 					</tr>
 					<tr>
