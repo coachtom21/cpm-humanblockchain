@@ -52,6 +52,7 @@ class Cpm_Humanblockchain_Admin {
 		$this->plugin_name = $plugin_name;
 		$this->version     = $version;
 		add_filter( 'wp_redirect', array( $this, 'filter_nwp_settings_redirect_tab' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_nwp_settings_wc_assets' ), 99 );
 
 	}
 
@@ -91,6 +92,10 @@ class Cpm_Humanblockchain_Admin {
 		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_geo_only_capped_nwp', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_two_scan_geo_only_capped_nwp' ),
+		) );
+		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_auto_cap_product_ids', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_auto_cap_product_ids' ),
 		) );
 		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qr_url', array(
 			'type'              => 'string',
@@ -239,6 +244,39 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Comma-separated product or variation IDs for auto NWP cap tagging at checkout.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_auto_cap_product_ids( $value ) {
+		if ( is_array( $value ) ) {
+			$parts = array();
+			foreach ( $value as $p ) {
+				$n = absint( $p );
+				if ( $n > 0 ) {
+					$parts[] = (string) $n;
+				}
+			}
+			$parts = array_unique( array_slice( $parts, 0, 500 ) );
+			return implode( ',', $parts );
+		}
+		$s = is_string( $value ) ? trim( $value ) : '';
+		if ( $s === '' ) {
+			return '';
+		}
+		$parts = array();
+		foreach ( preg_split( '/[\s,]+/', $s, -1, PREG_SPLIT_NO_EMPTY ) as $p ) {
+			$n = absint( $p );
+			if ( $n > 0 ) {
+				$parts[] = (string) $n;
+			}
+		}
+		$parts = array_unique( array_slice( $parts, 0, 500 ) );
+		return implode( ',', $parts );
+	}
+
+	/**
 	 * Target URL for the downloadable QR code image (optional; can be empty until generated).
 	 *
 	 * @param mixed $value Raw value.
@@ -375,6 +413,106 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Parse saved comma-separated product IDs into a unique int list.
+	 *
+	 * @param string $comma_ids Raw option value.
+	 * @return int[]
+	 */
+	private function parse_auto_cap_saved_product_ids( $comma_ids ) {
+		$out = array();
+		foreach ( preg_split( '/[\s,]+/', (string) $comma_ids, -1, PREG_SPLIT_NO_EMPTY ) as $p ) {
+			$n = absint( $p );
+			if ( $n > 0 ) {
+				$out[] = $n;
+			}
+		}
+		return array_values( array_unique( array_slice( $out, 0, 500 ) ) );
+	}
+
+	/**
+	 * Label for one row in the auto-cap product multiselect.
+	 *
+	 * @param WC_Product $product Product or variation.
+	 * @return string
+	 */
+	private function format_product_label_for_auto_cap_dropdown( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return '';
+		}
+		$id    = (int) $product->get_id();
+		$label = '#' . $id . ' — ' . wp_strip_all_tags( $product->get_name() );
+		if ( $product->is_type( 'variation' ) && function_exists( 'wc_get_formatted_variation' ) ) {
+			$attrs = wc_get_formatted_variation( $product, true, true, false );
+			if ( is_string( $attrs ) && $attrs !== '' ) {
+				$label .= ' (' . wp_strip_all_tags( $attrs ) . ')';
+			}
+		}
+		return $label;
+	}
+
+	/**
+	 * Build &lt;option&gt; list: all published products (up to a limit) plus any saved IDs not in that set.
+	 *
+	 * @param string $comma_ids Saved option (comma-separated IDs).
+	 * @return string HTML (escaped).
+	 */
+	private function get_nwp_auto_cap_product_multiselect_options_html( $comma_ids ) {
+		if ( ! function_exists( 'wc_get_product' ) || ! class_exists( 'WC_Product_Query' ) ) {
+			return '';
+		}
+		$selected = $this->parse_auto_cap_saved_product_ids( $comma_ids );
+		$labels   = array();
+		$limit    = (int) apply_filters( 'cpm_hb_nwp_auto_cap_dropdown_max_products', 500 );
+		$limit    = min( 2000, max( 1, $limit ) );
+		$types    = apply_filters(
+			'cpm_hb_nwp_auto_cap_dropdown_product_types',
+			array( 'simple', 'variable', 'variation' )
+		);
+		if ( ! is_array( $types ) ) {
+			$types = array( 'simple', 'variable', 'variation' );
+		}
+		$query = new WC_Product_Query(
+			array(
+				'status'  => 'publish',
+				'limit'   => $limit,
+				'orderby' => 'title',
+				'order'   => 'ASC',
+				'return'  => 'objects',
+				'type'    => $types,
+			)
+		);
+		$found = $query->get_products();
+		if ( is_array( $found ) ) {
+			foreach ( $found as $product ) {
+				if ( ! $product instanceof WC_Product ) {
+					continue;
+				}
+				$pid = (int) $product->get_id();
+				if ( $pid <= 0 ) {
+					continue;
+				}
+				$labels[ $pid ] = $this->format_product_label_for_auto_cap_dropdown( $product );
+			}
+		}
+		foreach ( $selected as $sid ) {
+			if ( isset( $labels[ $sid ] ) ) {
+				continue;
+			}
+			$product = wc_get_product( $sid );
+			$labels[ $sid ] = $product
+				? $this->format_product_label_for_auto_cap_dropdown( $product )
+				: '#' . $sid . ' — ' . __( '(missing product)', 'cpm-humanblockchain' );
+		}
+		natcasesort( $labels );
+		$html = '';
+		foreach ( $labels as $id => $label ) {
+			$sel = in_array( (int) $id, $selected, true ) ? ' selected="selected"' : '';
+			$html .= '<option value="' . esc_attr( (string) $id ) . '"' . $sel . '>' . esc_html( $label ) . '</option>';
+		}
+		return $html;
+	}
+
+	/**
 	 * Render settings page.
 	 *
 	 * @since 1.0.0
@@ -393,6 +531,7 @@ class Cpm_Humanblockchain_Admin {
 			Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M
 		);
 		$two_scan_cap_only = '1' === (string) get_option( Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_TWO_SCAN_GEO_ONLY_CAPPED_NWP, '0' );
+		$auto_cap_ids      = (string) get_option( Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_AUTO_CAP_PRODUCT_IDS, '' );
 		$nwp_qr_url       = get_option( 'cpm_nwp_qr_url', '' );
 		$nwp_qr_att       = (int) get_option( 'cpm_nwp_qr_attachment_id', 0 );
 		$nwp_qr_image     = ( $nwp_qr_att > 0 ) ? wp_get_attachment_image_url( $nwp_qr_att, 'full' ) : '';
@@ -505,6 +644,50 @@ class Cpm_Humanblockchain_Admin {
 								<p class="description">
 									<?php esc_html_e( 'When enabled, buyer OTP normally skips GPS/time checks unless you enable the otp filter; delivery confirm enforces location and elapsed time only if at least one selected order qualifies.', 'cpm-humanblockchain' ); ?>
 								</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><label for="cpm_nwp_auto_cap_product_ids"><?php esc_html_e( 'Auto-tag: products', 'cpm-humanblockchain' ); ?></label></th>
+							<td>
+								<?php if ( class_exists( 'WooCommerce' ) ) : ?>
+									<select
+										class="wc-enhanced-select"
+										multiple="multiple"
+										style="width:100%;max-width:640px;"
+										id="cpm_nwp_auto_cap_product_ids"
+										name="cpm_nwp_auto_cap_product_ids[]"
+										data-placeholder="<?php esc_attr_e( 'Select products…', 'cpm-humanblockchain' ); ?>"
+										data-allow_clear="true"
+									>
+										<?php
+										echo wp_kses(
+											$this->get_nwp_auto_cap_product_multiselect_options_html( $auto_cap_ids ),
+											array(
+												'option' => array(
+													'value'    => true,
+													'selected' => true,
+												),
+											)
+										);
+										?>
+									</select>
+									<p class="description">
+										<?php
+										echo esc_html(
+											sprintf(
+												/* translators: %d: max products listed in the dropdown */
+												__( 'Lists up to %d published products (and your saved picks if they are outside that list). Use the box to search within the list and select multiple rows. At checkout, matching orders get _cpm_hb_nwp_daily_max_usd = 0.03. Increase the limit with filter cpm_hb_nwp_auto_cap_dropdown_max_products if needed.', 'cpm-humanblockchain' ),
+												(int) apply_filters( 'cpm_hb_nwp_auto_cap_dropdown_max_products', 500 )
+											)
+										);
+										?>
+									</p>
+								<?php else : ?>
+									<input type="text" class="large-text code" id="cpm_nwp_auto_cap_product_ids" name="cpm_nwp_auto_cap_product_ids" value="<?php echo esc_attr( $auto_cap_ids ); ?>" placeholder="<?php esc_attr_e( 'e.g. 123, 456', 'cpm-humanblockchain' ); ?>">
+									<p class="description">
+										<?php esc_html_e( 'WooCommerce is required for the product picker. Enter comma-separated product or variation IDs, or install WooCommerce and reload.', 'cpm-humanblockchain' ); ?>
+									</p>
+								<?php endif; ?>
 							</td>
 						</tr>
 					</table>
@@ -661,7 +844,7 @@ class Cpm_Humanblockchain_Admin {
 	 *
 	 * @since    1.0.0
 	 */
-	public function enqueue_styles() {
+	public function enqueue_styles( $hook = '' ) {
 
 		/**
 		 * This function is provided for demonstration purposes only.
@@ -702,6 +885,32 @@ class Cpm_Humanblockchain_Admin {
 					'postEdit'   => admin_url( 'post.php' ),
 					'mediaStr'  => __( 'Open in Media Library', 'cpm-humanblockchain' ),
 				)
+			);
+		}
+	}
+
+	/**
+	 * WooCommerce SelectWoo (product search) on NWP settings — runs at priority 20 so WC has registered handles.
+	 *
+	 * @param string $hook_suffix Current admin screen.
+	 */
+	public function enqueue_nwp_settings_wc_assets( $hook_suffix ) {
+		if ( 'settings_page_cpm-nwp-settings' !== $hook_suffix || ! class_exists( 'WooCommerce' ) ) {
+			return;
+		}
+		if ( wp_style_is( 'woocommerce_admin_styles', 'registered' ) ) {
+			wp_enqueue_style( 'woocommerce_admin_styles' );
+		}
+		if ( wp_script_is( 'wc-enhanced-select', 'registered' ) ) {
+			wp_enqueue_script( 'wc-enhanced-select' );
+			wp_add_inline_script(
+				'wc-enhanced-select',
+				'jQuery(function($){$(document.body).trigger("wc-enhanced-select-init");'
+				. '$(document).on("submit",".cpm-nwp-settings-form-general",function(){'
+				. 'var $s=$("#cpm_nwp_auto_cap_product_ids");if(!$s.length){return;}'
+				. 'var v=$s.val();if(!v||!v.length){$(this).append("<input type=\"hidden\" name=\"cpm_nwp_auto_cap_product_ids[]\" value=\"\" />");}'
+				. '});});',
+				'after'
 			);
 		}
 	}

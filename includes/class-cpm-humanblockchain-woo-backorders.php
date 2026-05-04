@@ -26,6 +26,9 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		add_filter( 'is_protected_meta', array( __CLASS__, 'unhide_nwp_daily_cap_meta_in_order_ui' ), 10, 3 );
 		add_action( 'add_meta_boxes', array( __CLASS__, 'register_nwp_two_scan_meta_box' ), 20, 2 );
 		add_action( 'woocommerce_process_shop_order_meta', array( __CLASS__, 'save_order_nwp_two_scan_cap_field' ), 30, 2 );
+
+		add_action( 'woocommerce_checkout_order_processed', array( __CLASS__, 'maybe_auto_tag_order_nwp_daily_cap_on_checkout' ), 25, 3 );
+		add_action( 'woocommerce_store_api_checkout_order_processed', array( __CLASS__, 'maybe_auto_tag_order_nwp_daily_cap_blocks' ), 25, 1 );
 	}
 
 	/**
@@ -158,6 +161,118 @@ class Cpm_Humanblockchain_Woo_Backorders {
 			$order->delete_meta_data( '_cpm_hb_nwp_daily_max_usd' );
 		}
 		$order->save();
+	}
+
+	/**
+	 * Classic checkout: tag order with NWP cap meta when rules match (product meta, product IDs, or categories).
+	 *
+	 * @param int               $order_id     Order ID.
+	 * @param array             $posted_data  Posted checkout fields (unused).
+	 * @param WC_Order|null $order Order object when provided by WooCommerce.
+	 */
+	public static function maybe_auto_tag_order_nwp_daily_cap_on_checkout( $order_id, $posted_data = null, $order = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		unset( $posted_data );
+		if ( $order instanceof WC_Order ) {
+			self::maybe_auto_tag_order_nwp_daily_cap( $order );
+			return;
+		}
+		$o = wc_get_order( (int) $order_id );
+		if ( $o instanceof WC_Order ) {
+			self::maybe_auto_tag_order_nwp_daily_cap( $o );
+		}
+	}
+
+	/**
+	 * Block / Store API checkout.
+	 *
+	 * @param WC_Order $order Order.
+	 */
+	public static function maybe_auto_tag_order_nwp_daily_cap_blocks( $order ) {
+		if ( $order instanceof WC_Order ) {
+			self::maybe_auto_tag_order_nwp_daily_cap( $order );
+		}
+	}
+
+	/**
+	 * Set _cpm_hb_nwp_daily_max_usd = 0.03 when any line matches product meta, configured IDs, or configured categories.
+	 *
+	 * @param WC_Order $order Order.
+	 */
+	public static function maybe_auto_tag_order_nwp_daily_cap( WC_Order $order ) {
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		if ( (bool) apply_filters( 'cpm_hb_skip_auto_tag_nwp_daily_cap', false, $order ) ) {
+			return;
+		}
+		$existing = $order->get_meta( '_cpm_hb_nwp_daily_max_usd', true );
+		if ( $existing !== '' && null !== $existing && ! self::is_nwp_daily_cap_meta_value( $existing ) ) {
+			return;
+		}
+		if ( self::is_nwp_daily_cap_meta_value( $existing ) ) {
+			return;
+		}
+		if ( ! self::order_has_line_matching_nwp_cap_rules( $order ) ) {
+			return;
+		}
+		$order->update_meta_data( '_cpm_hb_nwp_daily_max_usd', '0.03' );
+		$order->save();
+	}
+
+	/**
+	 * @param mixed $raw Meta or product value.
+	 * @return bool
+	 */
+	private static function is_nwp_daily_cap_meta_value( $raw ) {
+		if ( is_numeric( $raw ) && abs( (float) $raw - 0.03 ) < 0.0001 ) {
+			return true;
+		}
+		if ( is_string( $raw ) && preg_match( '/^\s*0?\.03\s*$/', $raw ) ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * @param WC_Order $order Order.
+	 * @return bool
+	 */
+	private static function order_has_line_matching_nwp_cap_rules( WC_Order $order ) {
+		$config_ids = class_exists( 'Cpm_Humanblockchain_Nwp_Gateway_Config' ) ? Cpm_Humanblockchain_Nwp_Gateway_Config::get_auto_cap_product_ids() : array();
+
+		foreach ( $order->get_items() as $item ) {
+			if ( ! $item instanceof WC_Order_Item_Product ) {
+				continue;
+			}
+			if ( (bool) apply_filters( 'cpm_hb_order_line_qualifies_nwp_daily_cap', false, $item, $order, $config_ids, array() ) ) {
+				return true;
+			}
+			$product = $item->get_product();
+			if ( ! $product ) {
+				continue;
+			}
+			$check_ids = array_unique(
+				array_filter(
+					array( (int) $item->get_variation_id(), (int) $item->get_product_id() )
+				)
+			);
+			foreach ( $check_ids as $pid ) {
+				if ( $pid <= 0 ) {
+					continue;
+				}
+				$p = wc_get_product( $pid );
+				if ( ! $p ) {
+					continue;
+				}
+				if ( self::is_nwp_daily_cap_meta_value( $p->get_meta( '_cpm_hb_nwp_daily_max_usd', true ) ) ) {
+					return true;
+				}
+				if ( array() !== $config_ids && in_array( $pid, $config_ids, true ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

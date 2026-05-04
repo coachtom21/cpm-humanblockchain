@@ -20,6 +20,8 @@ class Cpm_Humanblockchain_Nwp_Gateway_Config {
 	 * Buyer OTP without order context skips geo/time in this mode unless filtered.
 	 */
 	const OPTION_TWO_SCAN_GEO_ONLY_CAPPED_NWP = 'cpm_nwp_two_scan_geo_only_capped_nwp';
+	/** Comma-separated WooCommerce product or variation IDs — matching checkout orders get _cpm_hb_nwp_daily_max_usd = 0.03. */
+	const OPTION_AUTO_CAP_PRODUCT_IDS        = 'cpm_nwp_auto_cap_product_ids';
 
 	/**
 	 * Maximum allowed seconds between scan 1 and scan 2 (PoD / two-scan flow).
@@ -57,5 +59,23 @@ class Cpm_Humanblockchain_Nwp_Gateway_Config {
 			'cpm_nwp_two_scan_geo_only_capped_nwp_orders',
 			'1' === (string) get_option( self::OPTION_TWO_SCAN_GEO_ONLY_CAPPED_NWP, '0' )
 		);
+	}
+
+	/**
+	 * Product / variation IDs that trigger auto order meta for NWP $0.03/day cap (checkout).
+	 *
+	 * @return int[]
+	 */
+	public static function get_auto_cap_product_ids() {
+		$raw = (string) get_option( self::OPTION_AUTO_CAP_PRODUCT_IDS, '' );
+		$raw = apply_filters( 'cpm_nwp_auto_cap_product_ids_raw', $raw );
+		$out = array();
+		foreach ( preg_split( '/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY ) as $p ) {
+			$n = absint( $p );
+			if ( $n > 0 ) {
+				$out[] = $n;
+			}
+		}
+		return array_values( array_unique( array_slice( $out, 0, 500 ) ) );
 	}
 }
