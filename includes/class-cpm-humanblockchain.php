@@ -146,6 +146,8 @@ class Cpm_Humanblockchain {
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-woo-backorders.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-pod-wallet.php';
+
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-xp-ledger.php';
 
 		/**
@@ -158,6 +160,7 @@ class Cpm_Humanblockchain {
 		Cpm_Humanblockchain_Device_Registry::init();
 		Cpm_Humanblockchain_Membership::init();
 		Cpm_Humanblockchain_Woo_Backorders::init();
+		Cpm_Humanblockchain_Pod_Wallet::init();
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_nwp_devices', 5 );
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_xp_ledger', 5 );
 

@@ -434,7 +434,7 @@ class Cpm_Humanblockchain_Woo_Backorders {
 	 * @param int      $buyer_id WP user ID.
 	 * @return bool
 	 */
-	private static function buyer_owns_wc_order( $order, $buyer_id ) {
+	public static function buyer_owns_wc_order( $order, $buyer_id ) {
 		if ( ! $order instanceof WC_Order ) {
 			return false;
 		}
