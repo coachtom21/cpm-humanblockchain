@@ -22,6 +22,142 @@ class Cpm_Humanblockchain_Woo_Backorders {
 	public static function init() {
 		add_action( 'cpm_hb_buyer_confirmed_delivery', array( __CLASS__, 'maybe_mark_woo_orders_after_pod_confirm' ), 10, 4 );
 		add_action( 'cpm_hb_buyer_confirmed_delivery', array( __CLASS__, 'maybe_note_trade_credit_and_action' ), 15, 4 );
+
+		add_filter( 'is_protected_meta', array( __CLASS__, 'unhide_nwp_daily_cap_meta_in_order_ui' ), 10, 3 );
+		add_action( 'add_meta_boxes', array( __CLASS__, 'register_nwp_two_scan_meta_box' ), 20, 2 );
+		add_action( 'woocommerce_process_shop_order_meta', array( __CLASS__, 'save_order_nwp_two_scan_cap_field' ), 30, 2 );
+	}
+
+	/**
+	 * WooCommerce hides underscore meta keys in the order "Custom fields" box; this key must stay visible to confirm it saved.
+	 *
+	 * @param bool   $protected Whether the key is protected (hidden).
+	 * @param string $meta_key  Meta key.
+	 * @param string $meta_type Object type (e.g. order).
+	 * @return bool
+	 */
+	public static function unhide_nwp_daily_cap_meta_in_order_ui( $protected, $meta_key, $meta_type ) {
+		if ( '_cpm_hb_nwp_daily_max_usd' !== $meta_key ) {
+			return $protected;
+		}
+		if ( in_array( (string) $meta_type, array( 'order', 'post', '' ), true ) ) {
+			return false;
+		}
+		return $protected;
+	}
+
+	/**
+	 * Sidebar meta box on order edit (HPOS + legacy) so the NWP two-scan control is easy to find.
+	 *
+	 * @param string              $screen_or_post_type Screen id (HPOS) or post type (legacy).
+	 * @param WC_Order|WP_Post    $post_or_order       Order object or shop_order post.
+	 */
+	public static function register_nwp_two_scan_meta_box( $screen_or_post_type, $post_or_order ) {
+		$order = null;
+		if ( $post_or_order instanceof WC_Order ) {
+			$order = $post_or_order;
+		} elseif ( $post_or_order instanceof WP_Post && in_array( $post_or_order->post_type, array( 'shop_order', 'shop_order_placehold' ), true ) ) {
+			$order = wc_get_order( $post_or_order->ID );
+		}
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		$screen = is_string( $screen_or_post_type ) ? $screen_or_post_type : '';
+		if ( $screen === '' ) {
+			return;
+		}
+		add_meta_box(
+			'cpm_hb_order_nwp_two_scan',
+			__( 'Human Blockchain — NWP two-scan', 'cpm-humanblockchain' ),
+			array( __CLASS__, 'render_order_nwp_two_scan_cap_field' ),
+			$screen,
+			'side',
+			'high'
+		);
+	}
+
+	/**
+	 * Meta box / order screen: checkbox to tag order for strict two-scan (stores _cpm_hb_nwp_daily_max_usd = 0.03).
+	 *
+	 * @param WC_Order|WP_Post $order_or_post Order or legacy post.
+	 */
+	public static function render_order_nwp_two_scan_cap_field( $order_or_post ) {
+		if ( ! is_admin() || ! current_user_can( 'edit_shop_orders' ) ) {
+			return;
+		}
+		$order = $order_or_post instanceof WC_Order ? $order_or_post : wc_get_order( $order_or_post );
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		$raw     = $order->get_meta( '_cpm_hb_nwp_daily_max_usd', true );
+		$checked = false;
+		if ( is_numeric( $raw ) && abs( (float) $raw - 0.03 ) < 0.0001 ) {
+			$checked = true;
+		} elseif ( is_string( $raw ) && preg_match( '/^\s*0?\.03\s*$/', $raw ) ) {
+			$checked = true;
+		}
+		?>
+		<div class="cpm-hb-order-nwp-cap" style="padding:0 2px;">
+			<input type="hidden" name="cpm_hb_order_nwp_cap_fields" value="1" />
+			<label style="display:block;margin-bottom:8px;">
+				<input type="checkbox" name="cpm_hb_order_nwp_strict_two_scan" value="1" <?php checked( $checked ); ?> />
+				<?php esc_html_e( 'Strict proof-of-delivery time/distance (NWP $0.03/day cap)', 'cpm-humanblockchain' ); ?>
+			</label>
+			<p class="description"><?php esc_html_e( 'Check this, then click Update on the order. The value is stored as order meta _cpm_hb_nwp_daily_max_usd = 0.03. Use when “Cap-aware two-scan” is enabled under NWP Gateway settings.', 'cpm-humanblockchain' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Whether the current POST is a valid WooCommerce order save from admin (legacy or HPOS).
+	 *
+	 * @param int $order_id Order ID.
+	 * @return bool
+	 */
+	private static function verify_order_admin_save_nonce( $order_id ) {
+		$order_id = (int) $order_id;
+		if ( isset( $_POST['woocommerce_meta_nonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['woocommerce_meta_nonce'] ) ), 'woocommerce_save_data' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return true;
+		}
+		if ( $order_id > 0 && isset( $_POST['_wpnonce'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'update-order_' . $order_id ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Persist NWP cap meta when the order is saved in admin.
+	 *
+	 * @param int                $order_id Order ID.
+	 * @param WC_Order|WP_Post|null $post_or_order Order object (HPOS) or post (legacy).
+	 */
+	public static function save_order_nwp_two_scan_cap_field( $order_id, $post_or_order = null ) {
+		if ( ! self::verify_order_admin_save_nonce( (int) $order_id ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_shop_orders' ) ) {
+			return;
+		}
+		$order = null;
+		if ( $post_or_order instanceof WC_Order ) {
+			$order = $post_or_order;
+		} elseif ( $post_or_order instanceof WP_Post ) {
+			$order = wc_get_order( $post_or_order->ID );
+		} else {
+			$order = wc_get_order( (int) $order_id );
+		}
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		if ( empty( $_POST['cpm_hb_order_nwp_cap_fields'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			return;
+		}
+		if ( ! empty( $_POST['cpm_hb_order_nwp_strict_two_scan'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			$order->update_meta_data( '_cpm_hb_nwp_daily_max_usd', '0.03' );
+		} else {
+			$order->delete_meta_data( '_cpm_hb_nwp_daily_max_usd' );
+		}
+		$order->save();
 	}
 
 	/**
