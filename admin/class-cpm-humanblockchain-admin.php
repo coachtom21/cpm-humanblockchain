@@ -41,6 +41,13 @@ class Cpm_Humanblockchain_Admin {
 	private $version;
 
 	/**
+	 * Settings API groups: one per tabbed form. WordPress saves every option in a group on submit;
+	 * fields not in the POST become null and would wipe the other tab if both shared one group.
+	 */
+	const NWP_SETTINGS_GROUP_GENERAL     = 'cpm_nwp_gateway_general';
+	const NWP_SETTINGS_GROUP_INTEGRATION = 'cpm_nwp_gateway_integration';
+
+	/**
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.0
@@ -72,60 +79,63 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
-	 * Register NWP Gateway settings (options group: cpm_nwp_gateway; previously cpm_nwp_twilio for Twilio-only).
+	 * Register NWP Gateway settings (two option groups for General vs Integration tabs).
 	 *
 	 * @since 1.0.0
 	 */
 	public function register_settings() {
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_discord_invite_url', array(
+		$g = self::NWP_SETTINGS_GROUP_GENERAL;
+		register_setting( $g, 'cpm_nwp_discord_invite_url', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_discord_invite_url' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_max_seconds', array(
+		register_setting( $g, 'cpm_nwp_two_scan_max_seconds', array(
 			'type'              => 'integer',
 			'sanitize_callback' => array( $this, 'sanitize_two_scan_max_seconds' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_max_distance_m', array(
+		register_setting( $g, 'cpm_nwp_two_scan_max_distance_m', array(
 			'type'              => 'integer',
 			'sanitize_callback' => array( $this, 'sanitize_two_scan_max_distance_m' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_geo_only_capped_nwp', array(
+		register_setting( $g, 'cpm_nwp_two_scan_geo_only_capped_nwp', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_two_scan_geo_only_capped_nwp' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_auto_cap_product_ids', array(
+		register_setting( $g, 'cpm_nwp_auto_cap_product_ids', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_auto_cap_product_ids' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qr_url', array(
+		register_setting( $g, 'cpm_nwp_qr_url', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_nwp_qr_url' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_twilio_sid', array(
+
+		$i = self::NWP_SETTINGS_GROUP_INTEGRATION;
+		register_setting( $i, 'cpm_nwp_twilio_sid', array(
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_twilio_token', array(
+		register_setting( $i, 'cpm_nwp_twilio_token', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_twilio_token' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_twilio_from', array(
+		register_setting( $i, 'cpm_nwp_twilio_from', array(
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_twilio_verify_service_sid', array(
+		register_setting( $i, 'cpm_nwp_twilio_verify_service_sid', array(
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_default_country', array(
+		register_setting( $i, 'cpm_nwp_default_country', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_default_country' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qrtiger_api_key', array(
+		register_setting( $i, 'cpm_nwp_qrtiger_api_key', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_qrtiger_api_key' ),
 		) );
-		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qrtiger_api_url', array(
+		register_setting( $i, 'cpm_nwp_qrtiger_api_url', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_qrtiger_api_url' ),
 		) );
@@ -142,7 +152,8 @@ class Cpm_Humanblockchain_Admin {
 		if ( ! isset( $_POST['option_page'], $_POST['cpm_nwp_settings_tab'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			return $location;
 		}
-		if ( 'cpm_nwp_gateway' !== $_POST['option_page'] ) { // phpcs:ignore WordPress.Security
+		$page = (string) wp_unslash( $_POST['option_page'] ); // phpcs:ignore WordPress.Security
+		if ( ! in_array( $page, array( self::NWP_SETTINGS_GROUP_GENERAL, self::NWP_SETTINGS_GROUP_INTEGRATION ), true ) ) {
 			return $location;
 		}
 		if ( false === strpos( (string) $location, 'cpm-nwp-settings' ) || false === strpos( (string) $location, 'settings-updated' ) ) {
@@ -574,7 +585,7 @@ class Cpm_Humanblockchain_Admin {
 
 			<div class="cpm-nwp-tab-panel" id="cpm-nwp-panel-general" style="<?php echo 'general' === $active_tab ? '' : 'display:none;'; ?>">
 				<form method="post" action="options.php" class="cpm-nwp-settings-form-general">
-					<?php settings_fields( 'cpm_nwp_gateway' ); ?>
+					<?php settings_fields( self::NWP_SETTINGS_GROUP_GENERAL ); ?>
 					<input type="hidden" name="cpm_nwp_settings_tab" value="general" />
 					<h2 class="title" style="margin-top:1em;"><?php esc_html_e( 'QR & onboarding links', 'cpm-humanblockchain' ); ?></h2>
 					<p class="description">
@@ -766,7 +777,7 @@ class Cpm_Humanblockchain_Admin {
 			</div>
 
 			<form method="post" action="options.php" class="cpm-nwp-settings-form-integration">
-				<?php settings_fields( 'cpm_nwp_gateway' ); ?>
+				<?php settings_fields( self::NWP_SETTINGS_GROUP_INTEGRATION ); ?>
 				<input type="hidden" name="cpm_nwp_settings_tab" value="integration" />
 				<h2 class="title" style="margin-top:0;"><?php esc_html_e( 'Twilio SMS (for OTP)', 'cpm-humanblockchain' ); ?></h2>
 				<p><?php esc_html_e( 'Used when a user opens Activate device → Send OTP. The phone must already exist in wp_nwp_devices.', 'cpm-humanblockchain' ); ?></p>
