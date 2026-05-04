@@ -652,6 +652,28 @@ class Cpm_Humanblockchain_Public {
 				$backorders_localize
 			);
 		}
+
+		if ( (bool) apply_filters( 'cpm_hb_hide_xp_ledger_remote_column_script', true ) && is_user_logged_in() ) {
+			$load_xp_ledger_remote_hide = false;
+			if ( function_exists( 'is_account_page' ) && is_account_page() && function_exists( 'WC' ) ) {
+				$wc = WC();
+				if ( $wc && $wc->query && 'xp-ledger' === $wc->query->get_current_endpoint() ) {
+					$load_xp_ledger_remote_hide = true;
+				}
+			}
+			if ( ! $load_xp_ledger_remote_hide && function_exists( 'is_page_template' ) && is_page_template( 'templates-parts/template-my-account.php' ) ) {
+				$load_xp_ledger_remote_hide = true;
+			}
+			if ( $load_xp_ledger_remote_hide ) {
+				wp_enqueue_script(
+					$this->plugin_name . '-xp-ledger-account',
+					plugin_dir_url( __FILE__ ) . 'js/cpm-hb-xp-ledger-account.js',
+					array(),
+					$this->version,
+					true
+				);
+			}
+		}
 	}
 
 }
