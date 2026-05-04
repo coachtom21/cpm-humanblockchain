@@ -211,6 +211,86 @@ class Cpm_Humanblockchain_Public {
 	}
 
 	/**
+	 * Cart page (classic template): promotional / story video above the cart table.
+	 */
+	public function render_cart_page_video() {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
+			return;
+		}
+		echo wp_kses( $this->get_cart_page_video_markup(), $this->get_cart_page_video_allowed_html() );
+	}
+
+	/**
+	 * Cart page (WooCommerce block): prepend the same video above the cart block.
+	 *
+	 * @param string               $content       Block HTML.
+	 * @param array<string, mixed> $parsed_block Parsed block.
+	 * @return string
+	 */
+	public function prepend_cart_page_video_to_cart_block( $content, $parsed_block ) {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
+			return $content;
+		}
+		if ( ! is_array( $parsed_block ) || ! isset( $parsed_block['blockName'] ) || 'woocommerce/cart' !== $parsed_block['blockName'] ) {
+			return $content;
+		}
+		return wp_kses( $this->get_cart_page_video_markup(), $this->get_cart_page_video_allowed_html() ) . $content;
+	}
+
+	/**
+	 * @return array<string, array<string, bool>>
+	 */
+	private function get_cart_page_video_allowed_html() {
+		return array(
+			'div'    => array( 'class' => true ),
+			'p'      => array( 'class' => true ),
+			'video'  => array(
+				'class'       => true,
+				'controls'    => true,
+				'playsinline' => true,
+				'preload'     => true,
+			),
+			'source' => array(
+				'src'  => true,
+				'type' => true,
+			),
+		);
+	}
+
+	/**
+	 * HTML for the cart-page video (shared by classic hook + block filter).
+	 *
+	 * @return string
+	 */
+	private function get_cart_page_video_markup() {
+		if ( ! (bool) apply_filters( 'cpm_hb_show_cart_page_video', true ) ) {
+			return '';
+		}
+		$default_url = 'https://humanblockchain.info/wp-content/uploads/2026/05/Coach-Toms-Dream_-One-Grain-of-Sand-2026-05-02-1.mp4';
+		$url         = (string) apply_filters( 'cpm_hb_cart_page_video_url', $default_url );
+		$url         = esc_url( $url );
+		if ( $url === '' ) {
+			return '';
+		}
+		$title = (string) apply_filters(
+			'cpm_hb_cart_page_video_title',
+			__( 'Coach Tom’s Dream — One Grain of Sand', 'cpm-humanblockchain' )
+		);
+		ob_start();
+		?>
+		<div class="cpm-hb-cart-page-video-wrap">
+			<?php if ( $title !== '' ) : ?>
+				<p class="cpm-hb-cart-page-video-title"><?php echo esc_html( $title ); ?></p>
+			<?php endif; ?>
+			<video class="cpm-hb-cart-page-video" controls playsinline preload="metadata">
+				<source src="<?php echo esc_url( $url ); ?>" type="video/mp4" />
+			</video>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
 	 * Remove one-time skip query param so a full reload (F5) can show the gate again.
 	 *
 	 * @since 1.0.0

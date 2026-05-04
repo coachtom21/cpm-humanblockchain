@@ -756,3 +756,30 @@ body.single-product .elementor-widget-container .woocommerce-variation-add-to-ca
 body.single-product .elementor-widget-container .woocommerce-variation-add-to-cart .quantity {
 	flex: 0 0 auto;
 }
+
+/* WooCommerce cart page — Coach Tom / Human Blockchain story video */
+body.woocommerce-cart .cpm-hb-cart-page-video-wrap {
+	box-sizing: border-box;
+	max-width: 960px;
+	margin: 0 auto 1.75rem;
+	padding: 0 12px;
+}
+
+body.woocommerce-cart .cpm-hb-cart-page-video-title {
+	margin: 0 0 0.65rem;
+	font-size: 1.05rem;
+	font-weight: 700;
+	line-height: 1.35;
+	text-align: center;
+	color: inherit;
+}
+
+body.woocommerce-cart .cpm-hb-cart-page-video {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: min(70vh, 540px);
+	border-radius: 10px;
+	background: #0b1220;
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}

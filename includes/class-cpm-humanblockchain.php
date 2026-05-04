@@ -223,6 +223,8 @@ class Cpm_Humanblockchain {
 		$this->loader->add_action( 'wp_footer', $plugin_public, 'render_landing_entry_modal', 4 );
 		$this->loader->add_action( 'wp_footer', $plugin_public, 'strip_landing_skip_gate_query_param', 5 );
 		$this->loader->add_action( 'wp_footer', $plugin_public, 'render_device_registration_modal', 6 );
+		$this->loader->add_action( 'woocommerce_before_cart', $plugin_public, 'render_cart_page_video', 5 );
+		$this->loader->add_filter( 'render_block', $plugin_public, 'prepend_cart_page_video_to_cart_block', 10, 2 );
 
 	}
 
