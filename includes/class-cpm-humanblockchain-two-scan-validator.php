@@ -170,10 +170,11 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 	 * @param string   $transaction_code Normalized or raw HB-… code.
 	 * @param float|null $buyer_lat       Buyer WGS84 latitude or null if missing.
 	 * @param float|null $buyer_lng       Buyer WGS84 longitude or null if missing.
-	 * @param string   $geo_error_context Optional: 'otp' | 'confirm' for message wording.
+	 * @param string     $geo_error_context Optional: 'otp' | 'confirm' for message wording.
+	 * @param int[]|null $order_ids         When context is confirm, Woo order IDs selected by the buyer (optional).
 	 * @return true|WP_Error
 	 */
-	public static function validate_buyer_two_scan( $transaction_code, $buyer_lat, $buyer_lng, $geo_error_context = 'otp' ) {
+	public static function validate_buyer_two_scan( $transaction_code, $buyer_lat, $buyer_lng, $geo_error_context = 'otp', $order_ids = null ) {
 		if ( ! apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) ) {
 			return true;
 		}
@@ -200,6 +201,11 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 				'cpm_hb_pod_tx',
 				__( 'That delivery code is unknown or has expired. Confirm the code with the seller and try again.', 'cpm-humanblockchain' )
 			);
+		}
+
+		$order_ids = is_array( $order_ids ) ? array_values( array_map( 'intval', $order_ids ) ) : null;
+		if ( ! self::should_enforce_time_distance( $code, $geo_error_context, $order_ids ) ) {
+			return true;
 		}
 
 		if ( null === $buyer_lat || null === $buyer_lng ) {
@@ -244,6 +250,35 @@ class Cpm_Humanblockchain_Two_Scan_Validator {
 		}
 
 		return true;
+	}
+
+	/**
+	 * When “capped NWP only” mode is on, skip elapsed time / distance / buyer GPS unless the flow qualifies.
+	 *
+	 * @param string     $transaction_code HB-… code (normalized).
+	 * @param string     $geo_error_context  otp|confirm.
+	 * @param int[]|null $order_ids          Selected Woo order IDs at confirm (may be empty).
+	 * @return bool True = run full geo + time + distance checks.
+	 */
+	public static function should_enforce_time_distance( $transaction_code, $geo_error_context, $order_ids ) {
+		unset( $transaction_code );
+		if ( ! class_exists( 'Cpm_Humanblockchain_Nwp_Gateway_Config' )
+			|| ! Cpm_Humanblockchain_Nwp_Gateway_Config::two_scan_geo_only_for_capped_nwp_orders() ) {
+			return true;
+		}
+		if ( 'confirm' === $geo_error_context && class_exists( 'Cpm_Humanblockchain_Woo_Backorders' )
+			&& is_array( $order_ids ) && array() !== $order_ids ) {
+			return Cpm_Humanblockchain_Woo_Backorders::orders_require_geo_two_scan( $order_ids );
+		}
+		if ( 'otp' === $geo_error_context ) {
+			return (bool) apply_filters( 'cpm_hb_two_scan_enforce_geo_at_otp_capped_only_mode', false );
+		}
+		return (bool) apply_filters(
+			'cpm_hb_two_scan_enforce_geo_confirm_fallback',
+			false,
+			$order_ids,
+			$geo_error_context
+		);
 	}
 
 	/**

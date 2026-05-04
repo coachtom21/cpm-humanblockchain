@@ -88,6 +88,10 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'integer',
 			'sanitize_callback' => array( $this, 'sanitize_two_scan_max_distance_m' ),
 		) );
+		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_two_scan_geo_only_capped_nwp', array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_two_scan_geo_only_capped_nwp' ),
+		) );
 		register_setting( 'cpm_nwp_gateway', 'cpm_nwp_qr_url', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_nwp_qr_url' ),
@@ -222,6 +226,16 @@ class Cpm_Humanblockchain_Admin {
 			$n = Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M;
 		}
 		return max( $min, min( $max, $n ) );
+	}
+
+	/**
+	 * Checkbox: two-scan time/distance only for NWP $0.03/day-cap Woo orders.
+	 *
+	 * @param mixed $value Raw value (use hidden field 0 + checkbox 1 so unchecked saves 0).
+	 * @return string '1' or '0'
+	 */
+	public function sanitize_two_scan_geo_only_capped_nwp( $value ) {
+		return '1' === (string) $value ? '1' : '0';
 	}
 
 	/**
@@ -378,6 +392,7 @@ class Cpm_Humanblockchain_Admin {
 			Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_TWO_SCAN_MAX_DISTANCE_M,
 			Cpm_Humanblockchain_Nwp_Gateway_Config::DEFAULT_TWO_SCAN_MAX_DISTANCE_M
 		);
+		$two_scan_cap_only = '1' === (string) get_option( Cpm_Humanblockchain_Nwp_Gateway_Config::OPTION_TWO_SCAN_GEO_ONLY_CAPPED_NWP, '0' );
 		$nwp_qr_url       = get_option( 'cpm_nwp_qr_url', '' );
 		$nwp_qr_att       = (int) get_option( 'cpm_nwp_qr_attachment_id', 0 );
 		$nwp_qr_image     = ( $nwp_qr_att > 0 ) ? wp_get_attachment_image_url( $nwp_qr_att, 'full' ) : '';
@@ -476,6 +491,19 @@ class Cpm_Humanblockchain_Admin {
 										)
 									);
 									?>
+								</p>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Cap-aware two-scan', 'cpm-humanblockchain' ); ?></th>
+							<td>
+								<input type="hidden" name="cpm_nwp_two_scan_geo_only_capped_nwp" value="0" />
+								<label>
+									<input type="checkbox" name="cpm_nwp_two_scan_geo_only_capped_nwp" value="1" <?php checked( $two_scan_cap_only ); ?> />
+									<?php esc_html_e( 'Apply time/distance rules only to WooCommerce orders tagged for NWP $0.03/day max (order meta _cpm_hb_nwp_daily_max_usd = 0.03, or filter).', 'cpm-humanblockchain' ); ?>
+								</label>
+								<p class="description">
+									<?php esc_html_e( 'When enabled, buyer OTP normally skips GPS/time checks unless you enable the otp filter; delivery confirm enforces location and elapsed time only if at least one selected order qualifies.', 'cpm-humanblockchain' ); ?>
 								</p>
 							</td>
 						</tr>

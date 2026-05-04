@@ -60,6 +60,14 @@
 	word-break: break-word;
 }
 
+.cpm-hb-backorders-footnote {
+	font-size: 0.9em;
+	line-height: 1.45;
+	color: #444;
+	margin: 0.75em 0 0;
+	max-width: 52rem;
+}
+
 .cpm-hb-backorders-empty {
 	margin: 0;
 	color: #64748b;

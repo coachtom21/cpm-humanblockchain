@@ -21,6 +21,76 @@ class Cpm_Humanblockchain_Woo_Backorders {
 	 */
 	public static function init() {
 		add_action( 'cpm_hb_buyer_confirmed_delivery', array( __CLASS__, 'maybe_mark_woo_orders_after_pod_confirm' ), 10, 4 );
+		add_action( 'cpm_hb_buyer_confirmed_delivery', array( __CLASS__, 'maybe_note_trade_credit_and_action' ), 15, 4 );
+	}
+
+	/**
+	 * After PoD confirm: optional Woo order note + action for seller trade credit (hub can listen).
+	 *
+	 * @param int    $buyer_id   Buyer WP user ID.
+	 * @param int    $seller_id  Seller WP user ID.
+	 * @param int[]  $order_ids  Order IDs.
+	 * @param string $code       HB transaction code.
+	 */
+	public static function maybe_note_trade_credit_and_action( $buyer_id, $seller_id, $order_ids, $code ) {
+		$buyer_id  = (int) $buyer_id;
+		$seller_id = (int) $seller_id;
+		$code      = is_string( $code ) ? $code : '';
+		if ( ! is_array( $order_ids ) || empty( $order_ids ) ) {
+			return;
+		}
+		$credit = (float) apply_filters( 'cpm_hb_seller_trade_credit_on_delivery_usd', 10.30, $buyer_id, $seller_id, $order_ids, $code );
+		$credit = max( 0, $credit );
+		if ( $credit <= 0 ) {
+			return;
+		}
+		/**
+		 * Seller-side trade credit after buyer confirms delivery (implement wallet/hub credit here).
+		 *
+		 * @param float  $credit    USD amount (filterable default 10.30).
+		 * @param int    $seller_id Seller WP user ID.
+		 * @param int    $buyer_id  Buyer WP user ID.
+		 * @param int[]  $order_ids Order IDs from confirm UI.
+		 * @param string $code      HB-… code.
+		 */
+		do_action( 'cpm_hb_seller_trade_credit_due', $credit, $seller_id, $buyer_id, $order_ids, $code );
+
+		if ( ! function_exists( 'wc_get_order' ) ) {
+			return;
+		}
+		$note = (string) apply_filters(
+			'cpm_hb_seller_trade_credit_order_note',
+			sprintf(
+				/* translators: 1: formatted USD, 2: seller WP user ID, 3: HB transaction code */
+				__( 'Proof-of-delivery: register %1$s trade credit for seller (WP user %2$d). Transaction code %3$s.', 'cpm-humanblockchain' ),
+				wp_strip_all_tags( function_exists( 'wc_price' ) ? wc_price( $credit ) : ( '$' . number_format_i18n( $credit, 2 ) ) ),
+				$seller_id,
+				$code
+			),
+			$credit,
+			$seller_id,
+			$buyer_id,
+			$order_ids,
+			$code
+		);
+		if ( $note === '' ) {
+			return;
+		}
+		foreach ( $order_ids as $oid ) {
+			$oid = (int) $oid;
+			if ( $oid <= 0 ) {
+				continue;
+			}
+			$order = wc_get_order( $oid );
+			if ( ! $order instanceof WC_Order ) {
+				continue;
+			}
+			if ( ! self::buyer_owns_wc_order( $order, $buyer_id ) ) {
+				continue;
+			}
+			$order->add_order_note( $note, false, true );
+			break;
+		}
 	}
 
 	/**
@@ -142,6 +212,43 @@ class Cpm_Humanblockchain_Woo_Backorders {
 	public static function get_order_statuses() {
 		$base = array( 'pending', 'processing', 'on-hold', 'pre-ordered' );
 		return array_values( array_unique( apply_filters( 'cpm_hb_woo_backorders_order_statuses', $base ) ) );
+	}
+
+	/**
+	 * Whether any selected WooCommerce order should use strict two-scan time/distance (NWP $0.03/day cap).
+	 * Mark orders with meta `_cpm_hb_nwp_daily_max_usd` = 0.03 (string or float), or use the filter per order.
+	 *
+	 * Hub-only numeric IDs (no WC order) are ignored here.
+	 *
+	 * @param int[] $order_ids Order IDs from the backorders confirm UI.
+	 * @return bool
+	 */
+	public static function orders_require_geo_two_scan( array $order_ids ) {
+		if ( ! function_exists( 'wc_get_order' ) ) {
+			return (bool) apply_filters( 'cpm_hb_orders_require_geo_two_scan_no_wc', false, $order_ids );
+		}
+		foreach ( $order_ids as $oid ) {
+			$oid = (int) $oid;
+			if ( $oid <= 0 ) {
+				continue;
+			}
+			$order = wc_get_order( $oid );
+			if ( ! $order instanceof WC_Order ) {
+				continue;
+			}
+			$raw = $order->get_meta( '_cpm_hb_nwp_daily_max_usd', true );
+			$max = is_numeric( $raw ) ? (float) $raw : null;
+			if ( null !== $max && abs( $max - 0.03 ) < 0.0001 ) {
+				return true;
+			}
+			if ( is_string( $raw ) && preg_match( '/^\s*0?\.03\s*$/', $raw ) ) {
+				return true;
+			}
+			if ( (bool) apply_filters( 'cpm_hb_wc_order_requires_nwp_two_scan_geo', false, $order ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -1158,7 +1158,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
 			$otp_covers = Cpm_Humanblockchain_Two_Scan_Validator::buyer_otp_two_scan_covers_confirm( $buyer_id, $code );
 			if ( ! $otp_covers ) {
-				$two_chk = Cpm_Humanblockchain_Two_Scan_Validator::validate_buyer_two_scan( $code, $b_lat, $b_lng, 'confirm' );
+				$two_chk = Cpm_Humanblockchain_Two_Scan_Validator::validate_buyer_two_scan( $code, $b_lat, $b_lng, 'confirm', $order_ids );
 				if ( is_wp_error( $two_chk ) ) {
 					wp_send_json_error( array( 'message' => $two_chk->get_error_message() ) );
 				}
@@ -1201,9 +1201,27 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		self::clear_buyer_pod_session_transaction_code( $buyer_id );
 
+		$rebate_usd = (float) apply_filters( 'cpm_hb_buyer_delivery_confirmed_rebate_usd', 5.0, $buyer_id, $seller_id, $order_ids, $code );
+		$rebate_usd = max( 0, $rebate_usd );
+		$msg_core   = __( 'Delivery confirmation recorded.', 'cpm-humanblockchain' );
+		if ( $rebate_usd > 0 && function_exists( 'wc_price' ) ) {
+			$msg_core .= ' ' . sprintf(
+				/* translators: %s: formatted money (e.g. $5.00) */
+				__( 'Buyer rebate for this confirmation: %s.', 'cpm-humanblockchain' ),
+				wp_strip_all_tags( wc_price( $rebate_usd ) )
+			);
+		} elseif ( $rebate_usd > 0 ) {
+			$msg_core .= ' ' . sprintf(
+				/* translators: %s: amount with currency symbol */
+				__( 'Buyer rebate for this confirmation: %s.', 'cpm-humanblockchain' ),
+				'$' . number_format_i18n( $rebate_usd, 2 )
+			);
+		}
+		$msg_core = apply_filters( 'cpm_hb_buyer_confirm_delivery_success_message', $msg_core, $buyer_id, $seller_id, $order_ids, $code );
+
 		wp_send_json_success(
 			array(
-				'message'      => __( 'Delivery confirmation recorded.', 'cpm-humanblockchain' ),
+				'message'      => $msg_core,
 				'redirect_url' => $redirect,
 			)
 		);

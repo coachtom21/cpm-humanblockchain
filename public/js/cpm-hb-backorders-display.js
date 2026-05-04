@@ -104,6 +104,12 @@
 			} );
 
 			$box.append( $table );
+			if ( S.economicsNote ) {
+				$box.append( $( '<p class="cpm-hb-backorders-footnote" />' ).text( S.economicsNote ) );
+			}
+			if ( S.podPendingNote ) {
+				$box.append( $( '<p class="cpm-hb-backorders-footnote" />' ).text( S.podPendingNote ) );
+			}
 		} else if ( data && typeof data === 'object' ) {
 			var $pre = $( '<pre class="cpm-hb-backorders-json" />' );
 			$pre.text( JSON.stringify( data, null, 2 ) );

@@ -602,6 +602,14 @@ class Cpm_Humanblockchain_Public {
 					'cancel'                  => __( 'Cancel', 'cpm-humanblockchain' ),
 					'submitting'              => __( 'Submitting…', 'cpm-humanblockchain' ),
 					'enterCodeAndOrders'      => __( 'Select orders and enter the seller’s transaction code.', 'cpm-humanblockchain' ),
+					'economicsNote'           => (string) apply_filters(
+						'cpm_hb_backorders_economics_note',
+						__( 'Small amounts shown on hub lines (for example $0.30) are usually a reserve or ring-fence, not your full spendable balance. When a pledge applies (such as $30), that reserve may already be covered—see your order or account terms. After you confirm delivery here, the buyer success message includes any configured rebate; seller trade credit is recorded via Woo order notes and the cpm_hb_seller_trade_credit_due action for integrations. XP rewards use a fixed internal basis (buyer 7% and seller 3% of a $10 notional amount), expressed as XP units rather than cash.', 'cpm-humanblockchain' )
+					),
+					'podPendingNote'          => (string) apply_filters(
+						'cpm_hb_backorders_pod_pending_note',
+						__( '“Pending” on a delivery or XP ledger row usually means waiting for the buyer to confirm delivery or for the hub to finish syncing—not the same as a WooCommerce order that is still awaiting payment.', 'cpm-humanblockchain' )
+					),
 				),
 				'loginUrl'             => wp_login_url( get_permalink() ),
 				'isVisitor'            => ! is_user_logged_in(),
