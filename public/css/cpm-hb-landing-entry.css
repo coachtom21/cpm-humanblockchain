@@ -225,6 +225,34 @@ body.cpm-hb-landing-entry-active {
 	line-height: 1.45;
 }
 
+/* Prompt 3 — NWP issuer path (Y3), shown when NWP = Yes */
+#cpm-hb-landing-entry-modal .cpm-hb-entry-issuer-panel {
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px dashed rgba(232, 238, 252, 0.18);
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-issuer-panel[hidden] {
+	display: none !important;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-issuer-lead {
+	margin: 0 0 8px;
+	color: var(--cpm-hb-muted);
+	font-size: 12px;
+	font-weight: 800;
+	line-height: 1.45;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pillRow--issuer {
+	margin-top: 0;
+}
+
+#cpm-hb-landing-entry-modal .cpm-hb-entry-pillRow--issuer .cpm-hb-entry-pill {
+	font-size: 12px;
+	padding: 7px 10px;
+}
+
 #cpm-hb-landing-entry-modal .cpm-hb-entry-pillRow {
 	display: flex;
 	gap: 10px;

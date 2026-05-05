@@ -44,8 +44,12 @@
 
 		var state = {
 			proof: null,
-			final: null
+			final: null,
+			nwp: null,
+			nwpIssuer: null
 		};
+
+		var $issuerBlock = $( '#cpm-hb-q3-issuer' );
 
 		function setPressed( $group, value ) {
 			$group.each( function() {
@@ -54,9 +58,31 @@
 			} );
 		}
 
+		function setIssuerPressed() {
+			$( '.cpm-hb-entry-issuer-pill' ).each( function() {
+				var issuer = $( this ).attr( 'data-nwp-issuer' );
+				var on = state.nwpIssuer != null && issuer === state.nwpIssuer;
+				$( this ).attr( 'aria-pressed', on ? 'true' : 'false' );
+			} );
+		}
+
+		function syncIssuerBlockVisibility() {
+			if ( ! $issuerBlock.length ) {
+				return;
+			}
+			if ( state.nwp === 'yes' ) {
+				$issuerBlock.removeAttr( 'hidden' );
+			} else {
+				$issuerBlock.attr( 'hidden', 'hidden' );
+			}
+		}
+
 		function syncUiFromState() {
 			setPressed( $( '.cpm-hb-entry-pill[data-prompt="proof"]' ), state.proof );
 			setPressed( $( '.cpm-hb-entry-pill[data-prompt="final"]' ), state.final );
+			setPressed( $( '.cpm-hb-entry-pill[data-prompt="nwp"]' ), state.nwp );
+			syncIssuerBlockVisibility();
+			setIssuerPressed();
 		}
 
 		function urlHasProofScan() {
@@ -129,15 +155,26 @@
 			stripProofScanFromUrl();
 		}
 
-		$( document ).on( 'click', '.cpm-hb-entry-pill', function() {
+		$( document ).on( 'click', '.cpm-hb-entry-pill[data-prompt]', function() {
 			var prompt = $( this ).data( 'prompt' );
 			var val = $( this ).data( 'value' );
 			if ( prompt === 'proof' ) {
 				state.proof = val;
 			} else if ( prompt === 'final' ) {
 				state.final = val;
+			} else if ( prompt === 'nwp' ) {
+				state.nwp = val;
+				if ( state.nwp !== 'yes' ) {
+					state.nwpIssuer = null;
+				}
 			}
 			syncUiFromState();
+		} );
+
+		$( document ).on( 'click', '.cpm-hb-entry-issuer-pill', function() {
+			var issuer = $( this ).attr( 'data-nwp-issuer' );
+			state.nwpIssuer = issuer || null;
+			setIssuerPressed();
 		} );
 
 		function dismissLandingModal() {
@@ -166,15 +203,26 @@
 			$( 'body' ).removeClass( 'cpm-hb-role-modal-active' );
 		}
 
+		function scanPayloadExtras() {
+			return {
+				nwp_accept: state.nwp,
+				nwp_issuer_type: state.nwp === 'yes' ? state.nwpIssuer : null
+			};
+		}
+
 		function persistScanBasic() {
 			try {
-				sessionStorage.setItem(
-					'hb_last_scan',
-					JSON.stringify( {
+				var payload = Object.assign(
+					{
 						proof_of_delivery: state.proof,
 						final_destination: state.final,
 						ts: Date.now()
-					} )
+					},
+					scanPayloadExtras()
+				);
+				sessionStorage.setItem(
+					'hb_last_scan',
+					JSON.stringify( payload )
 				);
 			} catch ( e ) {
 				// ignore
@@ -184,14 +232,18 @@
 		function persistScanWithRole() {
 			var role = $( 'input[name="cpm_hb_user_role"]:checked' ).val() || 'seller';
 			try {
-				sessionStorage.setItem(
-					'hb_last_scan',
-					JSON.stringify( {
+				var payload = Object.assign(
+					{
 						proof_of_delivery: state.proof,
 						final_destination: state.final,
 						user_role: role,
 						ts: Date.now()
-					} )
+					},
+					scanPayloadExtras()
+				);
+				sessionStorage.setItem(
+					'hb_last_scan',
+					JSON.stringify( payload )
 				);
 			} catch ( e ) {
 				// ignore
@@ -377,13 +429,19 @@
 		}
 
 		$( '#cpm-hb-enter-website' ).on( 'click', function() {
-			if ( state.proof == null || state.final == null ) {
-				var msg = ( window.cpmHbLanding && window.cpmHbLanding.answerBothPrompts ) ? window.cpmHbLanding.answerBothPrompts : 'Please answer both prompts.';
-				window.alert( msg );
+			var H = window.cpmHbLanding || {};
+			if ( state.proof == null || state.final == null || state.nwp == null ) {
+				window.alert( H.answerThreePrompts || H.answerBothPrompts || 'Please answer all three prompts.' );
+				return;
+			}
+			if ( state.nwp === 'yes' && ! state.nwpIssuer ) {
+				window.alert( H.pickNwpIssuer || 'NWP acceptance is Yes — choose Individual, POC / five-seller, or Guild.' );
 				return;
 			}
 			dismissLandingModal();
 			if ( shouldShowRoleModalForPod() ) {
+				// Save Y/Y/Y answers before role picker; role + user_role appended on Continue.
+				persistScanBasic();
 				// Intermediate delivery (not final stop): steer to Seller — paid for helping deliver.
 				var preferSeller = state.proof === 'yes' && state.final === 'no';
 				showRoleModal( { preferSeller: preferSeller } );

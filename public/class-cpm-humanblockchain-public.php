@@ -571,6 +571,8 @@ class Cpm_Humanblockchain_Public {
 					'whatIsThisUrl'       => esc_url_raw( $what_default ),
 					'howItWorksUrl'       => esc_url_raw( $how_default ),
 					'answerBothPrompts'   => __( 'Please answer both prompts (Proof of Delivery and Final Destination).', 'cpm-humanblockchain' ),
+					'answerThreePrompts' => __( 'Please answer all three prompts (Proof of Delivery, Final Destination, and NWP acceptance).', 'cpm-humanblockchain' ),
+					'pickNwpIssuer'      => __( 'NWP acceptance is Yes — choose whether this NWP is on an Individual, POC / five-seller, or Guild path.', 'cpm-humanblockchain' ),
 					// Set from the initial HTTP request so ?proof=scan still counts if the address bar is cleaned before OTP (replaceState, etc.).
 					'hasProofScan'        => $cpm_hb_has_proof_scan,
 					'proofScanNonce'      => $cpm_hb_proof_scan_nonce,
