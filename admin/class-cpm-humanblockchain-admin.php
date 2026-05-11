@@ -135,6 +135,14 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_qrtiger_api_url' ),
 		) );
+		register_setting( $i, Cpm_Humanblockchain_Membership::OPTION_ENDPOINT, array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_membership_api_endpoint' ),
+		) );
+		register_setting( $i, Cpm_Humanblockchain_Membership::OPTION_API_KEY, array(
+			'type'              => 'string',
+			'sanitize_callback' => array( $this, 'sanitize_membership_api_key' ),
+		) );
 	}
 
 	/**
@@ -420,6 +428,35 @@ class Cpm_Humanblockchain_Admin {
 	}
 
 	/**
+	 * Outbound membership API URL (empty = this site default REST URL).
+	 *
+	 * @param mixed $value Raw.
+	 * @return string
+	 */
+	public function sanitize_membership_api_endpoint( $value ) {
+		$v = is_string( $value ) ? trim( $value ) : '';
+		if ( $v === '' ) {
+			return '';
+		}
+		return filter_var( $v, FILTER_VALIDATE_URL ) ? esc_url_raw( $v ) : '';
+	}
+
+	/**
+	 * Bearer token for membership REST; blank submit keeps previous value.
+	 *
+	 * @param mixed $value Raw.
+	 * @return string
+	 */
+	public function sanitize_membership_api_key( $value ) {
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			$prev = get_option( Cpm_Humanblockchain_Membership::OPTION_API_KEY, '' );
+			return is_string( $prev ) ? $prev : '';
+		}
+		return sanitize_text_field( $value );
+	}
+
+	/**
 	 * Parse saved comma-separated product IDs into a unique int list.
 	 *
 	 * @param string $comma_ids Raw option value.
@@ -551,6 +588,13 @@ class Cpm_Humanblockchain_Admin {
 		$country          = get_option( 'cpm_nwp_default_country', 'AUTO' );
 		$qrtiger_key      = get_option( 'cpm_nwp_qrtiger_api_key', '' );
 		$qrtiger_url      = get_option( 'cpm_nwp_qrtiger_api_url', '' );
+		$hb_mem_endpoint  = class_exists( 'Cpm_Humanblockchain_Membership' )
+			? (string) get_option( Cpm_Humanblockchain_Membership::OPTION_ENDPOINT, '' )
+			: '';
+		$hb_mem_rest_url  = class_exists( 'Cpm_Humanblockchain_Membership' )
+			? Cpm_Humanblockchain_Membership::get_api_endpoint_url()
+			: '';
+		$hb_mem_api_ready = class_exists( 'Cpm_Humanblockchain_Membership' ) && Cpm_Humanblockchain_Membership::get_api_key() !== '';
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		if ( 'qr' === $active_tab ) {
 			$active_tab = 'general';
@@ -841,6 +885,36 @@ class Cpm_Humanblockchain_Admin {
 						<td>
 							<input type="url" id="cpm_nwp_qrtiger_api_url" name="cpm_nwp_qrtiger_api_url" value="<?php echo esc_attr( $qrtiger_url ); ?>" class="large-text" placeholder="https://api.qrtiger.com/">
 							<p class="description"><?php esc_html_e( 'Base URL for the QRTiger API (include protocol, no trailing path required if your client adds routes).', 'cpm-humanblockchain' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2 class="title" style="margin-top:2em;"><?php esc_html_e( 'Membership API (PMPro grant / sync)', 'cpm-humanblockchain' ); ?></h2>
+				<p class="description">
+					<?php esc_html_e( 'Bearer token secures POST /wp-json/myapi/v1/membership on this site and outbound “Sync membership” requests. Leave endpoint empty to use this site’s REST URL.', 'cpm-humanblockchain' ); ?>
+				</p>
+				<p class="description">
+					<strong><?php esc_html_e( 'Resolved POST URL:', 'cpm-humanblockchain' ); ?></strong>
+					<code style="word-break:break-all;"><?php echo esc_html( $hb_mem_rest_url ); ?></code>
+					<?php if ( $hb_mem_api_ready ) : ?>
+						<span style="color:#00a32a;"><?php esc_html_e( 'API key is set.', 'cpm-humanblockchain' ); ?></span>
+					<?php else : ?>
+						<span style="color:#d63638;"><?php esc_html_e( 'No key — REST membership is disabled until you set a Bearer token below (or legacy smallstreet_api_key in the database).', 'cpm-humanblockchain' ); ?></span>
+					<?php endif; ?>
+				</p>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="cpm_hb_membership_api_endpoint"><?php esc_html_e( 'Outbound membership URL', 'cpm-humanblockchain' ); ?></label></th>
+						<td>
+							<input type="url" id="cpm_hb_membership_api_endpoint" name="<?php echo esc_attr( Cpm_Humanblockchain_Membership::OPTION_ENDPOINT ); ?>" value="<?php echo esc_attr( $hb_mem_endpoint ); ?>" class="large-text" placeholder="<?php echo esc_attr( $hb_mem_rest_url ); ?>">
+							<p class="description"><?php esc_html_e( 'Optional. Full URL to POST JSON (email, phone, level_name). Empty = this site’s myapi/v1/membership.', 'cpm-humanblockchain' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cpm_hb_membership_api_key"><?php esc_html_e( 'Membership API Bearer token', 'cpm-humanblockchain' ); ?></label></th>
+						<td>
+							<input type="password" id="cpm_hb_membership_api_key" name="<?php echo esc_attr( Cpm_Humanblockchain_Membership::OPTION_API_KEY ); ?>" value="" autocomplete="new-password" class="regular-text" placeholder="<?php echo esc_attr( $hb_mem_api_ready ? __( 'Leave blank to keep current key', 'cpm-humanblockchain' ) : __( 'Paste a long random secret', 'cpm-humanblockchain' ) ); ?>">
+							<p class="description"><?php esc_html_e( 'Send as Authorization: Bearer &lt;token&gt;. If empty on save, the previous key is kept. Legacy option smallstreet_api_key is still read when this is empty.', 'cpm-humanblockchain' ); ?></p>
 						</td>
 					</tr>
 				</table>

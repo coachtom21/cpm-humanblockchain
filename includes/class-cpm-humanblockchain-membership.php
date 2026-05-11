@@ -21,6 +21,11 @@ class Cpm_Humanblockchain_Membership {
 	const OPTION_ENDPOINT = 'cpm_hb_membership_api_endpoint';
 
 	/**
+	 * Bearer token for REST + outbound sync (preferred over legacy smallstreet_api_key).
+	 */
+	const OPTION_API_KEY = 'cpm_hb_membership_api_key';
+
+	/**
 	 * Resolved POST URL for the membership API.
 	 *
 	 * @return string
@@ -37,12 +42,211 @@ class Cpm_Humanblockchain_Membership {
 	}
 
 	/**
-	 * Bearer token from WordPress options (same as legacy smallstreet_api_key).
+	 * Bearer token: {@see OPTION_API_KEY} first, then legacy smallstreet_api_key.
 	 *
 	 * @return string
 	 */
 	public static function get_api_key() {
+		$key = trim( (string) get_option( self::OPTION_API_KEY, '' ) );
+		if ( $key !== '' ) {
+			return $key;
+		}
 		return trim( (string) get_option( 'smallstreet_api_key', '' ) );
+	}
+
+	/**
+	 * WC order meta: PMPro orders row id created for this checkout (idempotency).
+	 */
+	const META_WC_PMPRO_MEMBERORDER_ID = '_cpm_hb_pmpro_memberorder_id';
+
+	/**
+	 * Insert a PMPro `pmpro_membership_orders` row (shows under Memberships → Orders).
+	 *
+	 * @param int      $user_id   WordPress user ID.
+	 * @param stdClass $level_obj Object from pmpro_getLevel().
+	 * @param WP_User  $user      User for billing name/phone.
+	 * @param array    $args {
+	 *     Optional. @type string     $payment_type              Shown as payment type.
+	 *     @type string     $payment_transaction_id    Unique transaction id.
+	 *     @type string     $notes                     Order notes.
+	 *     @type float|null $amount_override           If set, subtotal/total/InitialPayment (before tax).
+	 *     @type float|null $tax_override              If set with amount_override, tax amount.
+	 * }
+	 * @return int Order id or 0.
+	 */
+	public static function create_pmpro_member_order( $user_id, $level_obj, WP_User $user, array $args = array() ) {
+		if ( ! class_exists( 'MemberOrder', false ) ) {
+			return 0;
+		}
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 || empty( $level_obj->id ) ) {
+			return 0;
+		}
+
+		$defaults = array(
+			'payment_type'             => '',
+			'payment_transaction_id'   => '',
+			'notes'                    => '',
+			'amount_override'          => null,
+			'tax_override'             => null,
+		);
+		$args = wp_parse_args( $args, $defaults );
+
+		$initial = isset( $level_obj->initial_payment ) ? (float) $level_obj->initial_payment : 0.0;
+		if ( null !== $args['amount_override'] && is_numeric( $args['amount_override'] ) ) {
+			$initial = (float) $args['amount_override'];
+		}
+		$tax = 0.0;
+		if ( null !== $args['tax_override'] && is_numeric( $args['tax_override'] ) ) {
+			$tax = (float) $args['tax_override'];
+		}
+
+		$morder = new MemberOrder();
+		$morder->user_id          = $user_id;
+		$morder->membership_id    = (int) $level_obj->id;
+		$morder->membership_level = $level_obj;
+
+		$morder->InitialPayment = $initial;
+		$morder->subtotal       = $initial;
+		$morder->tax            = $tax;
+		$morder->total          = $initial + $tax;
+
+		$morder->status = 'success';
+
+		$gw = get_option( 'pmpro_gateway', '' );
+		if ( ! is_string( $gw ) || $gw === '' ) {
+			$gw = 'check';
+		}
+		$morder->gateway               = $gw;
+		$morder->gateway_environment  = (string) get_option( 'pmpro_gateway_environment', 'sandbox' );
+		$morder->payment_type         = is_string( $args['payment_type'] ) ? $args['payment_type'] : '';
+		$morder->payment_transaction_id = is_string( $args['payment_transaction_id'] ) ? $args['payment_transaction_id'] : '';
+		$morder->subscription_transaction_id = '';
+		$morder->notes                = is_string( $args['notes'] ) ? $args['notes'] : '';
+
+		$name = trim( $user->first_name . ' ' . $user->last_name );
+		if ( $name === '' ) {
+			$name = $user->display_name ? $user->display_name : $user->user_login;
+		}
+		$morder->billing = new stdClass();
+		$morder->billing->name     = $name;
+		$morder->billing->street   = '';
+		$morder->billing->city     = '';
+		$morder->billing->state    = '';
+		$morder->billing->zip      = '';
+		$morder->billing->country  = '';
+		$phone_meta = get_user_meta( $user_id, 'billing_phone', true );
+		if ( ! is_string( $phone_meta ) || $phone_meta === '' ) {
+			$phone_meta = get_user_meta( $user_id, 'mega-mobile', true );
+		}
+		$morder->billing->phone = is_string( $phone_meta ) ? $phone_meta : '';
+
+		$saved = $morder->saveOrder();
+		if ( false === $saved ) {
+			return 0;
+		}
+		return (int) $morder->id;
+	}
+
+	/**
+	 * When a WooCommerce order from Get started has `_cpm_hb_membership_tier`, add a PMPro order row.
+	 *
+	 * @param int $order_id WooCommerce order id.
+	 */
+	public static function wc_maybe_create_pmpro_order_for_hb_membership( $order_id ) {
+		if ( ! function_exists( 'wc_get_order' ) || ! class_exists( 'MemberOrder', false ) || ! function_exists( 'pmpro_getLevel' ) ) {
+			return;
+		}
+		$order_id = (int) $order_id;
+		if ( $order_id <= 0 ) {
+			return;
+		}
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof WC_Order ) {
+			return;
+		}
+		if ( (int) $order->get_meta( self::META_WC_PMPRO_MEMBERORDER_ID ) > 0 ) {
+			return;
+		}
+		if ( ! apply_filters( 'cpm_hb_sync_pmpro_order_from_wc_membership_order', true, $order ) ) {
+			return;
+		}
+
+		$statuses = apply_filters(
+			'cpm_hb_wc_order_statuses_for_pmpro_member_order_sync',
+			array( 'processing', 'completed', 'on-hold' )
+		);
+		if ( ! is_array( $statuses ) || ! $order->has_status( $statuses ) ) {
+			return;
+		}
+
+		$tier = $order->get_meta( '_cpm_hb_membership_tier' );
+		$tier = is_string( $tier ) ? sanitize_key( $tier ) : '';
+		if ( $tier === '' || ! in_array( $tier, self::valid_tier_slugs(), true ) ) {
+			return;
+		}
+
+		$uid = (int) $order->get_customer_id();
+		if ( $uid <= 0 ) {
+			$email = $order->get_billing_email();
+			if ( is_email( $email ) ) {
+				$u = get_user_by( 'email', $email );
+				if ( $u ) {
+					$uid = (int) $u->ID;
+				}
+			}
+		}
+		if ( $uid <= 0 ) {
+			return;
+		}
+
+		$level_id = self::get_pmpro_level_id_for_tier( $tier );
+		if ( $level_id <= 0 ) {
+			return;
+		}
+		$level_obj = pmpro_getLevel( $level_id );
+		if ( empty( $level_obj ) ) {
+			return;
+		}
+
+		$user = get_userdata( $uid );
+		if ( ! $user instanceof WP_User ) {
+			return;
+		}
+
+		$branch = $order->get_meta( '_cpm_hb_membership_branch' );
+		$branch = is_string( $branch ) ? sanitize_key( $branch ) : '';
+		$notes  = sprintf(
+			/* translators: 1: WooCommerce order number, 2: tier slug, 3: branch slug or dash */
+			__( 'HumanBlockchain Get started → WooCommerce order #%1$s. Tier: %2$s. Branch: %3$s.', 'cpm-humanblockchain' ),
+			$order->get_order_number(),
+			$tier,
+			$branch !== '' ? $branch : '—'
+		);
+
+		$subtotal = (float) $order->get_subtotal();
+		$tax      = (float) $order->get_total_tax();
+		$total    = (float) $order->get_total();
+		$use_wc   = ( $total > 0 || $subtotal > 0 || $tax > 0 );
+		$args     = array(
+			'payment_type'           => __( 'WooCommerce (Get started)', 'cpm-humanblockchain' ),
+			'payment_transaction_id' => 'wc-' . $order_id . '-' . substr( md5( (string) $order->get_order_key() ), 0, 10 ),
+			'notes'                  => $notes,
+		);
+		if ( $use_wc ) {
+			$args['amount_override'] = $subtotal;
+			$args['tax_override']    = $tax;
+			if ( $args['amount_override'] + $args['tax_override'] <= 0 && $total > 0 ) {
+				$args['amount_override'] = $total;
+				$args['tax_override']    = 0.0;
+			}
+		}
+
+		$oid = self::create_pmpro_member_order( $uid, $level_obj, $user, $args );
+		if ( $oid > 0 ) {
+			$order->update_meta_data( self::META_WC_PMPRO_MEMBERORDER_ID, $oid );
+			$order->save();
+		}
 	}
 
 	/**
@@ -55,6 +259,11 @@ class Cpm_Humanblockchain_Membership {
 		add_action( 'woocommerce_checkout_update_order_meta', array( __CLASS__, 'order_save_membership_tier' ), 10, 1 );
 		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'checkout_tier_notice' ), 5 );
 		add_action( 'pmpro_checkout_before_form', array( __CLASS__, 'checkout_tier_notice' ), 5 );
+
+		add_action( 'woocommerce_checkout_order_processed', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 50, 1 );
+		add_action( 'woocommerce_order_status_processing', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 20, 1 );
+		add_action( 'woocommerce_order_status_completed', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 20, 1 );
+		add_action( 'woocommerce_order_status_on-hold', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 20, 1 );
 	}
 
 	/**
@@ -494,6 +703,22 @@ class Cpm_Humanblockchain_Membership {
 	 */
 	public static function handle_submit() {
 		check_ajax_referer( 'cpm_hb_membership', 'nonce' );
+
+		if ( ! is_user_logged_in() ) {
+			$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REMOTE_ADDR'] ) ) : 'unknown'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+			$key = 'cpm_hb_mem_submit_' . md5( $ip );
+			$n   = (int) get_transient( $key );
+			if ( $n >= 45 ) {
+				wp_send_json_error(
+					array(
+						'code'    => 'rate_limited',
+						'message' => __( 'Too many attempts. Please try again in a few minutes.', 'cpm-humanblockchain' ),
+					),
+					429
+				);
+			}
+			set_transient( $key, $n + 1, 10 * MINUTE_IN_SECONDS );
+		}
 
 		$tier = isset( $_POST['tier'] ) ? sanitize_key( wp_unslash( $_POST['tier'] ) ) : '';
 		if ( ! in_array( $tier, self::valid_tier_slugs(), true ) ) {

@@ -25,6 +25,8 @@ if ( ! is_array( $cpm_hb_membership_branches ) ) {
 			<h2 id="cpm-hb-membership-title" class="cpm-hb-membership-title"><?php esc_html_e( 'Select membership', 'cpm-humanblockchain' ); ?></h2>
 			<p class="cpm-hb-membership-intro" id="cpm-hb-membership-intro-text"><?php esc_html_e( 'Choose the path that fits you. You can change details later in onboarding.', 'cpm-humanblockchain' ); ?></p>
 
+			<p class="cpm-hb-membership-error" id="cpm-hb-membership-error" role="alert" hidden style="color:#fca5a5;margin:0 0 12px;font-size:14px;"></p>
+
 			<div class="cpm-hb-membership-branch-row">
 				<label for="cpm-hb-membership-branch" class="cpm-hb-membership-branch-label"><?php esc_html_e( 'Branch (select one)', 'cpm-humanblockchain' ); ?></label>
 				<select id="cpm-hb-membership-branch" class="cpm-hb-membership-branch" name="cpm_hb_branch" aria-describedby="cpm-hb-membership-intro-text" autocomplete="off">
@@ -46,6 +48,9 @@ if ( ! is_array( $cpm_hb_membership_branches ) ) {
 			<div id="cpm-hb-membership-success" class="cpm-hb-membership-success" hidden role="status" aria-live="polite" tabindex="-1">
 				<p class="cpm-hb-membership-success-icon" aria-hidden="true">✓</p>
 				<p class="cpm-hb-membership-success-msg" id="cpm-hb-membership-success-msg"></p>
+				<div class="cpm-hb-membership-success-actions" id="cpm-hb-membership-success-actions" hidden style="margin-top:14px;">
+					<button type="button" class="cpm-hb-membership-continue" id="cpm-hb-membership-goto-checkout"><?php esc_html_e( 'Continue to checkout', 'cpm-humanblockchain' ); ?></button>
+				</div>
 			</div>
 
 			<div class="cpm-hb-membership-grid" role="radiogroup" aria-labelledby="cpm-hb-membership-title">

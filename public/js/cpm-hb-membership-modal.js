@@ -2,6 +2,17 @@
 	'use strict';
 
 	$( function() {
+		try {
+			var p = new URLSearchParams( window.location.search );
+			if ( p.get( 'cpm_hb_open_membership' ) === '1' ) {
+				setTimeout( function() {
+					$( '.cpm-hb-open-membership-modal' ).first().trigger( 'click' );
+				}, 300 );
+			}
+		} catch ( err ) {
+			// ignore
+		}
+
 		var $modal = $( '#cpm-hb-membership-modal' );
 		var $contact = $( '#cpm-hb-membership-contact-modal' );
 		var $continue = $( '#cpm-hb-membership-continue' );
@@ -42,10 +53,21 @@
 			var $success = $( '#cpm-hb-membership-success' );
 			$success.prop( 'hidden', true ).attr( 'aria-hidden', 'true' );
 			$( '#cpm-hb-membership-success-msg' ).empty();
+			$( '#cpm-hb-membership-success-actions' ).prop( 'hidden', true );
+			$( '#cpm-hb-membership-error' ).prop( 'hidden', true ).text( '' );
 			$modal.find( '.cpm-hb-membership-intro, .cpm-hb-membership-branch-row, .cpm-hb-membership-grid, .cpm-hb-membership-actions' ).show();
 			if ( $branch.length ) {
 				$branch.val( '' );
 			}
+		}
+
+		function showMembershipModalError( msg ) {
+			var $e = $( '#cpm-hb-membership-error' );
+			if ( ! $e.length ) {
+				window.alert( msg );
+				return;
+			}
+			$e.text( msg ).prop( 'hidden', false );
 		}
 
 		function closeModal() {
@@ -58,6 +80,7 @@
 
 		function openContactModal( guest ) {
 			contactModeGuest = !! guest;
+			$( '#cpm-hb-membership-error' ).prop( 'hidden', true ).text( '' );
 			$contact.removeClass( 'cpm-hb-membership-contact--phone-only' );
 			$( '#cpm-hb-membership-contact-error' ).prop( 'hidden', true ).text( '' );
 			$( '#cpm-hb-membership-contact-form' )[ 0 ].reset();
@@ -133,6 +156,17 @@
 			closeContactModal();
 			openModal();
 			showMembershipSuccessMessage( data || {} );
+			var url = data && typeof data.redirect_url === 'string' ? data.redirect_url.trim() : '';
+			var $act = $( '#cpm-hb-membership-success-actions' );
+			var $go = $( '#cpm-hb-membership-goto-checkout' );
+			if ( url && $act.length && $go.length ) {
+				$act.prop( 'hidden', false );
+				$go.off( 'click' ).on( 'click', function() {
+					window.location.href = url;
+				} );
+			} else if ( $act.length ) {
+				$act.prop( 'hidden', true );
+			}
 		}
 
 		function rememberTierAndGo( data ) {
@@ -184,8 +218,9 @@
 		}
 
 		function submitMembership( extra ) {
+			$( '#cpm-hb-membership-error' ).prop( 'hidden', true ).text( '' );
 			if ( ! cfg.ajaxUrl || ! cfg.action || ! cfg.nonce ) {
-				window.alert( ( cfg.strings && cfg.strings.genericErr ) || 'Configuration error.' );
+				showMembershipModalError( ( cfg.strings && cfg.strings.genericErr ) || 'Configuration error.' );
 				return;
 			}
 			var payload = {
@@ -211,7 +246,7 @@
 			} )
 				.done( function( response ) {
 					if ( ! response ) {
-						window.alert( str.genericErr || 'Error' );
+						showMembershipModalError( str.genericErr || 'Error' );
 						return;
 					}
 					if ( response.needs_phone ) {
@@ -229,7 +264,7 @@
 						( response.data && response.data.message ) ||
 						response.message ||
 						str.genericErr;
-					window.alert( msg );
+					showMembershipModalError( msg );
 				} )
 				.fail( function( xhr ) {
 					var err = xhr.responseJSON;
@@ -237,7 +272,7 @@
 						( err && err.data && err.data.message ) ||
 						( err && err.message ) ||
 						str.genericErr;
-					window.alert( msg );
+					showMembershipModalError( msg );
 				} )
 				.always( function() {
 					setBusy( false, $btn, str.submitting, str.continue );
