@@ -104,6 +104,86 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Insert a local XP ledger row for Discord bot QR verification (no Smallstreet hub sync).
+	 *
+	 * @param int                  $wp_user_id  WordPress user ID.
+	 * @param int                  $xp_awarded  XP amount (non-negative integer).
+	 * @param string               $event_id    Bot idempotency key (e.g. Discord message id).
+	 * @param array<string, mixed> $context     Optional keys: discord_id, guild_id, discord_username.
+	 * @return bool True when a row was inserted.
+	 */
+	public static function record_discord_verification_xp( $wp_user_id, $xp_awarded, $event_id, array $context = array() ) {
+		global $wpdb;
+
+		$wp_user_id = (int) $wp_user_id;
+		if ( $wp_user_id <= 0 ) {
+			return false;
+		}
+
+		$xp_awarded = (int) $xp_awarded;
+		if ( $xp_awarded <= 0 ) {
+			return false;
+		}
+
+		$xp_str = (string) $xp_awarded;
+		if ( ! ctype_digit( $xp_str ) ) {
+			return false;
+		}
+
+		$event_id = trim( (string) $event_id );
+		if ( $event_id === '' ) {
+			$event_id = (string) time();
+		}
+
+		$tid = 'discord-' . preg_replace( '/[^a-zA-Z0-9._-]/', '', $event_id );
+		if ( $tid === 'discord-' ) {
+			$tid = 'discord-' . substr( md5( $event_id ), 0, 24 );
+		}
+		if ( strlen( $tid ) > 64 ) {
+			$tid = substr( $tid, 0, 64 );
+		}
+
+		$ledger_date = current_time( 'mysql' );
+		$entry       = array(
+			'source'      => 'discord_bot',
+			'event_id'    => $event_id,
+			'xp_units'    => $xp_str,
+			'scan_status' => 'completed',
+		);
+		if ( ! empty( $context['discord_id'] ) ) {
+			$entry['discord_id'] = (string) $context['discord_id'];
+		}
+		if ( ! empty( $context['guild_id'] ) ) {
+			$entry['guild_id'] = (string) $context['guild_id'];
+		}
+		if ( ! empty( $context['discord_username'] ) ) {
+			$entry['discord_username'] = (string) $context['discord_username'];
+		}
+		$entry_store = array_merge( $entry, array( 'date' => $ledger_date ) );
+
+		$table = self::table_name();
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'wp_user_id'         => $wp_user_id,
+				'scan_type'          => 'discord_verify',
+				'transaction_id'     => $tid,
+				'xp_units'           => $xp_str,
+				'scan_status'        => 'completed',
+				'entry_json'         => wp_json_encode( $entry_store ),
+				'remote_sync_status' => 'skipped',
+				'remote_last_error'  => __( 'Discord verification XP; local ledger only (no hub sync).', 'cpm-humanblockchain' ),
+				'ledger_date'        => $ledger_date,
+				'created_at'         => current_time( 'mysql' ),
+				'updated_at'         => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		return false !== $inserted && (int) $wpdb->insert_id > 0;
+	}
+
+	/**
 	 * Scan endpoint (override via filter).
 	 *
 	 * @return string
