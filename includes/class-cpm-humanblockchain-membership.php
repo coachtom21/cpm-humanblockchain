@@ -149,7 +149,9 @@ class Cpm_Humanblockchain_Membership {
 	}
 
 	/**
-	 * When a WooCommerce order from Get started has `_cpm_hb_membership_tier`, add a PMPro order row.
+	 * When a WooCommerce order from Get started has `_cpm_hb_membership_tier`, grant PMPro level
+	 * ({@see pmpro_changeMembershipLevel()} → `pmpro_memberships_users`) and add a PMPro order row
+	 * (`pmpro_membership_orders`). MemberOrder alone does not activate membership.
 	 *
 	 * @param int $order_id WooCommerce order id.
 	 */
@@ -242,6 +244,21 @@ class Cpm_Humanblockchain_Membership {
 			}
 		}
 
+		if ( apply_filters( 'cpm_hb_wc_grant_pmpro_level_from_membership_order', true, $order, $uid, $level_id, $level_obj ) && function_exists( 'pmpro_changeMembershipLevel' ) ) {
+			global $pmpro_error;
+			$pmpro_error = '';
+			$granted     = pmpro_changeMembershipLevel( $level_id, $uid );
+			if ( false === $granted ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG && function_exists( 'error_log' ) ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log(
+						'cpm_hb wc_maybe_create_pmpro_order_for_hb_membership: pmpro_changeMembershipLevel failed for user ' . $uid . ' level ' . $level_id . ' — ' . ( $pmpro_error ? $pmpro_error : 'unknown' )
+					);
+				}
+				return;
+			}
+		}
+
 		$oid = self::create_pmpro_member_order( $uid, $level_obj, $user, $args );
 		if ( $oid > 0 ) {
 			$order->update_meta_data( self::META_WC_PMPRO_MEMBERORDER_ID, $oid );
@@ -253,12 +270,16 @@ class Cpm_Humanblockchain_Membership {
 	 * Register hooks.
 	 */
 	public static function init() {
+		add_filter( 'cpm_hb_pmpro_level_id_for_tier', array( __CLASS__, 'filter_default_pmpro_level_id_for_tier' ), 99, 2 );
+
 		add_action( 'wp_ajax_cpm_hb_membership_submit', array( __CLASS__, 'handle_submit' ) );
 		add_action( 'wp_ajax_nopriv_cpm_hb_membership_submit', array( __CLASS__, 'handle_submit' ) );
 		add_action( 'template_redirect', array( __CLASS__, 'checkout_capture_tier_from_query' ), 5 );
 		add_action( 'woocommerce_checkout_update_order_meta', array( __CLASS__, 'order_save_membership_tier' ), 10, 1 );
 		add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'checkout_tier_notice' ), 5 );
 		add_action( 'pmpro_checkout_before_form', array( __CLASS__, 'checkout_tier_notice' ), 5 );
+
+		add_filter( 'pmpro_registration_checks', array( __CLASS__, 'pmpro_registration_checks_active_membership' ), 99 );
 
 		add_action( 'woocommerce_checkout_order_processed', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 50, 1 );
 		add_action( 'woocommerce_order_status_processing', array( __CLASS__, 'wc_maybe_create_pmpro_order_for_hb_membership' ), 20, 1 );
@@ -273,6 +294,111 @@ class Cpm_Humanblockchain_Membership {
 	 */
 	public static function valid_tier_slugs() {
 		return array( 'yamer', 'megavoter', 'patron' );
+	}
+
+	/**
+	 * Map a PMPro level ID back to a HumanBlockchain tier slug (yamer|megavoter|patron), if known.
+	 *
+	 * @param int $level_id PMPro level id.
+	 * @return string|null Tier slug or null if not mapped.
+	 */
+	public static function tier_slug_for_pmpro_level_id( $level_id ) {
+		$level_id = (int) $level_id;
+		if ( $level_id <= 0 ) {
+			return null;
+		}
+		foreach ( self::valid_tier_slugs() as $tier ) {
+			if ( self::get_pmpro_level_id_for_tier( $tier ) === $level_id ) {
+				return $tier;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Whether an active PMPro level should be treated like YAMer (free) for checkout rules.
+	 *
+	 * @param int $active_level_id Active membership level id.
+	 * @return bool
+	 */
+	private static function active_pmpro_level_is_yamer_or_unknown_free( $active_level_id ) {
+		$active_level_id = (int) $active_level_id;
+		$tier            = self::tier_slug_for_pmpro_level_id( $active_level_id );
+		if ( 'yamer' === $tier ) {
+			return true;
+		}
+		if ( null !== $tier ) {
+			return false;
+		}
+		if ( function_exists( 'pmpro_getLevel' ) && function_exists( 'pmpro_isLevelFree' ) ) {
+			$L = pmpro_getLevel( $active_level_id );
+			if ( $L && pmpro_isLevelFree( $L ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Block PMPro paid checkout when the member already has a different paid plan (same group).
+	 * YAMer (free) may upgrade to Pioneer or Patron; same-level checkout is allowed (renewal).
+	 *
+	 * @param int      $user_id      WordPress user ID.
+	 * @param stdClass $target_level Level object at checkout.
+	 * @return bool True = block checkout.
+	 */
+	public static function pmpro_should_block_checkout_due_to_active_membership( $user_id, $target_level ) {
+		$user_id = (int) $user_id;
+		if ( $user_id <= 0 || empty( $target_level->id ) || ! function_exists( 'pmpro_getMembershipLevelsForUser' ) ) {
+			return false;
+		}
+		if ( function_exists( 'pmpro_isLevelFree' ) && pmpro_isLevelFree( $target_level ) ) {
+			return false;
+		}
+		$target_id = (int) $target_level->id;
+		$actives   = pmpro_getMembershipLevelsForUser( $user_id );
+		if ( empty( $actives ) || ! is_array( $actives ) ) {
+			return false;
+		}
+		foreach ( $actives as $row ) {
+			if ( (int) $row->id === $target_id ) {
+				return false;
+			}
+		}
+		foreach ( $actives as $row ) {
+			$aid = (int) $row->id;
+			if ( self::active_pmpro_level_is_yamer_or_unknown_free( $aid ) ) {
+				continue;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * PMPro: prevent duplicate paid subscriptions while a non–YAMer plan is active.
+	 *
+	 * @param bool $okay Continue checkout.
+	 * @return bool
+	 */
+	public static function pmpro_registration_checks_active_membership( $okay ) {
+		if ( ! $okay || ! function_exists( 'pmpro_setMessage' ) ) {
+			return $okay;
+		}
+		global $current_user, $pmpro_level;
+		if ( empty( $current_user->ID ) || empty( $pmpro_level ) || empty( $pmpro_level->id ) ) {
+			return $okay;
+		}
+		$block = self::pmpro_should_block_checkout_due_to_active_membership( (int) $current_user->ID, $pmpro_level );
+		$block = (bool) apply_filters( 'cpm_hb_pmpro_block_checkout_due_to_active_membership', $block, (int) $current_user->ID, $pmpro_level );
+		if ( $block ) {
+			pmpro_setMessage(
+				__( 'You already have an active paid membership. Cancel it or wait until it expires before subscribing to a different plan. YAMer (free) members can upgrade to Pioneer or Patron at any time.', 'cpm-humanblockchain' ),
+				'pmpro_error'
+			);
+			return false;
+		}
+		return $okay;
 	}
 
 	/**
@@ -475,6 +601,53 @@ class Cpm_Humanblockchain_Membership {
 			$id = 0;
 		}
 		return $id;
+	}
+
+	/**
+	 * Last-chance tier → PMPro level ID when no theme or other code set `cpm_hb_pmpro_level_id_for_tier`.
+	 * Without this, Get started falls through to WooCommerce checkout with no `cpm_hb_membership_product_id`,
+	 * which yields an empty cart and no PMPro member/order rows.
+	 *
+	 * @param int    $id   Level ID from earlier filters (0 if unset).
+	 * @param string $tier yamer|megavoter|patron.
+	 * @return int
+	 */
+	public static function filter_default_pmpro_level_id_for_tier( $id, $tier ) {
+		$id = (int) $id;
+		if ( $id > 0 ) {
+			return $id;
+		}
+		$tier = sanitize_key( (string) $tier );
+		$defaults = array(
+			'yamer'     => 1,
+			'megavoter' => 2,
+			'patron'    => 3,
+		);
+		$labels = array(
+			'yamer'     => 'YAMer',
+			'megavoter' => 'Pioneer',
+			'patron'    => 'Patron',
+		);
+		if ( ! isset( $defaults[ $tier ] ) ) {
+			return 0;
+		}
+		if ( function_exists( 'pmpro_getAllLevels' ) ) {
+			$by_lower = array();
+			foreach ( pmpro_getAllLevels( true ) as $lvl ) {
+				$n = strtolower( trim( (string) $lvl->name ) );
+				if ( $n !== '' ) {
+					$by_lower[ $n ] = (int) $lvl->id;
+				}
+			}
+			$want = strtolower( $labels[ $tier ] );
+			if ( isset( $by_lower[ $want ] ) ) {
+				return (int) $by_lower[ $want ];
+			}
+			if ( 'megavoter' === $tier && isset( $by_lower['megavoter'] ) ) {
+				return (int) $by_lower['megavoter'];
+			}
+		}
+		return (int) $defaults[ $tier ];
 	}
 
 	/**
