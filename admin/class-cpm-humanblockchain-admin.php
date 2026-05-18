@@ -1012,10 +1012,24 @@ class Cpm_Humanblockchain_Admin {
 			<input type="hidden" name="action" value="cpm_hb_nwp_ledger_github_sync_order" />
 			<p>
 				<label for="cpm_hb_ledger_order_id"><strong><?php esc_html_e( 'WooCommerce order ID', 'cpm-humanblockchain' ); ?></strong></label><br />
-				<input type="number" min="1" step="1" class="small-text" id="cpm_hb_ledger_order_id" name="cpm_hb_ledger_order_id" value="" required />
+				<input type="number" min="1" step="1" class="small-text" id="cpm_hb_ledger_order_id" name="cpm_hb_ledger_order_id" value="" />
 			</p>
-			<?php submit_button( __( 'Push order to GitHub now', 'cpm-humanblockchain' ), 'primary', 'submit', false ); ?>
-			<p class="description"><?php esc_html_e( 'Creates or updates ledger/order-{id}.json. Clears the previous sync flag so you can retry.', 'cpm-humanblockchain' ); ?></p>
+			<p>
+				<label>
+					<input type="checkbox" name="cpm_hb_ledger_sync_all_orders" value="1" />
+					<?php esc_html_e( 'Also sync recent WooCommerce orders (last 200)', 'cpm-humanblockchain' ); ?>
+				</label>
+			</p>
+			<p>
+				<label>
+					<input type="checkbox" name="cpm_hb_ledger_sync_all_xp" value="1" />
+					<?php esc_html_e( 'Also sync entire wp_xp_ledger table (up to 500 rows)', 'cpm-humanblockchain' ); ?>
+				</label>
+			</p>
+			<?php submit_button( __( 'Push orders + XP ledger to GitHub', 'cpm-humanblockchain' ), 'primary', 'submit', false ); ?>
+			<p class="description">
+				<?php esc_html_e( 'Pushes ledger/order-{id}.json for each order and ledger/xp/event-*.json for each xp_ledger row linked to that order (order_id or order_ids in entry_json). Use checkboxes for bulk backfill.', 'cpm-humanblockchain' ); ?>
+			</p>
 		</form>
 		<?php
 	}
@@ -1110,32 +1124,22 @@ class Cpm_Humanblockchain_Admin {
 		check_admin_referer( 'cpm_hb_nwp_ledger_github_sync_order' );
 
 		$order_id = isset( $_POST['cpm_hb_ledger_order_id'] ) ? absint( wp_unslash( $_POST['cpm_hb_ledger_order_id'] ) ) : 0;
-		if ( $order_id <= 0 ) {
+		$sync_all_orders = ! empty( $_POST['cpm_hb_ledger_sync_all_orders'] );
+		$sync_all_xp     = ! empty( $_POST['cpm_hb_ledger_sync_all_xp'] );
+
+		if ( ! class_exists( 'Cpm_Hb_Github_Ledger' ) ) {
 			wp_safe_redirect(
 				$this->nwp_settings_integration_url(
 					array(
 						'cpm_ledger_notice' => 'error',
-						'cpm_ledger_msg'    => rawurlencode( __( 'Enter a valid order ID.', 'cpm-humanblockchain' ) ),
+						'cpm_ledger_msg'    => rawurlencode( __( 'GitHub ledger bridge is not loaded.', 'cpm-humanblockchain' ) ),
 					)
 				)
 			);
 			exit;
 		}
 
-		if ( ! function_exists( 'ss_ledger_gh_sync_order_to_github' ) || ! function_exists( 'ss_ledger_gh_config_ok' ) || ! ss_ledger_gh_config_ok() ) {
-			wp_safe_redirect(
-				$this->nwp_settings_integration_url(
-					array(
-						'cpm_ledger_notice' => 'error',
-						'cpm_ledger_msg'    => rawurlencode( __( 'GitHub ledger is not configured.', 'cpm-humanblockchain' ) ),
-					)
-				)
-			);
-			exit;
-		}
-
-		$order = function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : null;
-		if ( ! $order ) {
+		if ( $order_id > 0 && function_exists( 'wc_get_order' ) && ! wc_get_order( $order_id ) ) {
 			wp_safe_redirect(
 				$this->nwp_settings_integration_url(
 					array(
@@ -1153,34 +1157,46 @@ class Cpm_Humanblockchain_Admin {
 			exit;
 		}
 
-		$order->delete_meta_data( '_ss_ledger_gh_last_sync' );
-		$order->save();
+		$result = Cpm_Hb_Github_Ledger::sync_bundle_to_github(
+			$order_id,
+			array(
+				'sync_all_orders' => $sync_all_orders,
+				'sync_all_xp'     => $sync_all_xp,
+			)
+		);
 
-		$r = ss_ledger_gh_sync_order_to_github( $order_id, 'manual', 'Ledger: manual sync from NWP Gateway' );
-		if ( is_wp_error( $r ) ) {
+		if ( is_wp_error( $result ) ) {
+			if ( function_exists( 'ss_ledger_gh_set_last_error' ) ) {
+				ss_ledger_gh_set_last_error( $result->get_error_message() );
+			}
 			wp_safe_redirect(
 				$this->nwp_settings_integration_url(
 					array(
 						'cpm_ledger_notice' => 'error',
-						'cpm_ledger_msg'    => rawurlencode( $r->get_error_message() ),
+						'cpm_ledger_msg'    => rawurlencode( $result->get_error_message() ),
 					)
 				)
 			);
 			exit;
 		}
 
+		$msg = sprintf(
+			/* translators: 1: orders synced, 2: orders failed, 3: xp rows synced, 4: xp rows failed */
+			__( 'GitHub sync done: %1$d order(s) OK (%2$d failed), %3$d xp_ledger row(s) OK (%4$d failed).', 'cpm-humanblockchain' ),
+			(int) $result['orders_ok'],
+			(int) $result['orders_fail'],
+			(int) $result['xp_ok'],
+			(int) $result['xp_fail']
+		);
+		if ( function_exists( 'ss_ledger_gh_set_last_success' ) ) {
+			ss_ledger_gh_set_last_success( $msg );
+		}
+
 		wp_safe_redirect(
 			$this->nwp_settings_integration_url(
 				array(
 					'cpm_ledger_notice' => 'success',
-					'cpm_ledger_msg'    => rawurlencode(
-						sprintf(
-							/* translators: 1: order ID, 2: same order ID for file path */
-							__( 'Order #%1$d pushed to ledger/order-%2$d.json on GitHub.', 'cpm-humanblockchain' ),
-							$order_id,
-							$order_id
-						)
-					),
+					'cpm_ledger_msg'    => rawurlencode( $msg ),
 				)
 			)
 		);
