@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Bridges wp_xp_ledger rows, PoD wallet credits, and HBC pod-ledger events to GitHub.
+ * Bridges wp_xp_ledger rows and PoD wallet credits (cpm-humanblockchain) to GitHub.
  */
 class Cpm_Hb_Github_Ledger {
 
@@ -21,7 +21,6 @@ class Cpm_Hb_Github_Ledger {
 		add_action( 'cpm_hb_xp_ledger_row_saved', array( __CLASS__, 'on_xp_ledger_row_saved' ), 10, 1 );
 		add_action( 'cpm_hb_buyer_rebate_wallet_credited', array( __CLASS__, 'on_buyer_rebate_credited' ), 10, 5 );
 		add_action( 'cpm_hb_seller_trade_credit_wallet_credited', array( __CLASS__, 'on_seller_trade_credit_credited' ), 10, 6 );
-		add_action( 'cpm_hb_hbc_pod_ledger_saved', array( __CLASS__, 'on_hbc_pod_ledger_saved' ), 10, 3 );
 	}
 
 	/**
@@ -155,41 +154,6 @@ class Cpm_Hb_Github_Ledger {
 				'order_ids'           => array_values( array_map( 'intval', (array) $order_ids ) ),
 			)
 		);
-	}
-
-	/**
-	 * @param string               $event     initiated|confirmed.
-	 * @param int                  $ledger_id Row ID in wp_hbc_ledger.
-	 * @param array<string, mixed> $data      Sanitized row snapshot.
-	 */
-	public static function on_hbc_pod_ledger_saved( $event, $ledger_id, $data ) {
-		if ( ! self::is_enabled() || ! function_exists( 'ss_ledger_gh_put_repo_file' ) ) {
-			return;
-		}
-		$event     = sanitize_key( (string) $event );
-		$ledger_id = absint( $ledger_id );
-		if ( $ledger_id <= 0 || $event === '' ) {
-			return;
-		}
-
-		$payload = array(
-			'site'      => 'humanblockchain',
-			'event'     => $event,
-			'ledger_id' => $ledger_id,
-			'date'      => gmdate( 'c' ),
-		);
-		if ( is_array( $data ) ) {
-			$payload = array_merge( $payload, $data );
-		}
-
-		$payload = apply_filters( 'cpm_hb_github_ledger_hbc_payload', $payload, $event, $ledger_id, $data );
-		$path    = 'ledger/hbc/' . $ledger_id . '-' . $event . '.json';
-		$json    = wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
-		$msg     = sprintf( 'HBC PoD ledger %s #%d', $event, $ledger_id );
-		$res     = ss_ledger_gh_put_repo_file( $path, $json, $msg );
-		if ( is_wp_error( $res ) ) {
-			error_log( '[cpm_hb_github_ledger] ' . $path . ': ' . $res->get_error_message() );
-		}
 	}
 
 	/**
