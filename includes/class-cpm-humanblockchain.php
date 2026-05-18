@@ -101,6 +101,8 @@ class Cpm_Humanblockchain {
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/cpm-hb-smallstreet-integration.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/cpm-hb-github-ledger.php';
+
 		/**
 		 * The class responsible for orchestrating the actions and filters of the
 		 * core plugin.

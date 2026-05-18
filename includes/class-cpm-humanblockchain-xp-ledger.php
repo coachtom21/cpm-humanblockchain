@@ -48,6 +48,28 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Notify GitHub ledger integration (cpm_hb_xp_ledger_row_saved → ss_ledger_gh_record_xp).
+	 *
+	 * @param array<string, mixed> $args Row snapshot.
+	 */
+	private static function emit_github_ledger_row_event( array $args ) {
+		$defaults = array(
+			'row_id'                  => 0,
+			'wp_user_id'              => 0,
+			'scan_type'               => '',
+			'transaction_id'          => '',
+			'xp_units'                => '',
+			'scan_status'             => '',
+			'order_id'                => null,
+			'counterparty_wp_user_id' => null,
+			'ledger_date'             => '',
+			'entry_json'              => null,
+			'event_kind'              => 'insert',
+		);
+		do_action( 'cpm_hb_xp_ledger_row_saved', array_merge( $defaults, $args ) );
+	}
+
+	/**
 	 * Ledger rows for a WordPress user (newest first).
 	 *
 	 * @param int $wp_user_id User ID.
@@ -180,7 +202,23 @@ class Cpm_Humanblockchain_Xp_Ledger {
 			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
 
-		return false !== $inserted && (int) $wpdb->insert_id > 0;
+		if ( false !== $inserted && (int) $wpdb->insert_id > 0 ) {
+			self::emit_github_ledger_row_event(
+				array(
+					'row_id'         => (int) $wpdb->insert_id,
+					'wp_user_id'     => $wp_user_id,
+					'scan_type'      => 'discord_verify',
+					'transaction_id' => $tid,
+					'xp_units'       => $xp_str,
+					'scan_status'    => 'completed',
+					'ledger_date'    => $ledger_date,
+					'entry_json'     => $entry_store,
+				)
+			);
+			return true;
+		}
+
+		return false;
 	}
 
 	/**
@@ -688,7 +726,7 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		 * @param string $remote_status remote_sync_status value.
 		 * @param string|null $remote_err remote_last_error (null to clear).
 		 */
-		$apply_local_seller_completed = static function ( $remote_status, $remote_err ) use ( $wpdb, $table, $seller_row, $seller_entry_json, $date_str, $oid, $buyer_id ) {
+		$apply_local_seller_completed = static function ( $remote_status, $remote_err ) use ( $wpdb, $table, $seller_row, $seller_entry_json, $date_str, $oid, $buyer_id, $transaction_code, $seller_id, $seller_xp, $seller_entry_data ) {
 			$seller_update = array(
 				'scan_status'        => 'completed',
 				'entry_json'         => $seller_entry_json,
@@ -716,6 +754,21 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( 'id' => (int) $seller_row->id ),
 				$formats,
 				array( '%d' )
+			);
+			self::emit_github_ledger_row_event(
+				array(
+					'row_id'                  => (int) $seller_row->id,
+					'wp_user_id'              => (int) $seller_id,
+					'scan_type'               => 'seller_scan',
+					'transaction_id'          => (string) $transaction_code,
+					'xp_units'                => (string) $seller_xp,
+					'scan_status'             => 'completed',
+					'order_id'                => $oid > 0 ? $oid : null,
+					'counterparty_wp_user_id' => $buyer_id > 0 ? $buyer_id : null,
+					'ledger_date'             => $date_str,
+					'entry_json'              => $seller_entry_data,
+					'event_kind'              => 'seller_completed',
+				)
 			);
 		};
 
@@ -761,6 +814,21 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				array( 'id' => (int) $seller_row->id ),
 				$formats,
 				array( '%d' )
+			);
+			self::emit_github_ledger_row_event(
+				array(
+					'row_id'                  => (int) $seller_row->id,
+					'wp_user_id'              => (int) $seller_id,
+					'scan_type'               => 'seller_scan',
+					'transaction_id'          => (string) $transaction_code,
+					'xp_units'                => (string) $seller_xp,
+					'scan_status'             => 'completed',
+					'order_id'                => $oid > 0 ? $oid : null,
+					'counterparty_wp_user_id' => $buyer_id > 0 ? $buyer_id : null,
+					'ledger_date'             => $date_str,
+					'entry_json'              => $seller_entry_data,
+					'event_kind'              => 'seller_completed',
+				)
 			);
 		} else {
 			// Remote PATCH failed: still mark seller completed locally with buyer link so PoD is not stuck pending.
@@ -876,6 +944,21 @@ class Cpm_Humanblockchain_Xp_Ledger {
 		}
 
 		$buyer_row_id = (int) $wpdb->insert_id;
+
+		self::emit_github_ledger_row_event(
+			array(
+				'row_id'                  => $buyer_row_id,
+				'wp_user_id'              => $buyer_id,
+				'scan_type'               => $scan_type,
+				'transaction_id'          => $transaction_code,
+				'xp_units'                => $xp_units,
+				'scan_status'             => 'completed',
+				'order_id'                => $primary_order_id > 0 ? $primary_order_id : null,
+				'counterparty_wp_user_id' => $seller_id,
+				'ledger_date'             => $ledger_date,
+				'entry_json'              => $entry_local,
+			)
+		);
 
 		if ( ! self::xp_remote_http_enabled() ) {
 			$scan_url = self::get_scan_endpoint_url();
@@ -1086,6 +1169,19 @@ class Cpm_Humanblockchain_Xp_Ledger {
 				false
 			);
 		}
+
+		self::emit_github_ledger_row_event(
+			array(
+				'row_id'         => $row_id,
+				'wp_user_id'     => $wp_user_id,
+				'scan_type'      => $scan_type,
+				'transaction_id' => $transaction_code,
+				'xp_units'       => $xp_units,
+				'scan_status'    => 'pending',
+				'ledger_date'    => $ledger_date,
+				'entry_json'     => $entry_store,
+			)
+		);
 
 		if ( ! $sync_remote ) {
 			$skip_msg = __( 'Local ledger only; hub sync skipped for this flow.', 'cpm-humanblockchain' );
