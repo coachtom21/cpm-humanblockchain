@@ -977,9 +977,44 @@ class Cpm_Humanblockchain_Admin {
 					<th scope="row"><?php esc_html_e( 'Config OK', 'cpm-humanblockchain' ); ?></th>
 					<td><?php echo $status['config_ok'] ? '<span style="color:#00a32a;">' . esc_html__( 'Yes', 'cpm-humanblockchain' ) . '</span>' : '<span style="color:#d63638;">' . esc_html__( 'No', 'cpm-humanblockchain' ) . '</span>'; ?></td>
 				</tr>
+				<?php if ( ! empty( $status['constants'] ) && is_array( $status['constants'] ) ) : ?>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'wp-config constants', 'cpm-humanblockchain' ); ?></th>
+					<td>
+						<?php
+						foreach ( $status['constants'] as $const => $defined ) {
+							echo '<div><code>' . esc_html( $const ) . '</code> — ';
+							echo $defined
+								? '<span style="color:#00a32a;">' . esc_html__( 'defined', 'cpm-humanblockchain' ) . '</span>'
+								: '<span style="color:#d63638;">' . esc_html__( 'missing', 'cpm-humanblockchain' ) . '</span>';
+							echo '</div>';
+						}
+						?>
+					</td>
+				</tr>
+				<?php endif; ?>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'PEM path (wp-config)', 'cpm-humanblockchain' ); ?></th>
+					<td><code><?php echo esc_html( (string) $status['pem_path'] ); ?></code></td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'PEM file exists', 'cpm-humanblockchain' ); ?></th>
+					<td><?php echo ! empty( $status['pem_exists'] ) ? esc_html__( 'Yes', 'cpm-humanblockchain' ) : '<span style="color:#d63638;">' . esc_html__( 'No — upload ledger-github-app.pem', 'cpm-humanblockchain' ) . '</span>'; ?></td>
+				</tr>
 				<tr>
 					<th scope="row"><?php esc_html_e( 'PEM readable', 'cpm-humanblockchain' ); ?></th>
-					<td><code><?php echo esc_html( (string) $status['pem_path'] ); ?></code> — <?php echo $status['pem_readable'] ? esc_html__( 'Yes', 'cpm-humanblockchain' ) : esc_html__( 'No', 'cpm-humanblockchain' ); ?></td>
+					<td>
+						<?php
+						if ( ! empty( $status['pem_readable'] ) ) {
+							echo '<span style="color:#00a32a;">' . esc_html__( 'Yes', 'cpm-humanblockchain' ) . '</span>';
+							if ( ! empty( $status['pem_resolved'] ) ) {
+								echo ' <code>' . esc_html( (string) $status['pem_resolved'] ) . '</code>';
+							}
+						} else {
+							echo '<span style="color:#d63638;">' . esc_html__( 'No — fix file permissions on the server (see below)', 'cpm-humanblockchain' ) . '</span>';
+						}
+						?>
+					</td>
 				</tr>
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Repository', 'cpm-humanblockchain' ); ?></th>
@@ -999,6 +1034,18 @@ class Cpm_Humanblockchain_Admin {
 				<?php endif; ?>
 			</tbody>
 		</table>
+		<?php if ( empty( $status['config_ok'] ) ) : ?>
+		<div class="notice notice-warning inline" style="margin:12px 0;padding:12px;max-width:720px;">
+			<p><strong><?php esc_html_e( 'Bitnami / live server fix', 'cpm-humanblockchain' ); ?></strong></p>
+			<ol style="margin:0 0 0 1.25em;">
+				<li><?php esc_html_e( 'Upload ledger-github-app.pem to:', 'cpm-humanblockchain' ); ?> <code>/bitnami/wordpress/wp-content/private/ledger-github-app.pem</code></li>
+				<li><?php esc_html_e( 'SSH: sudo mkdir -p /bitnami/wordpress/wp-content/private', 'cpm-humanblockchain' ); ?></li>
+				<li><?php esc_html_e( 'SSH: sudo chown bitnami:daemon /bitnami/wordpress/wp-content/private/ledger-github-app.pem', 'cpm-humanblockchain' ); ?></li>
+				<li><?php esc_html_e( 'SSH: sudo chmod 640 /bitnami/wordpress/wp-content/private/ledger-github-app.pem', 'cpm-humanblockchain' ); ?></li>
+				<li><?php esc_html_e( 'Confirm wp-config.php (same folder as wp-settings.php) contains all SS_LEDGER_* lines.', 'cpm-humanblockchain' ); ?></li>
+			</ol>
+		</div>
+		<?php endif; ?>
 
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:1em 0;">
 			<?php wp_nonce_field( 'cpm_hb_nwp_ledger_github_test' ); ?>
