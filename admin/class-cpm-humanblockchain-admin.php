@@ -788,25 +788,29 @@ class Cpm_Humanblockchain_Admin {
 
 			<div class="cpm-nwp-tab-panel" id="cpm-nwp-panel-integration" style="<?php echo 'integration' === $active_tab ? '' : 'display:none;'; ?>">
 
-			<?php if ( class_exists( 'Cpm_Hb_Legal_Pages' ) ) : ?>
-				<?php if ( isset( $_GET['cpm_hb_legal_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['cpm_hb_legal_sync'] ) ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
-					<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Privacy Policy and Terms pages were updated from the plugin templates.', 'cpm-humanblockchain' ); ?></p></div>
-				<?php endif; ?>
-				<div class="notice notice-info inline" style="margin: 12px 0 20px;">
-					<p><strong><?php esc_html_e( 'Legal pages (Twilio 10DLC):', 'cpm-humanblockchain' ); ?></strong></p>
-					<ul style="list-style:disc;margin-left:1.5em;">
-						<li><a href="<?php echo esc_url( Cpm_Hb_Legal_Pages::privacy_url() ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'cpm-humanblockchain' ); ?></a></li>
-						<li><a href="<?php echo esc_url( Cpm_Hb_Legal_Pages::terms_url() ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Terms and Conditions', 'cpm-humanblockchain' ); ?></a></li>
-					</ul>
-					<p class="description"><?php esc_html_e( 'Use these URLs in your Twilio A2P campaign. Pages are created/updated from plugin templates on activation.', 'cpm-humanblockchain' ); ?></p>
-					<p><strong><?php esc_html_e( 'Suggested campaign opt-in text:', 'cpm-humanblockchain' ); ?></strong></p>
-					<textarea readonly rows="4" class="large-text code" style="margin-top:6px;"><?php echo esc_textarea( Cpm_Hb_Legal_Pages::twilio_opt_in_description() ); ?></textarea>
-					<p style="margin-top:12px;">
-						<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cpm_hb_sync_legal_pages' ), 'cpm_hb_sync_legal_pages' ) ); ?>"><?php esc_html_e( 'Update legal page content now', 'cpm-humanblockchain' ); ?></a>
-						<span class="description" style="margin-left:8px;"><?php esc_html_e( 'Overwrites pages marked as plugin-managed or empty. Custom edited pages are left unchanged.', 'cpm-humanblockchain' ); ?></span>
-					</p>
-				</div>
-			<?php endif; ?>
+			<?php
+			$hb_privacy_url = function_exists( 'hb_legal_privacy_url' ) ? hb_legal_privacy_url() : home_url( '/privacy-policy/' );
+			$hb_terms_url   = function_exists( 'hb_legal_terms_url' ) ? hb_legal_terms_url() : home_url( '/terms-and-conditions/' );
+			$hb_opt_in      = sprintf(
+				/* translators: 1: privacy URL, 2: terms URL */
+				__(
+					'Users opt in on our website by entering their mobile phone number and clicking “Send OTP” to receive a one-time verification code. Consent is not required to purchase. Message frequency varies; typically one message per verification request. Message and data rates may apply. Reply STOP to opt out, HELP for help. Privacy: %1$s · Terms: %2$s',
+					'cpm-humanblockchain'
+				),
+				$hb_privacy_url,
+				$hb_terms_url
+			);
+			?>
+			<div class="notice notice-info inline" style="margin: 12px 0 20px;">
+				<p><strong><?php esc_html_e( 'Legal pages (Twilio 10DLC):', 'cpm-humanblockchain' ); ?></strong></p>
+				<ul style="list-style:disc;margin-left:1.5em;">
+					<li><a href="<?php echo esc_url( $hb_privacy_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'cpm-humanblockchain' ); ?></a></li>
+					<li><a href="<?php echo esc_url( $hb_terms_url ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Terms and Conditions', 'cpm-humanblockchain' ); ?></a></li>
+				</ul>
+				<p class="description"><?php esc_html_e( 'Assign the child theme page templates “Privacy Policy” and “Terms and Conditions” to those pages. Leave the page body empty.', 'cpm-humanblockchain' ); ?></p>
+				<p><strong><?php esc_html_e( 'Suggested campaign opt-in text:', 'cpm-humanblockchain' ); ?></strong></p>
+				<textarea readonly rows="4" class="large-text code" style="margin-top:6px;"><?php echo esc_textarea( $hb_opt_in ); ?></textarea>
+			</div>
 
 			<div class="notice notice-info inline" style="margin: 12px 0;">
 				<p>
