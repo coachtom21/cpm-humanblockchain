@@ -14,6 +14,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Cpm_Hb_Github_Ledger {
 
+	/** @var string WP-Cron hook for daily orders + xp_ledger catch-up. */
+	const CRON_HOOK = 'cpm_hb_github_ledger_daily_sync';
+
 	/**
 	 * Register hooks.
 	 */
@@ -21,6 +24,131 @@ class Cpm_Hb_Github_Ledger {
 		add_action( 'cpm_hb_xp_ledger_row_saved', array( __CLASS__, 'on_xp_ledger_row_saved' ), 10, 1 );
 		add_action( 'cpm_hb_buyer_rebate_wallet_credited', array( __CLASS__, 'on_buyer_rebate_credited' ), 10, 5 );
 		add_action( 'cpm_hb_seller_trade_credit_wallet_credited', array( __CLASS__, 'on_seller_trade_credit_credited' ), 10, 6 );
+		add_action( 'init', array( __CLASS__, 'maybe_schedule_cron' ), 99 );
+		add_action( self::CRON_HOOK, array( __CLASS__, 'run_scheduled_sync' ) );
+	}
+
+	/**
+	 * Whether the daily catch-up cron is allowed to run.
+	 *
+	 * @return bool
+	 */
+	public static function is_cron_enabled() {
+		if ( defined( 'CPM_HB_LEDGER_GH_DISABLE_CRON' ) && CPM_HB_LEDGER_GH_DISABLE_CRON ) {
+			return false;
+		}
+		return (bool) apply_filters( 'cpm_hb_github_ledger_cron_enabled', true );
+	}
+
+	/**
+	 * Options passed to sync_bundle_to_github() from cron (same as manual bulk checkboxes).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public static function get_cron_sync_options() {
+		return (array) apply_filters(
+			'cpm_hb_github_ledger_cron_sync_options',
+			array(
+				'sync_all_orders' => true,
+				'sync_all_xp'     => true,
+				'orders_limit'    => 200,
+				'xp_limit'        => 500,
+				'source'          => 'cron',
+			)
+		);
+	}
+
+	/**
+	 * Schedule daily catch-up when GitHub ledger is configured.
+	 */
+	public static function maybe_schedule_cron() {
+		if ( ! self::is_cron_enabled() || ! self::is_enabled() ) {
+			self::unschedule_cron();
+			return;
+		}
+		if ( wp_next_scheduled( self::CRON_HOOK ) ) {
+			return;
+		}
+		$first = (int) apply_filters( 'cpm_hb_github_ledger_cron_first_run_timestamp', time() + HOUR_IN_SECONDS );
+		wp_schedule_event( $first, 'daily', self::CRON_HOOK );
+	}
+
+	/**
+	 * Clear scheduled catch-up.
+	 */
+	public static function unschedule_cron() {
+		$timestamp = wp_next_scheduled( self::CRON_HOOK );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, self::CRON_HOOK );
+		}
+	}
+
+	/**
+	 * WP-Cron callback: push recent orders + wp_xp_ledger (same as manual bulk).
+	 *
+	 * @return array<string, mixed>|WP_Error|null
+	 */
+	public static function run_scheduled_sync() {
+		if ( ! self::is_cron_enabled() || ! self::is_enabled() ) {
+			return null;
+		}
+		if ( get_transient( 'cpm_hb_github_ledger_cron_lock' ) ) {
+			return null;
+		}
+		set_transient( 'cpm_hb_github_ledger_cron_lock', '1', 30 * MINUTE_IN_SECONDS );
+
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( (int) apply_filters( 'cpm_hb_github_ledger_cron_time_limit', 600 ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		$result = self::sync_bundle_to_github( 0, self::get_cron_sync_options() );
+
+		delete_transient( 'cpm_hb_github_ledger_cron_lock' );
+
+		$log_stats = is_wp_error( $result ) ? array( 'error' => $result->get_error_message() ) : $result;
+		update_option(
+			'cpm_hb_github_ledger_last_cron',
+			array(
+				'time'   => time(),
+				'result' => $log_stats,
+			),
+			false
+		);
+
+		if ( is_wp_error( $result ) ) {
+			if ( function_exists( 'ss_ledger_gh_set_last_error' ) ) {
+				ss_ledger_gh_set_last_error( 'Cron: ' . $result->get_error_message() );
+			}
+			error_log( '[cpm_hb_github_ledger] Cron sync failed: ' . $result->get_error_message() );
+		} else {
+			$msg = sprintf(
+				'Cron sync: %d order(s) OK (%d failed), %d xp_ledger row(s) OK (%d failed).',
+				(int) $result['orders_ok'],
+				(int) $result['orders_fail'],
+				(int) $result['xp_ok'],
+				(int) $result['xp_fail']
+			);
+			if ( function_exists( 'ss_ledger_gh_set_last_success' ) ) {
+				ss_ledger_gh_set_last_success( $msg );
+			}
+			error_log( '[cpm_hb_github_ledger] ' . $msg );
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return array{scheduled: bool, next: int, last: array<string, mixed>|null}
+	 */
+	public static function get_cron_status() {
+		$next = wp_next_scheduled( self::CRON_HOOK );
+		$last = get_option( 'cpm_hb_github_ledger_last_cron', null );
+		return array(
+			'enabled'   => self::is_cron_enabled(),
+			'scheduled' => (bool) $next,
+			'next'      => $next ? (int) $next : 0,
+			'last'      => is_array( $last ) ? $last : null,
+		);
 	}
 
 	/**
@@ -254,6 +382,7 @@ class Cpm_Hb_Github_Ledger {
 		$sync_all_xp        = ! empty( $options['sync_all_xp'] );
 		$orders_limit       = isset( $options['orders_limit'] ) ? (int) $options['orders_limit'] : 200;
 		$xp_limit           = isset( $options['xp_limit'] ) ? (int) $options['xp_limit'] : 500;
+		$source             = isset( $options['source'] ) ? sanitize_key( (string) $options['source'] ) : 'manual';
 		$delay              = max( 0, (int) apply_filters( 'cpm_hb_github_ledger_bulk_usleep', 150000 ) );
 
 		$stats = array(
@@ -292,7 +421,11 @@ class Cpm_Hb_Github_Ledger {
 				$order->delete_meta_data( '_ss_ledger_gh_last_sync' );
 				$order->save();
 			}
-			$r = ss_ledger_gh_sync_order_to_github( $oid, 'manual', sprintf( 'Ledger: NWP manual sync order #%d', $oid ) );
+			$order_source = ( 'cron' === $source ) ? 'cron_monthly' : 'manual';
+			$order_commit = ( 'cron' === $source )
+				? sprintf( 'Ledger: NWP cron sync order #%d', $oid )
+				: sprintf( 'Ledger: NWP manual sync order #%d', $oid );
+			$r = ss_ledger_gh_sync_order_to_github( $oid, $order_source, $order_commit );
 			if ( is_wp_error( $r ) ) {
 				++$stats['orders_fail'];
 			} else {

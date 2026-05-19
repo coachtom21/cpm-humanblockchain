@@ -62,6 +62,7 @@ class Cpm_Humanblockchain_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_nwp_settings_wc_assets' ), 99 );
 		add_action( 'admin_post_cpm_hb_nwp_ledger_github_test', array( $this, 'handle_nwp_ledger_github_test' ) );
 		add_action( 'admin_post_cpm_hb_nwp_ledger_github_sync_order', array( $this, 'handle_nwp_ledger_github_sync_order' ) );
+		add_action( 'admin_post_cpm_hb_nwp_ledger_github_run_cron', array( $this, 'handle_nwp_ledger_github_run_cron' ) );
 		add_action( 'admin_notices', array( $this, 'maybe_show_nwp_ledger_github_notice' ) );
 
 	}
@@ -1078,6 +1079,99 @@ class Cpm_Humanblockchain_Admin {
 				<?php esc_html_e( 'Pushes ledger/order-{id}.json for each order and ledger/xp/event-*.json for each xp_ledger row linked to that order (order_id or order_ids in entry_json). Use checkboxes for bulk backfill.', 'cpm-humanblockchain' ); ?>
 			</p>
 		</form>
+
+		<?php
+		if ( class_exists( 'Cpm_Hb_Github_Ledger' ) ) {
+			$this->render_nwp_ledger_github_cron_section();
+		}
+		?>
+		<?php
+	}
+
+	/**
+	 * Scheduled catch-up (same as manual bulk: last 200 orders + up to 500 xp_ledger rows).
+	 */
+	private function render_nwp_ledger_github_cron_section() {
+		$cron = Cpm_Hb_Github_Ledger::get_cron_status();
+		?>
+		<hr style="margin:2em 0 1em;" />
+		<h3><?php esc_html_e( 'Scheduled catch-up (cron)', 'cpm-humanblockchain' ); ?></h3>
+		<p class="description">
+			<?php esc_html_e( 'Runs daily via WordPress cron: syncs the last 200 WooCommerce orders and up to 500 wp_xp_ledger rows to GitHub (same as checking both bulk boxes above). Real-time hooks still run on checkout and new XP rows.', 'cpm-humanblockchain' ); ?>
+		</p>
+		<table class="widefat striped" style="max-width:720px;margin:1em 0;">
+			<tbody>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Cron enabled', 'cpm-humanblockchain' ); ?></th>
+					<td>
+						<?php
+						if ( ! empty( $cron['enabled'] ) ) {
+							echo '<span style="color:#00a32a;">' . esc_html__( 'Yes', 'cpm-humanblockchain' ) . '</span>';
+						} else {
+							echo '<span style="color:#d63638;">' . esc_html__( 'No (CPM_HB_LEDGER_GH_DISABLE_CRON)', 'cpm-humanblockchain' ) . '</span>';
+						}
+						?>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Next run', 'cpm-humanblockchain' ); ?></th>
+					<td>
+						<?php
+						if ( ! empty( $cron['scheduled'] ) && ! empty( $cron['next'] ) ) {
+							echo esc_html( wp_date( 'Y-m-d H:i:s T', (int) $cron['next'] ) );
+						} elseif ( ! empty( $cron['enabled'] ) && Cpm_Hb_Github_Ledger::is_enabled() ) {
+							esc_html_e( 'Scheduling on next page load…', 'cpm-humanblockchain' );
+						} else {
+							esc_html_e( 'Not scheduled', 'cpm-humanblockchain' );
+						}
+						?>
+					</td>
+				</tr>
+				<?php if ( ! empty( $cron['last'] ) && is_array( $cron['last'] ) ) : ?>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Last cron run', 'cpm-humanblockchain' ); ?></th>
+					<td>
+						<?php
+						if ( ! empty( $cron['last']['time'] ) ) {
+							echo esc_html( wp_date( 'Y-m-d H:i:s T', (int) $cron['last']['time'] ) );
+							echo '<br />';
+						}
+						$res = isset( $cron['last']['result'] ) && is_array( $cron['last']['result'] ) ? $cron['last']['result'] : array();
+						if ( ! empty( $res['error'] ) ) {
+							echo '<span style="color:#d63638;">' . esc_html( (string) $res['error'] ) . '</span>';
+						} elseif ( isset( $res['orders_ok'] ) ) {
+							echo esc_html(
+								sprintf(
+									/* translators: 1: orders ok, 2: orders fail, 3: xp ok, 4: xp fail */
+									__( '%1$d order(s) OK (%2$d failed), %3$d xp row(s) OK (%4$d failed).', 'cpm-humanblockchain' ),
+									(int) $res['orders_ok'],
+									(int) $res['orders_fail'],
+									(int) $res['xp_ok'],
+									(int) $res['xp_fail']
+								)
+							);
+						}
+						?>
+					</td>
+				</tr>
+				<?php endif; ?>
+			</tbody>
+		</table>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin:1em 0 2em;">
+			<?php wp_nonce_field( 'cpm_hb_nwp_ledger_github_run_cron' ); ?>
+			<input type="hidden" name="action" value="cpm_hb_nwp_ledger_github_run_cron" />
+			<?php submit_button( __( 'Run scheduled sync now', 'cpm-humanblockchain' ), 'secondary', 'submit', false ); ?>
+		</form>
+
+		<p class="description" style="max-width:720px;">
+			<strong><?php esc_html_e( 'Production tip:', 'cpm-humanblockchain' ); ?></strong>
+			<?php esc_html_e( 'WP-Cron only runs when someone visits the site. On Bitnami, add a system cron every 15 minutes:', 'cpm-humanblockchain' ); ?>
+			<br /><code>*/15 * * * * wget -q -O - "<?php echo esc_url( site_url( 'wp-cron.php?doing_wp_cron' ) ); ?>" &gt;/dev/null 2&gt;&amp;1</code>
+			<br />
+			<?php esc_html_e( 'Optional: disable the MU-plugin monthly order-only cron to avoid duplicate work — add to wp-config.php:', 'cpm-humanblockchain' ); ?>
+			<br /><code>define( 'SS_LEDGER_GH_DISABLE_MONTHLY_CRON', true );</code>
+		</p>
 		<?php
 	}
 
@@ -1238,6 +1332,73 @@ class Cpm_Humanblockchain_Admin {
 		if ( function_exists( 'ss_ledger_gh_set_last_success' ) ) {
 			ss_ledger_gh_set_last_success( $msg );
 		}
+
+		wp_safe_redirect(
+			$this->nwp_settings_integration_url(
+				array(
+					'cpm_ledger_notice' => 'success',
+					'cpm_ledger_msg'    => rawurlencode( $msg ),
+				)
+			)
+		);
+		exit;
+	}
+
+	/**
+	 * @return void
+	 */
+	public function handle_nwp_ledger_github_run_cron() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Unauthorized.', 'cpm-humanblockchain' ) );
+		}
+		check_admin_referer( 'cpm_hb_nwp_ledger_github_run_cron' );
+
+		if ( ! class_exists( 'Cpm_Hb_Github_Ledger' ) ) {
+			wp_safe_redirect(
+				$this->nwp_settings_integration_url(
+					array(
+						'cpm_ledger_notice' => 'error',
+						'cpm_ledger_msg'    => rawurlencode( __( 'GitHub ledger bridge is not loaded.', 'cpm-humanblockchain' ) ),
+					)
+				)
+			);
+			exit;
+		}
+
+		$result = Cpm_Hb_Github_Ledger::run_scheduled_sync();
+
+		if ( null === $result ) {
+			wp_safe_redirect(
+				$this->nwp_settings_integration_url(
+					array(
+						'cpm_ledger_notice' => 'error',
+						'cpm_ledger_msg'    => rawurlencode( __( 'Cron sync skipped (disabled, not configured, or already running).', 'cpm-humanblockchain' ) ),
+					)
+				)
+			);
+			exit;
+		}
+
+		if ( is_wp_error( $result ) ) {
+			wp_safe_redirect(
+				$this->nwp_settings_integration_url(
+					array(
+						'cpm_ledger_notice' => 'error',
+						'cpm_ledger_msg'    => rawurlencode( $result->get_error_message() ),
+					)
+				)
+			);
+			exit;
+		}
+
+		$msg = sprintf(
+			/* translators: 1: orders synced, 2: orders failed, 3: xp rows synced, 4: xp rows failed */
+			__( 'Cron sync done: %1$d order(s) OK (%2$d failed), %3$d xp_ledger row(s) OK (%4$d failed).', 'cpm-humanblockchain' ),
+			(int) $result['orders_ok'],
+			(int) $result['orders_fail'],
+			(int) $result['xp_ok'],
+			(int) $result['xp_fail']
+		);
 
 		wp_safe_redirect(
 			$this->nwp_settings_integration_url(
