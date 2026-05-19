@@ -783,3 +783,27 @@ body.woocommerce-cart .cpm-hb-cart-page-video {
 	background: #0b1220;
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
 }
+
+/* Side cart drawer — Coach Tom story video (theme override xoo-wsc-header.php) */
+.xoo-wsc-container .cpm-hb-side-cart-video-wrap {
+	margin: 10px 0 12px;
+	padding: 0 12px;
+	box-sizing: border-box;
+}
+
+.xoo-wsc-container .cpm-hb-side-cart-video-title {
+	margin: 0 0 0.5rem;
+	font-size: 0.9rem;
+	font-weight: 700;
+	line-height: 1.35;
+	color: inherit;
+}
+
+.xoo-wsc-container .cpm-hb-side-cart-video {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 220px;
+	border-radius: 8px;
+	background: #0b1220;
+}

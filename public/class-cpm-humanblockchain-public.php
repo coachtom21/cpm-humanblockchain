@@ -266,7 +266,7 @@ class Cpm_Humanblockchain_Public {
 		if ( ! (bool) apply_filters( 'cpm_hb_show_cart_page_video', true ) ) {
 			return '';
 		}
-		$default_url = 'https://humanblockchain.info/wp-content/uploads/2026/05/Coach-Toms-Dream_-One-Grain-of-Sand-2026-05-021.mp4';
+		$default_url = 'http://humanblockchain.info/wp-content/uploads/2026/05/Coach-Toms-Dream_-One-Grain-of-Sand-2026-05-021.mp4';
 		$url         = (string) apply_filters( 'cpm_hb_cart_page_video_url', $default_url );
 		$url         = esc_url( $url );
 		if ( $url === '' ) {
