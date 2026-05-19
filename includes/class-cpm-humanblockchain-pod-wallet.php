@@ -195,6 +195,8 @@ class Cpm_Humanblockchain_Pod_Wallet {
 
 		$rebate_cents = (int) round( $rebate_usd * 100 );
 		$credit_cents = (int) round( $credit_usd * 100 );
+		$rebate_applied = 0;
+		$credit_applied = 0;
 
 		$primary = self::first_buyer_owned_wc_order( $buyer_id, $order_ids );
 
@@ -233,6 +235,7 @@ class Cpm_Humanblockchain_Pod_Wallet {
 			 * @param string $code         HB transaction code.
 			 */
 			do_action( 'cpm_hb_buyer_rebate_wallet_credited', $buyer_id, $rebate_cents, $fp, $order_ids, $code );
+			$rebate_applied = $rebate_cents;
 		}
 
 		if ( $seller_id > 0 && $credit_cents > 0 && ! self::fingerprint_seen( $seller_id, self::META_SELLER_CREDIT_FP, $fp ) ) {
@@ -272,6 +275,20 @@ class Cpm_Humanblockchain_Pod_Wallet {
 			 * @param string $code         HB transaction code.
 			 */
 			do_action( 'cpm_hb_seller_trade_credit_wallet_credited', $seller_id, $credit_cents, $fp, $buyer_id, $order_ids, $code );
+			$credit_applied = $credit_cents;
+		}
+
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && ( $rebate_applied > 0 || $credit_applied > 0 || ! empty( $order_ids ) ) ) {
+			$ledger_fp = Cpm_Hb_Delivery_Ledger::delivery_event_fingerprint( $buyer_id, $seller_id, $order_ids, $code );
+			Cpm_Hb_Delivery_Ledger::record_confirm_entries(
+				$buyer_id,
+				$seller_id,
+				$order_ids,
+				$code,
+				$rebate_applied,
+				$credit_applied,
+				$ledger_fp
+			);
 		}
 	}
 
@@ -334,7 +351,14 @@ class Cpm_Humanblockchain_Pod_Wallet {
 		if ( $tc > 0 ) {
 			echo '<p class="cpm-hb-pod-wallet-dashboard__line">' . esc_html__( 'Seller trade credit balance:', 'cpm-humanblockchain' ) . ' <strong class="cpm-hb-pod-wallet-dashboard__amount">' . esc_html( $fmt( $tc ) ) . '</strong></p>';
 		}
-		echo '<p class="cpm-hb-pod-wallet-dashboard__desc">' . esc_html__( 'Balances accrue when a delivery is confirmed on the backorders flow; XP rewards are separate.', 'cpm-humanblockchain' ) . '</p>';
+		$wallet_url = '';
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && function_exists( 'wc_get_account_endpoint_url' ) ) {
+			$wallet_url = wc_get_account_endpoint_url( Cpm_Hb_Delivery_Ledger::account_endpoint_slug() );
+		}
+		echo '<p class="cpm-hb-pod-wallet-dashboard__desc">' . esc_html__( 'Balances accrue when a delivery is confirmed on the backorders flow (2-scan).', 'cpm-humanblockchain' ) . '</p>';
+		if ( is_string( $wallet_url ) && $wallet_url !== '' ) {
+			echo '<p><a href="' . esc_url( $wallet_url ) . '">' . esc_html__( 'View delivery wallet history', 'cpm-humanblockchain' ) . '</a></p>';
+		}
 		echo '</section>';
 	}
 }

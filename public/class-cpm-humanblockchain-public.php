@@ -686,7 +686,7 @@ class Cpm_Humanblockchain_Public {
 					'enterCodeAndOrders'      => __( 'Select orders and enter the seller’s transaction code.', 'cpm-humanblockchain' ),
 					'economicsNote'           => (string) apply_filters(
 						'cpm_hb_backorders_economics_note',
-						__( 'Small amounts shown on hub lines (for example $0.30) are usually a reserve or ring-fence, not your full spendable balance. When a pledge applies (such as $30), that reserve may already be covered—see your order or account terms. After you confirm delivery here, the buyer success message includes any configured rebate; seller trade credit is recorded via Woo order notes and the cpm_hb_seller_trade_credit_due action for integrations. XP rewards use a fixed internal basis (buyer 7% and seller 3% of a $10 notional amount), expressed as XP units rather than cash.', 'cpm-humanblockchain' )
+						__( 'Small amounts shown on hub lines (for example $0.30) are usually a reserve or ring-fence on the order, not spendable wallet balance. When a pledge applies (such as $30), that reserve may already be covered. After you confirm delivery, buyers receive the configured rebate (default $5) and sellers receive trade credit (default $10.30), recorded in your Delivery wallet under My Account.', 'cpm-humanblockchain' )
 					),
 					'podPendingNote'          => (string) apply_filters(
 						'cpm_hb_backorders_pod_pending_note',

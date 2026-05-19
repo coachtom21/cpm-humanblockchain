@@ -33,6 +33,15 @@ class Cpm_Humanblockchain_Activator {
 		self::upgrade_nwp_devices_table();
 		self::create_xp_ledger_table();
 		self::upgrade_xp_ledger_columns();
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) ) {
+			Cpm_Hb_Delivery_Ledger::create_table();
+		} else {
+			require_once plugin_dir_path( dirname( __FILE__ ) ) . 'class-cpm-hb-delivery-ledger.php';
+			if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) ) {
+				Cpm_Hb_Delivery_Ledger::create_table();
+			}
+		}
+		flush_rewrite_rules( false );
 	}
 
 	/**
@@ -96,6 +105,17 @@ class Cpm_Humanblockchain_Activator {
 	public static function maybe_upgrade_xp_ledger() {
 		self::create_xp_ledger_table();
 		self::upgrade_xp_ledger_columns();
+	}
+
+	/**
+	 * Ensure delivery ledger table exists (existing installs).
+	 *
+	 * @since 1.0.0
+	 */
+	public static function maybe_upgrade_delivery_ledger() {
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) ) {
+			Cpm_Hb_Delivery_Ledger::create_table();
+		}
 	}
 
 	/**

@@ -964,7 +964,7 @@ class Cpm_Humanblockchain_Device_Registry {
 				? array( 'lat' => (float) $s_lat, 'lng' => (float) $s_lng )
 				: null;
 			$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
-			if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+			if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && Cpm_Hb_Delivery_Ledger::pod_records_xp_ledger() && class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 				$ledger_res = Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code, false, $pod_loc, $pod_ts );
 				if ( is_array( $ledger_res ) && ! empty( $ledger_res['remote'] ) && 'db_failed' === $ledger_res['remote'] ) {
 					$msg = ! empty( $ledger_res['summary'] ) && is_string( $ledger_res['summary'] )
@@ -1075,7 +1075,7 @@ class Cpm_Humanblockchain_Device_Registry {
 			? array( 'lat' => (float) $s_lat, 'lng' => (float) $s_lng )
 			: null;
 		$seller_transaction_code = self::create_seller_pod_transaction_code( $wp_uid );
-		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && Cpm_Hb_Delivery_Ledger::pod_records_xp_ledger() && class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 			Cpm_Humanblockchain_Xp_Ledger::record_seller_scan_after_verification( $wp_uid, $seller_transaction_code, true, $pod_loc, $pod_ts );
 		}
 		if ( apply_filters( 'cpm_hb_two_scan_validation_enabled', true ) && class_exists( 'Cpm_Humanblockchain_Two_Scan_Validator' ) ) {
@@ -1165,7 +1165,7 @@ class Cpm_Humanblockchain_Device_Registry {
 			}
 		}
 
-		if ( class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && Cpm_Hb_Delivery_Ledger::pod_records_xp_ledger() && class_exists( 'Cpm_Humanblockchain_Xp_Ledger' ) ) {
 			Cpm_Humanblockchain_Xp_Ledger::record_buyer_scan_after_confirm( $buyer_id, $seller_id, $code, $order_ids, $buyer_scan_loc );
 		}
 

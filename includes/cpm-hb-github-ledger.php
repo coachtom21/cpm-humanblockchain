@@ -24,6 +24,7 @@ class Cpm_Hb_Github_Ledger {
 		add_action( 'cpm_hb_xp_ledger_row_saved', array( __CLASS__, 'on_xp_ledger_row_saved' ), 10, 1 );
 		add_action( 'cpm_hb_buyer_rebate_wallet_credited', array( __CLASS__, 'on_buyer_rebate_credited' ), 10, 5 );
 		add_action( 'cpm_hb_seller_trade_credit_wallet_credited', array( __CLASS__, 'on_seller_trade_credit_credited' ), 10, 6 );
+		add_action( 'cpm_hb_delivery_ledger_row_saved', array( __CLASS__, 'on_delivery_ledger_row_saved' ), 10, 2 );
 		add_action( 'init', array( __CLASS__, 'maybe_schedule_cron' ), 99 );
 		add_action( self::CRON_HOOK, array( __CLASS__, 'run_scheduled_sync' ) );
 	}
@@ -482,6 +483,46 @@ class Cpm_Hb_Github_Ledger {
 	}
 
 	/**
+	 * @param int                  $row_id Insert ID in wp_hb_delivery_ledger.
+	 * @param array<string, mixed> $args   Row args passed to insert_entry().
+	 */
+	public static function on_delivery_ledger_row_saved( $row_id, $args ) {
+		if ( ! self::is_enabled() || ! is_array( $args ) ) {
+			return;
+		}
+		$row_id = (int) $row_id;
+		$uid    = isset( $args['wp_user_id'] ) ? (int) $args['wp_user_id'] : 0;
+		$type   = isset( $args['entry_type'] ) ? sanitize_key( (string) $args['entry_type'] ) : '';
+		if ( $row_id <= 0 || $uid <= 0 || $type === '' ) {
+			return;
+		}
+		$payload = array(
+			'user_id'    => $uid,
+			'action'     => 'hb-delivery-' . $type,
+			'date'       => gmdate( 'c' ),
+			'uniq'       => 'hb-dl-' . $row_id,
+			'site'       => 'humanblockchain',
+			'row_id'     => $row_id,
+			'entry_type' => $type,
+			'amount_cents' => isset( $args['amount_cents'] ) ? (int) $args['amount_cents'] : 0,
+		);
+		if ( ! empty( $args['transaction_code'] ) ) {
+			$payload['transaction_id'] = (string) $args['transaction_code'];
+		}
+		if ( ! empty( $args['order_id'] ) ) {
+			$payload['order_id'] = (int) $args['order_id'];
+		}
+		if ( ! empty( $args['counterparty_wp_user_id'] ) ) {
+			$payload['counterparty_user_id'] = (int) $args['counterparty_wp_user_id'];
+		}
+		if ( ! empty( $args['reserve_pledge_covered'] ) ) {
+			$payload['reserve_pledge_covered'] = true;
+		}
+		$payload = apply_filters( 'cpm_hb_github_ledger_delivery_payload', $payload, $row_id, $args );
+		do_action( 'ss_ledger_gh_record_xp', $payload );
+	}
+
+	/**
 	 * @param int    $buyer_id     Buyer user ID.
 	 * @param int    $rebate_cents Cents credited.
 	 * @param string $fp           Fingerprint.
@@ -489,6 +530,9 @@ class Cpm_Hb_Github_Ledger {
 	 * @param string $code         HB transaction code.
 	 */
 	public static function on_buyer_rebate_credited( $buyer_id, $rebate_cents, $fp, $order_ids, $code ) {
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && ! Cpm_Hb_Delivery_Ledger::pod_records_xp_ledger() ) {
+			return;
+		}
 		self::record_wallet_event(
 			(int) $buyer_id,
 			'pod-buyer-rebate',
@@ -510,6 +554,9 @@ class Cpm_Hb_Github_Ledger {
 	 * @param string $code         HB transaction code.
 	 */
 	public static function on_seller_trade_credit_credited( $seller_id, $credit_cents, $fp, $buyer_id, $order_ids, $code ) {
+		if ( class_exists( 'Cpm_Hb_Delivery_Ledger' ) && ! Cpm_Hb_Delivery_Ledger::pod_records_xp_ledger() ) {
+			return;
+		}
 		self::record_wallet_event(
 			(int) $seller_id,
 			'pod-seller-trade-credit',
