@@ -161,6 +161,8 @@ class Cpm_Humanblockchain {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-device-registry.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-hb-legal-pages.php';
+
 		$this->loader = new Cpm_Humanblockchain_Loader();
 
 		Cpm_Humanblockchain_Device_Registry::init();
@@ -169,6 +171,7 @@ class Cpm_Humanblockchain {
 		Cpm_Humanblockchain_Woo_Backorders::init();
 		Cpm_Humanblockchain_Pod_Wallet::init();
 		Cpm_Hb_Delivery_Ledger::init();
+		Cpm_Hb_Legal_Pages::init();
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_nwp_devices', 5 );
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_xp_ledger', 5 );
 		$this->loader->add_action( 'plugins_loaded', 'Cpm_Humanblockchain_Activator', 'maybe_upgrade_delivery_ledger', 5 );

@@ -788,6 +788,26 @@ class Cpm_Humanblockchain_Admin {
 
 			<div class="cpm-nwp-tab-panel" id="cpm-nwp-panel-integration" style="<?php echo 'integration' === $active_tab ? '' : 'display:none;'; ?>">
 
+			<?php if ( class_exists( 'Cpm_Hb_Legal_Pages' ) ) : ?>
+				<?php if ( isset( $_GET['cpm_hb_legal_sync'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['cpm_hb_legal_sync'] ) ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+					<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Privacy Policy and Terms pages were updated from the plugin templates.', 'cpm-humanblockchain' ); ?></p></div>
+				<?php endif; ?>
+				<div class="notice notice-info inline" style="margin: 12px 0 20px;">
+					<p><strong><?php esc_html_e( 'Legal pages (Twilio 10DLC):', 'cpm-humanblockchain' ); ?></strong></p>
+					<ul style="list-style:disc;margin-left:1.5em;">
+						<li><a href="<?php echo esc_url( Cpm_Hb_Legal_Pages::privacy_url() ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Privacy Policy', 'cpm-humanblockchain' ); ?></a></li>
+						<li><a href="<?php echo esc_url( Cpm_Hb_Legal_Pages::terms_url() ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Terms and Conditions', 'cpm-humanblockchain' ); ?></a></li>
+					</ul>
+					<p class="description"><?php esc_html_e( 'Use these URLs in your Twilio A2P campaign. Pages are created/updated from plugin templates on activation.', 'cpm-humanblockchain' ); ?></p>
+					<p><strong><?php esc_html_e( 'Suggested campaign opt-in text:', 'cpm-humanblockchain' ); ?></strong></p>
+					<textarea readonly rows="4" class="large-text code" style="margin-top:6px;"><?php echo esc_textarea( Cpm_Hb_Legal_Pages::twilio_opt_in_description() ); ?></textarea>
+					<p style="margin-top:12px;">
+						<a class="button button-secondary" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=cpm_hb_sync_legal_pages' ), 'cpm_hb_sync_legal_pages' ) ); ?>"><?php esc_html_e( 'Update legal page content now', 'cpm-humanblockchain' ); ?></a>
+						<span class="description" style="margin-left:8px;"><?php esc_html_e( 'Overwrites pages marked as plugin-managed or empty. Custom edited pages are left unchanged.', 'cpm-humanblockchain' ); ?></span>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<div class="notice notice-info inline" style="margin: 12px 0;">
 				<p>
 					<strong><?php esc_html_e( 'Twilio status:', 'cpm-humanblockchain' ); ?></strong>

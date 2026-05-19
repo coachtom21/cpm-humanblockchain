@@ -41,6 +41,11 @@ class Cpm_Humanblockchain_Activator {
 				Cpm_Hb_Delivery_Ledger::create_table();
 			}
 		}
+		require_once plugin_dir_path( __FILE__ ) . 'class-cpm-hb-legal-pages.php';
+		if ( class_exists( 'Cpm_Hb_Legal_Pages' ) ) {
+			Cpm_Hb_Legal_Pages::ensure_pages( true );
+			update_option( Cpm_Hb_Legal_Pages::OPTION_CONTENT_VERSION, Cpm_Hb_Legal_Pages::CONTENT_VERSION );
+		}
 		flush_rewrite_rules( false );
 	}
 
