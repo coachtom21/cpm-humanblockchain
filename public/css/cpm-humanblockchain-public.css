@@ -455,6 +455,22 @@ body.cpm-nwp-modal-open {
 	color: #059669;
 }
 
+.cpm-nwp-sms-disclosure {
+	margin: 0.75rem 0 0;
+	font-size: 0.8125rem;
+	line-height: 1.45;
+	color: #4b5563;
+}
+
+.cpm-nwp-sms-disclosure a {
+	color: #5b21b6;
+	text-decoration: underline;
+}
+
+.cpm-nwp-sms-disclosure a:hover {
+	color: #4c1d95;
+}
+
 .cpm-nwp-activate-actions {
 	margin-top: 1.5rem;
 }

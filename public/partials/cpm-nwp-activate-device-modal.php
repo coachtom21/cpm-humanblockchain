@@ -48,9 +48,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 						}
 						?>
 					</select>
-					<input type="tel" id="cpm-nwp-activate-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" required aria-describedby="cpm-nwp-activate-mobile-hint cpm-nwp-activate-lookup-hint">
+					<input type="tel" id="cpm-nwp-activate-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" required aria-describedby="cpm-nwp-sms-disclosure cpm-nwp-activate-mobile-hint cpm-nwp-activate-lookup-hint">
 					<input type="hidden" name="mobile" id="cpm-nwp-activate-mobile-e164" value="">
 				</div>
+				<?php require __DIR__ . '/cpm-nwp-sms-disclosure.php'; ?>
 				<p id="cpm-nwp-activate-mobile-hint" class="cpm-nwp-field-note cpm-nwp-activate-field-hint"><?php esc_html_e( 'Choose your country, then your number without the country code. Must match a device you already registered.', 'cpm-humanblockchain' ); ?></p>
 				<p id="cpm-nwp-activate-lookup-hint" class="cpm-nwp-field-note cpm-nwp-activate-lookup-hint" aria-live="polite"></p>
 			</div>
