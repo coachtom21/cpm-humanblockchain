@@ -152,9 +152,53 @@ class Cpm_Humanblockchain_Activator {
 		if ( ! in_array( 'phone_country', $columns, true ) ) {
 			$updates[] = "ADD COLUMN phone_country VARCHAR(8) DEFAULT NULL";
 		}
+		if ( ! in_array( 'peace_pentagon_branch', $columns, true ) ) {
+			$updates[] = "ADD COLUMN peace_pentagon_branch VARCHAR(32) DEFAULT NULL";
+		}
+		if ( ! in_array( 'branch_source', $columns, true ) ) {
+			$updates[] = "ADD COLUMN branch_source VARCHAR(16) DEFAULT NULL";
+		}
+		if ( ! in_array( 'branch_preference', $columns, true ) ) {
+			$updates[] = "ADD COLUMN branch_preference VARCHAR(32) DEFAULT NULL";
+		}
+		if ( ! in_array( 'buyer_poc_id', $columns, true ) ) {
+			$updates[] = "ADD COLUMN buyer_poc_id VARCHAR(128) DEFAULT NULL";
+		}
+		if ( ! in_array( 'seller_poc_id', $columns, true ) ) {
+			$updates[] = "ADD COLUMN seller_poc_id VARCHAR(128) DEFAULT NULL";
+		}
+		if ( ! in_array( 'poc_status', $columns, true ) ) {
+			$updates[] = "ADD COLUMN poc_status VARCHAR(16) NOT NULL DEFAULT 'pending'";
+		}
+		if ( ! in_array( 'membership_tier', $columns, true ) ) {
+			$updates[] = "ADD COLUMN membership_tier VARCHAR(32) DEFAULT NULL";
+		}
+		if ( ! in_array( 'serendipity_assigned_at', $columns, true ) ) {
+			$updates[] = "ADD COLUMN serendipity_assigned_at DATETIME DEFAULT NULL";
+		}
 
 		foreach ( $updates as $alter ) {
 			$wpdb->query( "ALTER TABLE $table_name $alter" );
+		}
+
+		$columns = $wpdb->get_col( "SHOW COLUMNS FROM $table_name" );
+		$indexes = $wpdb->get_results( "SHOW INDEX FROM $table_name", ARRAY_A );
+		$index_names = array();
+		if ( is_array( $indexes ) ) {
+			foreach ( $indexes as $idx ) {
+				if ( isset( $idx['Key_name'] ) ) {
+					$index_names[ $idx['Key_name'] ] = true;
+				}
+			}
+		}
+		if ( in_array( 'buyer_poc_id', $columns, true ) && empty( $index_names['buyer_poc_id'] ) ) {
+			$wpdb->query( "ALTER TABLE $table_name ADD KEY buyer_poc_id (buyer_poc_id)" );
+		}
+		if ( in_array( 'seller_poc_id', $columns, true ) && empty( $index_names['seller_poc_id'] ) ) {
+			$wpdb->query( "ALTER TABLE $table_name ADD KEY seller_poc_id (seller_poc_id)" );
+		}
+		if ( in_array( 'peace_pentagon_branch', $columns, true ) && empty( $index_names['peace_pentagon_branch'] ) ) {
+			$wpdb->query( "ALTER TABLE $table_name ADD KEY peace_pentagon_branch (peace_pentagon_branch)" );
 		}
 	}
 

@@ -142,6 +142,8 @@ class Cpm_Humanblockchain {
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-membership.php';
 
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-serendipity.php';
+
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-membership-rest.php';
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-cpm-humanblockchain-register-user-api.php';
@@ -165,6 +167,7 @@ class Cpm_Humanblockchain {
 
 		Cpm_Humanblockchain_Device_Registry::init();
 		Cpm_Humanblockchain_Membership::init();
+		Cpm_Humanblockchain_Serendipity::init();
 		Cpm_Humanblockchain_Membership_Rest::init();
 		Cpm_Humanblockchain_Woo_Backorders::init();
 		Cpm_Humanblockchain_Pod_Wallet::init();

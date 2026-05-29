@@ -264,6 +264,8 @@ class Cpm_Humanblockchain_Membership {
 			$order->update_meta_data( self::META_WC_PMPRO_MEMBERORDER_ID, $oid );
 			$order->save();
 		}
+
+		do_action( 'cpm_hb_wc_membership_order_synced', $uid, $tier, $branch, $order_id );
 	}
 
 	/**
@@ -455,6 +457,7 @@ class Cpm_Humanblockchain_Membership {
 		if ( is_array( $payload ) && ! empty( $payload ) ) {
 			update_user_meta( $user_id, '_membership_level', wp_json_encode( $payload ) );
 		}
+		do_action( 'cpm_hb_after_membership_saved', $user_id, $tier, $branch, (string) $level_name );
 	}
 
 	/**
@@ -975,6 +978,12 @@ class Cpm_Humanblockchain_Membership {
 				'level_name'     => $level['level_name'],
 				'email'          => $user->user_email,
 			);
+			if ( class_exists( 'Cpm_Humanblockchain_Serendipity' ) ) {
+				$ser = Cpm_Humanblockchain_Serendipity::get_assignment_for_user( $uid );
+				if ( is_array( $ser ) ) {
+					$out['serendipity'] = $ser;
+				}
+			}
 			$out = apply_filters( 'cpm_hb_membership_submit_response', $out, 'logged_in', $uid );
 			wp_send_json_success( $out );
 		}

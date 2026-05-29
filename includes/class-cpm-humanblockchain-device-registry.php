@@ -677,6 +677,8 @@ class Cpm_Humanblockchain_Device_Registry {
 			$response['register_user_sync'] = $register_user_sync;
 		}
 
+		do_action( 'cpm_hb_after_device_registered', $device_id, $wp_user_id, $email );
+
 		wp_send_json_success( $response );
 	}
 
