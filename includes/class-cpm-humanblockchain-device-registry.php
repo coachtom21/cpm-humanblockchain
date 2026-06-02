@@ -535,6 +535,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		$qrtiger     = isset( $_POST['qrtiger_vcard_link'] ) ? esc_url_raw( wp_unslash( $_POST['qrtiger_vcard_link'] ) ) : '';
 		$device_hash = isset( $_POST['device_hash'] ) ? sanitize_text_field( wp_unslash( $_POST['device_hash'] ) ) : '';
 		$referral    = isset( $_POST['referral_source_nwp_id'] ) ? absint( $_POST['referral_source_nwp_id'] ) : 0;
+		$referral    = (int) apply_filters( 'cpm_hb_referral_source_nwp_id', $referral );
 		$geo_lat     = isset( $_POST['geo_lat'] ) ? floatval( $_POST['geo_lat'] ) : null;
 		$geo_lng     = isset( $_POST['geo_lng'] ) ? floatval( $_POST['geo_lng'] ) : null;
 
