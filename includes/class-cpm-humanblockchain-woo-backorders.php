@@ -46,7 +46,19 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		add_filter( 'woocommerce_add_to_cart_validation', array( __CLASS__, 'validate_add_to_cart_min_qty' ), 10, 4 );
 		add_filter( 'woocommerce_update_cart_validation', array( __CLASS__, 'validate_update_cart_min_qty' ), 10, 4 );
 		add_filter( 'woocommerce_quantity_input_min', array( __CLASS__, 'filter_quantity_input_min' ), 10, 2 );
+		add_filter( 'woocommerce_quantity_input_max', array( __CLASS__, 'filter_quantity_input_max' ), 10, 2 );
 		add_filter( 'woocommerce_quantity_input_args', array( __CLASS__, 'filter_quantity_input_args' ), 20, 2 );
+		add_filter( 'woocommerce_add_to_cart_quantity', array( __CLASS__, 'filter_add_to_cart_quantity' ), 10, 2 );
+		add_action( 'woocommerce_cart_loaded_from_session', array( __CLASS__, 'normalize_fixed_qty_cart_lines' ), 20 );
+
+		add_filter( 'woocommerce_store_api_product_quantity_minimum', array( __CLASS__, 'filter_store_api_quantity_minimum' ), 10, 3 );
+		add_filter( 'woocommerce_store_api_product_quantity_maximum', array( __CLASS__, 'filter_store_api_quantity_maximum' ), 10, 3 );
+		add_filter( 'woocommerce_store_api_product_quantity_editable', array( __CLASS__, 'filter_store_api_quantity_editable' ), 10, 3 );
+
+		add_filter( 'woocommerce_available_variation', array( __CLASS__, 'filter_available_variation_fixed_qty' ), 20, 3 );
+		add_filter( 'body_class', array( __CLASS__, 'add_fixed_qty_body_class' ) );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_fixed_qty_assets' ), 25 );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_cart_fixed_qty_assets' ), 25 );
 	}
 
 	/**
@@ -851,6 +863,78 @@ class Cpm_Humanblockchain_Woo_Backorders {
 	}
 
 	/**
+	 * SKUs sold in a fixed pack of 10 (quantity cannot be changed in cart).
+	 *
+	 * @return string[] Uppercased SKUs.
+	 */
+	private static function get_skus_with_fixed_qty_ten() {
+		$list = apply_filters(
+			'cpm_hb_fixed_qty_10_skus',
+			array( 'YAM-STICKER', 'HANG-TAG' )
+		);
+		if ( ! is_array( $list ) ) {
+			$list = array();
+		}
+		$out = array();
+		foreach ( $list as $s ) {
+			$s = strtoupper( trim( (string) $s ) );
+			if ( $s !== '' ) {
+				$out[] = $s;
+			}
+		}
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * @param WC_Product $product Variation, simple, or variable (parent checks children).
+	 * @return bool
+	 */
+	private static function product_sku_has_fixed_qty_ten( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return false;
+		}
+		$sku = strtoupper( trim( (string) $product->get_sku() ) );
+		if ( $sku !== '' && in_array( $sku, self::get_skus_with_fixed_qty_ten(), true ) ) {
+			return true;
+		}
+		if ( $product->is_type( 'variable' ) ) {
+			foreach ( $product->get_children() as $child_id ) {
+				$c = wc_get_product( (int) $child_id );
+				if ( $c instanceof WC_Product && self::product_sku_has_fixed_qty_ten( $c ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Fixed quantity from SKU rules (10) or 0 if not applicable.
+	 *
+	 * @param WC_Product|null $product Product or variation.
+	 * @return int
+	 */
+	public static function get_fixed_order_qty_for_product( $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return 0;
+		}
+		$fixed = self::product_sku_has_fixed_qty_ten( $product ) ? 10 : 0;
+		return (int) apply_filters( 'cpm_hb_fixed_order_qty', $fixed, $product );
+	}
+
+	/**
+	 * @param int $product_id Product or variation ID.
+	 * @return int 0 when not fixed.
+	 */
+	public static function get_fixed_order_qty_for_product_id( $product_id ) {
+		$product_id = (int) $product_id;
+		if ( $product_id <= 0 || ! function_exists( 'wc_get_product' ) ) {
+			return 0;
+		}
+		return self::get_fixed_order_qty_for_product( wc_get_product( $product_id ) );
+	}
+
+	/**
 	 * @param WC_Product $product Product or variation.
 	 * @return int 0 if unset.
 	 */
@@ -1007,12 +1091,27 @@ class Cpm_Humanblockchain_Woo_Backorders {
 			return;
 		}
 		foreach ( WC()->cart->get_cart() as $cart_item ) {
-			$min = self::get_effective_min_order_qty_for_cart_item( $cart_item );
-			if ( $min <= 1 ) {
+			$fixed = self::get_fixed_order_qty_for_product( isset( $cart_item['data'] ) ? $cart_item['data'] : null );
+			$min   = self::get_effective_min_order_qty_for_cart_item( $cart_item );
+			if ( $fixed <= 0 && $min <= 1 ) {
 				continue;
 			}
 			$qty = isset( $cart_item['quantity'] ) ? (int) $cart_item['quantity'] : 0;
-			if ( $qty < $min ) {
+			if ( $fixed > 0 && $qty !== $fixed ) {
+				$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+				$name    = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+				wc_add_notice(
+					sprintf(
+						/* translators: 1: product name, 2: fixed quantity */
+						__( '“%1$s” is sold in a fixed quantity of %2$d.', 'cpm-humanblockchain' ),
+						wp_strip_all_tags( $name ),
+						$fixed
+					),
+					'error'
+				);
+				continue;
+			}
+			if ( $min > 1 && $qty < $min ) {
 				$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
 				$name    = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
 				wc_add_notice(
@@ -1044,6 +1143,23 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		$variation_id = (int) $variation_id;
 		$quantity     = (int) $quantity;
 		$product      = wc_get_product( $variation_id > 0 ? $variation_id : $product_id );
+		$fixed        = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			if ( $quantity !== $fixed ) {
+				$name = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+				wc_add_notice(
+					sprintf(
+						/* translators: 1: product name, 2: fixed quantity */
+						__( '“%1$s” must be added in a fixed quantity of %2$d.', 'cpm-humanblockchain' ),
+						wp_strip_all_tags( $name ),
+						$fixed
+					),
+					'error'
+				);
+				return false;
+			}
+			return $passed;
+		}
 		$min          = self::get_effective_min_order_qty_for_product( $product );
 		if ( $min <= 1 ) {
 			return $passed;
@@ -1082,6 +1198,24 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		if ( ! $passed || ! is_array( $values ) ) {
 			return $passed;
 		}
+		$product = isset( $values['data'] ) ? $values['data'] : null;
+		$fixed   = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			if ( (int) $quantity !== $fixed ) {
+				$name = $product instanceof WC_Product ? $product->get_name() : __( 'This product', 'cpm-humanblockchain' );
+				wc_add_notice(
+					sprintf(
+						/* translators: 1: product name, 2: fixed quantity */
+						__( '“%1$s” quantity is fixed at %2$d and cannot be changed.', 'cpm-humanblockchain' ),
+						wp_strip_all_tags( $name ),
+						$fixed
+					),
+					'error'
+				);
+				return false;
+			}
+			return $passed;
+		}
 		$min = self::get_effective_min_order_qty_for_cart_item( $values );
 		if ( $min <= 1 ) {
 			return $passed;
@@ -1112,8 +1246,110 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		if ( ! $product instanceof WC_Product ) {
 			return (int) $min;
 		}
+		$fixed = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			return $fixed;
+		}
 		$eff = self::get_effective_min_order_qty_for_product( $product );
 		return max( (int) $min, $eff );
+	}
+
+	/**
+	 * @param int        $max     Existing max.
+	 * @param WC_Product $product Product.
+	 * @return int
+	 */
+	public static function filter_quantity_input_max( $max, $product ) {
+		if ( ! $product instanceof WC_Product ) {
+			return (int) $max;
+		}
+		$fixed = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			// Do not return fixed qty as max — WooCommerce hides the field when min === max.
+			return -1;
+		}
+		return (int) $max;
+	}
+
+	/**
+	 * Force fixed-pack products to always add exactly 10 units.
+	 *
+	 * @param int $quantity   Requested quantity.
+	 * @param int $product_id Product or variation ID.
+	 * @return int
+	 */
+	public static function filter_add_to_cart_quantity( $quantity, $product_id ) {
+		$fixed = self::get_fixed_order_qty_for_product_id( $product_id );
+		return $fixed > 0 ? $fixed : (int) $quantity;
+	}
+
+	/**
+	 * Correct any stale cart lines for fixed-pack SKUs (e.g. after a rules change).
+	 */
+	public static function normalize_fixed_qty_cart_lines() {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
+		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+			$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+			$fixed   = self::get_fixed_order_qty_for_product( $product );
+			if ( $fixed <= 0 ) {
+				continue;
+			}
+			$qty = isset( $cart_item['quantity'] ) ? (int) $cart_item['quantity'] : 0;
+			if ( $qty !== $fixed ) {
+				WC()->cart->set_quantity( $cart_item_key, $fixed, false );
+			}
+		}
+	}
+
+	/**
+	 * @param mixed           $minimum   Minimum quantity.
+	 * @param WC_Product      $product   Product.
+	 * @param array|null      $cart_item Cart item when in cart.
+	 * @return int
+	 */
+	public static function filter_store_api_quantity_minimum( $minimum, $product, $cart_item ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		unset( $cart_item );
+		if ( ! $product instanceof WC_Product ) {
+			return (int) $minimum;
+		}
+		$fixed = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			return $fixed;
+		}
+		return max( (int) $minimum, self::get_effective_min_order_qty_for_product( $product ) );
+	}
+
+	/**
+	 * @param mixed           $maximum   Maximum quantity.
+	 * @param WC_Product      $product   Product.
+	 * @param array|null      $cart_item Cart item when in cart.
+	 * @return int
+	 */
+	public static function filter_store_api_quantity_maximum( $maximum, $product, $cart_item ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		unset( $cart_item );
+		if ( ! $product instanceof WC_Product ) {
+			return (int) $maximum;
+		}
+		$fixed = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			return $fixed;
+		}
+		return (int) $maximum;
+	}
+
+	/**
+	 * Keep quantity visible in block cart; min/max filters enforce the fixed pack size.
+	 *
+	 * @param mixed           $editable  Whether quantity is editable.
+	 * @param WC_Product      $product   Product.
+	 * @param array|null      $cart_item Cart item when in cart.
+	 * @return bool
+	 */
+	public static function filter_store_api_quantity_editable( $editable, $product, $cart_item ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		unset( $cart_item, $product );
+		return (bool) $editable;
 	}
 
 	/**
@@ -1127,6 +1363,24 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		if ( ! $product instanceof WC_Product || ! is_array( $args ) ) {
 			return $args;
 		}
+		$fixed = self::get_fixed_order_qty_for_product( $product );
+		if ( $fixed > 0 ) {
+			$classes               = isset( $args['classes'] ) && is_array( $args['classes'] ) ? $args['classes'] : array( 'input-text', 'qty', 'text' );
+			$classes[]             = 'cpm-hb-fixed-qty';
+			$args['classes']       = array_values( array_unique( $classes ) );
+			$args['min_value']     = $fixed;
+			$args['input_value']   = $fixed;
+			$args['readonly']      = true;
+			$args['custom_attributes'] = array_merge(
+				isset( $args['custom_attributes'] ) && is_array( $args['custom_attributes'] ) ? $args['custom_attributes'] : array(),
+				array(
+					'data-fixed-qty' => (string) $fixed,
+				)
+			);
+			// Empty string — not equal to min — so WooCommerce keeps the field visible (not type=hidden).
+			$args['max_value'] = '';
+			return $args;
+		}
 		$min = self::get_effective_min_order_qty_for_product( $product );
 		if ( $min <= 1 ) {
 			return $args;
@@ -1134,5 +1388,86 @@ class Cpm_Humanblockchain_Woo_Backorders {
 		$args['min_value']   = isset( $args['min_value'] ) ? max( (int) $args['min_value'], $min ) : $min;
 		$args['input_value'] = isset( $args['input_value'] ) ? max( (int) $args['input_value'], $min ) : $min;
 		return $args;
+	}
+
+	/**
+	 * Keep variation JSON from re-applying max=10 (which can hide the qty field in some themes).
+	 *
+	 * @param array<string,mixed> $data      Variation data.
+	 * @param WC_Product_Variable $product   Parent product.
+	 * @param WC_Product_Variation $variation Variation.
+	 * @return array<string,mixed>
+	 */
+	public static function filter_available_variation_fixed_qty( $data, $product, $variation ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter
+		unset( $product );
+		$fixed = self::get_fixed_order_qty_for_product( $variation );
+		if ( $fixed > 0 && is_array( $data ) ) {
+			$data['min_qty'] = $fixed;
+			$data['max_qty'] = '';
+		}
+		return $data;
+	}
+
+	/**
+	 * @param string[] $classes Body classes.
+	 * @return string[]
+	 */
+	public static function add_fixed_qty_body_class( $classes ) {
+		if ( ! function_exists( 'is_product' ) || ! is_product() ) {
+			return $classes;
+		}
+		global $product;
+		if ( $product instanceof WC_Product && self::get_fixed_order_qty_for_product( $product ) > 0 ) {
+			$classes[] = 'cpm-hb-fixed-qty-product';
+		}
+		return $classes;
+	}
+
+	/**
+	 * @return void
+	 */
+	public static function enqueue_fixed_qty_assets() {
+		if ( ! function_exists( 'is_product' ) || ! is_product() ) {
+			return;
+		}
+		global $product;
+		if ( ! $product instanceof WC_Product || self::get_fixed_order_qty_for_product( $product ) <= 0 ) {
+			return;
+		}
+		$root    = dirname( __DIR__ );
+		$js_path = $root . '/public/js/cpm-hb-fixed-qty.js';
+		if ( ! file_exists( $js_path ) ) {
+			return;
+		}
+		wp_enqueue_script(
+			'cpm-hb-fixed-qty',
+			plugins_url( 'public/js/cpm-hb-fixed-qty.js', $root . '/cpm-humanblockchain.php' ),
+			array( 'jquery', 'wc-add-to-cart-variation' ),
+			filemtime( $js_path ),
+			true
+		);
+	}
+
+	/**
+	 * Block/classic cart — lock fixed-pack quantity at 10 while keeping the qty control visible.
+	 *
+	 * @return void
+	 */
+	public static function enqueue_cart_fixed_qty_assets() {
+		if ( ! function_exists( 'is_cart' ) || ! is_cart() ) {
+			return;
+		}
+		$root    = dirname( __DIR__ );
+		$js_path = $root . '/public/js/cpm-hb-cart-fixed-qty.js';
+		if ( ! file_exists( $js_path ) ) {
+			return;
+		}
+		wp_enqueue_script(
+			'cpm-hb-cart-fixed-qty',
+			plugins_url( 'public/js/cpm-hb-cart-fixed-qty.js', $root . '/cpm-humanblockchain.php' ),
+			array( 'jquery' ),
+			filemtime( $js_path ),
+			true
+		);
 	}
 }

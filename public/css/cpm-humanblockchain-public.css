@@ -773,6 +773,26 @@ body.single-product .elementor-widget-container .woocommerce-variation-add-to-ca
 	flex: 0 0 auto;
 }
 
+/* Fixed-pack qty (YAM-STICKER / HANG-TAG = 10) — visible counter, not editable */
+body.single-product.cpm-hb-fixed-qty-product .quantity .qty.cpm-hb-fixed-qty,
+body.single-product.cpm-hb-fixed-qty-product .quantity input.qty[readonly][name="quantity"] {
+	cursor: default;
+	background: #f8fafc;
+	color: #0f172a;
+	opacity: 1;
+}
+
+body.single-product.cpm-hb-fixed-qty-product .quantity .qty.cpm-hb-fixed-qty:focus,
+body.single-product.cpm-hb-fixed-qty-product .quantity input.qty[readonly][name="quantity"]:focus {
+	outline: none;
+	box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+/* Safety: never show a second qty row above the variation add-to-cart area */
+body.single-product.cpm-hb-fixed-qty-product .cpm-hb-variable-fixed-qty {
+	display: none !important;
+}
+
 /* WooCommerce cart page — Coach Tom / Human Blockchain story video */
 body.woocommerce-cart .cpm-hb-cart-page-video-wrap {
 	box-sizing: border-box;
