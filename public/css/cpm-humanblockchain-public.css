@@ -843,3 +843,21 @@ body.woocommerce-cart .cpm-hb-cart-page-video {
 	border-radius: 8px;
 	background: #0b1220;
 }
+
+/* Scroll the full drawer (header, video, products, footer) — not the product list alone. */
+.xoo-wsc-container {
+	overflow-x: hidden;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.xoo-wsc-container .xoo-wsc-header,
+.xoo-wsc-container .xoo-wsc-body,
+.xoo-wsc-container .xoo-wsc-footer {
+	flex-shrink: 0;
+}
+
+.xoo-wsc-container .xoo-wsc-body {
+	flex-grow: 0;
+	overflow: visible;
+}
