@@ -329,7 +329,59 @@ class Cpm_Humanblockchain_Public {
 		if ( $this->should_show_landing_entry_modal() ) {
 			$classes[] = 'cpm-hb-landing-entry-active';
 		}
+		if ( $this->should_open_account_otp_on_load() ) {
+			$classes[] = 'hb-account-otp-guest';
+		}
 		return $classes;
+	}
+
+	/**
+	 * Canonical My Account page URL (custom template page, then WooCommerce fallback).
+	 *
+	 * @return string
+	 */
+	public static function get_my_account_page_url() {
+		$page = get_page_by_path( 'my-account' );
+		if ( $page instanceof WP_Post && 'publish' === $page->post_status ) {
+			return (string) get_permalink( $page );
+		}
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$wc_url = wc_get_page_permalink( 'myaccount' );
+			if ( is_string( $wc_url ) && $wc_url !== '' ) {
+				return $wc_url;
+			}
+		}
+		return home_url( '/my-account/' );
+	}
+
+	/**
+	 * Auto-open the phone OTP modal on load (guest My Account / login-with-redirect flows).
+	 *
+	 * @return bool
+	 */
+	private function should_open_account_otp_on_load() {
+		if ( is_user_logged_in() ) {
+			return false;
+		}
+		if ( isset( $_GET['hb_account_otp'] ) && '1' === sanitize_text_field( wp_unslash( $_GET['hb_account_otp'] ) ) ) {
+			return true;
+		}
+		if ( function_exists( 'is_page_template' ) && is_page_template( 'templates-parts/template-my-account.php' ) ) {
+			return true;
+		}
+		if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+			if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
+				return false;
+			}
+			return true;
+		}
+		if ( function_exists( 'hb_should_enqueue_pmpro_login_styles' ) && hb_should_enqueue_pmpro_login_styles() ) {
+			$redirect = isset( $_GET['redirect_to'] ) ? rawurldecode( wp_unslash( $_GET['redirect_to'] ) ) : '';
+			if ( $redirect !== '' && false !== strpos( $redirect, 'my-account' ) ) {
+				return true;
+			}
+		}
+		return (bool) apply_filters( 'cpm_nwp_open_account_otp_on_load', false );
 	}
 
 	/**
@@ -608,6 +660,9 @@ class Cpm_Humanblockchain_Public {
 				'matched' => __( 'Country matched to your registered device record.', 'cpm-humanblockchain' ),
 			),
 			'homeUrl'            => home_url( '/' ),
+			'myAccountUrl'       => esc_url_raw( self::get_my_account_page_url() ),
+			'isLoggedIn'         => is_user_logged_in(),
+			'openAccountOtpOnLoad' => $this->should_open_account_otp_on_load(),
 			'discordInviteUrl'   => esc_url_raw( $discord_invite ),
 			'defaultCountry'     => $default_country,
 			'registerPhoneDefaultIso' => $register_phone_default_iso,

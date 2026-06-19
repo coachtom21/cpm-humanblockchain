@@ -215,6 +215,70 @@
 		}
 		window.cpmNwpInitActivatePhoneFields = cpmNwpInitActivatePhoneFields;
 
+		function cpmHbClearMyAccountPhoneLoginContext() {
+			if ( ! window.cpmHbLanding ) {
+				return;
+			}
+			window.cpmHbLanding.phoneModalFromMyAccount = false;
+			window.cpmHbLanding.phoneModalFromLanding = false;
+			window.cpmHbLanding.pendingOtpRedirect = '';
+			window.cpmHbLanding.buyerProofScan = false;
+			window.cpmHbLanding.podProofScan = false;
+			window.cpmHbLanding.landingRole = '';
+		}
+
+		function cpmHbCloseActivateModalForMyAccount() {
+			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			clearInlineFeedback( $activateFeedback );
+			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			cpmHbClearMyAccountPhoneLoginContext();
+		}
+
+		function cpmHbIsMyAccountLink( $a ) {
+			var href = ( $a.attr( 'href' ) || '' ).split( '#' )[0].split( '?' )[0];
+			var myUrl = ( window.cpmNwp && window.cpmNwp.myAccountUrl ) ? window.cpmNwp.myAccountUrl : '';
+			if ( href && myUrl ) {
+				try {
+					var linkPath = new URL( href, window.location.origin ).pathname.replace( /\/$/, '' );
+					var myPath = new URL( myUrl, window.location.origin ).pathname.replace( /\/$/, '' );
+					if ( linkPath && myPath && linkPath === myPath ) {
+						return true;
+					}
+				} catch ( err ) {
+					// ignore invalid URLs
+				}
+			}
+			var text = ( $a.text() || '' ).trim().toLowerCase();
+			return text === 'my account';
+		}
+
+		function cpmHbOpenMyAccountPhoneLogin( returnUrl ) {
+			window.cpmHbSkipPodOtpContext = true;
+			if ( ! window.cpmHbLanding ) {
+				window.cpmHbLanding = {};
+			}
+			var H = window.cpmHbLanding;
+			H.phoneModalFromMyAccount = true;
+			H.phoneModalFromLanding = false;
+			H.buyerProofScan = false;
+			H.podProofScan = false;
+			H.landingRole = '';
+			H.pendingOtpRedirect = returnUrl || ( window.cpmNwp && window.cpmNwp.myAccountUrl ) || '';
+
+			if ( ! $activateModal.length ) {
+				return false;
+			}
+
+			clearInlineFeedback( $activateFeedback );
+			$( '#cpm-nwp-activate-form' ).trigger( 'reset' );
+			cpmNwpInitActivatePhoneFields();
+			$activateModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
+			$( 'body' ).addClass( 'cpm-nwp-modal-open' );
+			$( '#cpm-nwp-activate-mobile-national' ).trigger( 'focus' );
+			return true;
+		}
+		window.cpmHbOpenMyAccountPhoneLogin = cpmHbOpenMyAccountPhoneLogin;
+
 		$( document ).on( 'input change', '#cpm-nwp-phone-country, #cpm-nwp-mobile-national', function() {
 			$( '#cpm-nwp-mobile-e164' ).val( cpmNwpBuildRegisterMobileE164() );
 			cpmNwpScheduleDevicePhoneLookup( 'register' );
@@ -448,6 +512,10 @@
 				window.cpmHbLanding.landingRole = '';
 				return;
 			}
+			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' && window.cpmHbLanding && window.cpmHbLanding.phoneModalFromMyAccount ) {
+				cpmHbCloseActivateModalForMyAccount();
+				return;
+			}
 			$clickedModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			if ( $clickedModal.attr( 'id' ) === 'cpm-nwp-activate-modal' ) {
 				$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
@@ -475,6 +543,10 @@
 				window.cpmHbLanding.buyerProofScan = false;
 				window.cpmHbLanding.podProofScan = false;
 				window.cpmHbLanding.landingRole = '';
+				return;
+			}
+			if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromMyAccount ) {
+				cpmHbCloseActivateModalForMyAccount();
 				return;
 			}
 			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
@@ -564,6 +636,8 @@
 						window.cpmHbLanding.buyerProofScan = false;
 						window.cpmHbLanding.podProofScan = false;
 						window.cpmHbLanding.landingRole = '';
+					} else if ( window.cpmHbLanding && window.cpmHbLanding.phoneModalFromMyAccount ) {
+						cpmHbCloseActivateModalForMyAccount();
 					} else {
 						$( '#cpm-nwp-register-modal' ).removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 						clearInlineFeedback( $activateFeedback );
@@ -1177,6 +1251,24 @@
 
 		cpmNwpInitRegisterPhoneFields();
 		cpmNwpInitActivatePhoneFields();
+
+		$( document ).on( 'click', 'a[href]', function( e ) {
+			if ( window.cpmNwp && window.cpmNwp.isLoggedIn ) {
+				return;
+			}
+			var $a = $( e.currentTarget );
+			if ( ! cpmHbIsMyAccountLink( $a ) ) {
+				return;
+			}
+			e.preventDefault();
+			cpmHbOpenMyAccountPhoneLogin();
+		} );
+
+		if ( window.cpmNwp && window.cpmNwp.openAccountOtpOnLoad ) {
+			setTimeout( function() {
+				cpmHbOpenMyAccountPhoneLogin();
+			}, 200 );
+		}
 	} );
 
 })( jQuery );
