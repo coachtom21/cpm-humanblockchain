@@ -127,6 +127,10 @@ class Cpm_Humanblockchain_Admin {
 			'type'              => 'string',
 			'sanitize_callback' => 'sanitize_text_field',
 		) );
+		register_setting( $i, 'cpm_nwp_twilio_verify_service_sid', array(
+			'type'              => 'string',
+			'sanitize_callback' => 'sanitize_text_field',
+		) );
 		register_setting( $i, 'cpm_nwp_default_country', array(
 			'type'              => 'string',
 			'sanitize_callback' => array( $this, 'sanitize_default_country' ),
@@ -589,6 +593,10 @@ class Cpm_Humanblockchain_Admin {
 		$sid              = get_option( 'cpm_nwp_twilio_sid', '' );
 		$token            = get_option( 'cpm_nwp_twilio_token', '' );
 		$from             = get_option( 'cpm_nwp_twilio_from', '' );
+		$verify_sid       = class_exists( 'Cpm_Humanblockchain_Otp_Service' )
+			? Cpm_Humanblockchain_Otp_Service::get_verify_service_sid()
+			: get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
+		$verify_sid_saved = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
 		$country          = get_option( 'cpm_nwp_default_country', 'AUTO' );
 		$qrtiger_key      = get_option( 'cpm_nwp_qrtiger_api_key', '' );
 		$qrtiger_url      = get_option( 'cpm_nwp_qrtiger_api_url', '' );
@@ -887,6 +895,19 @@ class Cpm_Humanblockchain_Admin {
 						<td>
 							<input type="password" id="cpm_nwp_twilio_token" name="cpm_nwp_twilio_token" value="" autocomplete="new-password" class="regular-text" placeholder="<?php echo esc_attr( $token !== '' ? __( 'Leave blank to keep saved token', 'cpm-humanblockchain' ) : __( 'Paste Auth Token from Twilio Console', 'cpm-humanblockchain' ) ); ?>">
 							<p class="description"><?php esc_html_e( 'Must match the Auth Token in Twilio Console. Leave blank when saving other settings to keep the current token.', 'cpm-humanblockchain' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="cpm_nwp_twilio_verify_service_sid"><?php esc_html_e( 'Verify Service SID (recommended)', 'cpm-humanblockchain' ); ?></label></th>
+						<td>
+							<input type="text" id="cpm_nwp_twilio_verify_service_sid" name="cpm_nwp_twilio_verify_service_sid" value="<?php echo esc_attr( is_string( $verify_sid_saved ) ? $verify_sid_saved : '' ); ?>" class="regular-text" placeholder="VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+							<p class="description">
+								<?php esc_html_e( 'Twilio Console → Verify → Services. When set, OTP uses Twilio Verify (best for Nepal +977). No From number required. If blank, the legacy cpm-twilio APP_SID constant is used when that plugin is active.', 'cpm-humanblockchain' ); ?>
+								<?php if ( $uses_verify_api && $verify_sid !== '' ) : ?>
+									<br><strong><?php esc_html_e( 'Active Verify Service:', 'cpm-humanblockchain' ); ?></strong>
+									<code><?php echo esc_html( substr( $verify_sid, 0, 6 ) . '…' . substr( $verify_sid, -4 ) ); ?></code>
+								<?php endif; ?>
+							</p>
 						</td>
 					</tr>
 					<tr>

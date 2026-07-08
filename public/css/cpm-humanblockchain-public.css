@@ -541,6 +541,12 @@ body.cpm-nwp-modal-open {
 	color: #991b1b;
 }
 
+.cpm-nwp-inline-feedback--warning {
+	background: #fffbeb;
+	border: 1px solid #fcd34d;
+	color: #92400e;
+}
+
 .cpm-nwp-verify-subtitle {
 	margin: 0.5rem 0 0;
 	font-size: 0.875rem;

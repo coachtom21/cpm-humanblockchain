@@ -302,11 +302,11 @@ class Cpm_Humanblockchain_Otp_Service {
 	private static function get_credentials() {
 		$sid = self::pick_twilio_constant_or_option(
 			'cpm_nwp_twilio_sid',
-			array( 'CPM_NWP_TWILIO_SID', 'CPM_TWILIO_ACCOUNT_SID' )
+			array( 'CPM_NWP_TWILIO_SID', 'CPM_TWILIO_ACCOUNT_SID', 'ACCOUNT_SID' )
 		);
 		$token = self::pick_twilio_constant_or_option(
 			'cpm_nwp_twilio_token',
-			array( 'CPM_NWP_TWILIO_TOKEN', 'CPM_TWILIO_AUTH_TOKEN' )
+			array( 'CPM_NWP_TWILIO_TOKEN', 'CPM_TWILIO_AUTH_TOKEN', 'AUTH_TOKEN' )
 		);
 		$from = self::pick_twilio_constant_or_option(
 			'cpm_nwp_twilio_from',
@@ -358,7 +358,14 @@ class Cpm_Humanblockchain_Otp_Service {
 			return self::trim_twilio_secret( CPM_NWP_TWILIO_VERIFY_SERVICE_SID );
 		}
 		$opt = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
-		return self::trim_twilio_secret( is_string( $opt ) ? $opt : '' );
+		if ( self::trim_twilio_secret( is_string( $opt ) ? $opt : '' ) !== '' ) {
+			return self::trim_twilio_secret( $opt );
+		}
+		// Legacy cpm-twilio plugin defines APP_SID (VA…) for the same Verify flow.
+		if ( defined( 'APP_SID' ) && is_string( APP_SID ) && APP_SID !== '' ) {
+			return self::trim_twilio_secret( APP_SID );
+		}
+		return '';
 	}
 
 	/**
@@ -556,9 +563,10 @@ class Cpm_Humanblockchain_Otp_Service {
 	 * @return array{ confirmed: bool, failed: bool, message?: string }
 	 */
 	private static function twilio_poll_outbound_sms_delivery( $to, array $creds, $not_before ) {
-		$in_progress = array( 'queued', 'sending', 'accepted', 'scheduled' );
-		$terminal_ok = array( 'sent', 'delivered', 'read' );
-		$terminal_bad = array( 'failed', 'undelivered', 'canceled' );
+		$in_progress   = array( 'queued', 'sending', 'accepted', 'scheduled' );
+		$delivered_ok  = array( 'delivered', 'read' );
+		$terminal_bad  = array( 'failed', 'undelivered', 'canceled' );
+		$saw_sent_only = false;
 
 		for ( $i = 0; $i < 15; $i++ ) {
 			$messages = self::twilio_list_messages_to( $to, $creds, 8 );
@@ -583,11 +591,14 @@ class Cpm_Humanblockchain_Otp_Service {
 						'message'   => self::message_failed_user_text( $data ),
 					);
 				}
-				if ( $st !== '' && in_array( $st, $terminal_ok, true ) ) {
+				if ( $st !== '' && in_array( $st, $delivered_ok, true ) ) {
 					return array(
 						'confirmed' => true,
 						'failed'    => false,
 					);
+				}
+				if ( 'sent' === $st ) {
+					$saw_sent_only = true;
 				}
 			}
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
@@ -595,6 +606,14 @@ class Cpm_Humanblockchain_Otp_Service {
 				error_log( 'cpm_nwp twilio verify delivery poll to=' . $to . ' i=' . $i );
 			}
 			usleep( 400000 );
+		}
+
+		if ( $saw_sent_only ) {
+			return array(
+				'confirmed' => false,
+				'failed'    => false,
+				'sent_only' => true,
+			);
 		}
 
 		return array(
@@ -767,13 +786,14 @@ class Cpm_Humanblockchain_Otp_Service {
 					'error'   => $twilio_status,
 				);
 			}
+			$unconfirmed = ! in_array( $twilio_status, array( 'delivered', 'read' ), true );
 			return array(
 				'success'        => true,
-				'message'        => self::otp_sent_success_message( $to, false ),
+				'message'        => self::otp_sent_success_message( $to, $unconfirmed ),
 				'error'          => null,
 				'phone_masked'   => self::mask_phone_e164( $to ),
 				'delivery_mode'  => 'sms',
-				'unconfirmed'    => false,
+				'unconfirmed'    => $unconfirmed,
 			);
 		}
 

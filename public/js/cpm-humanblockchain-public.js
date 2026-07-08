@@ -322,12 +322,13 @@
 			if ( ! $box.length ) {
 				return;
 			}
-			$box.removeClass( 'cpm-nwp-inline-feedback--hidden cpm-nwp-inline-feedback--success cpm-nwp-inline-feedback--error' );
+			$box.removeClass( 'cpm-nwp-inline-feedback--hidden cpm-nwp-inline-feedback--success cpm-nwp-inline-feedback--error cpm-nwp-inline-feedback--warning' );
 			if ( ! message ) {
 				$box.addClass( 'cpm-nwp-inline-feedback--hidden' ).empty();
 				return;
 			}
-			$box.addClass( 'cpm-nwp-inline-feedback--' + ( type === 'success' ? 'success' : 'error' ) );
+			var feedbackType = type === 'success' ? 'success' : ( type === 'warning' ? 'warning' : 'error' );
+			$box.addClass( 'cpm-nwp-inline-feedback--' + feedbackType );
 			$box.text( message );
 		}
 
@@ -777,7 +778,8 @@
 							$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 							clearInlineFeedback( $activateFeedback );
 							$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-							showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
+							var feedbackType = ( res.data && res.data.unconfirmed ) ? 'warning' : 'success';
+							showInlineFeedback( $verifyFeedback, res.data.message, feedbackType );
 							$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
 						} else {
 							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
