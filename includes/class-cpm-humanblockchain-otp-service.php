@@ -460,6 +460,24 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Mask E.164 for user-facing messages (e.g. +977****8973).
+	 *
+	 * @param string $phone_e164 E.164 phone.
+	 * @return string
+	 */
+	public static function mask_phone_e164( $phone_e164 ) {
+		$digits = preg_replace( '/\D/', '', (string) $phone_e164 );
+		if ( strlen( $digits ) < 4 ) {
+			return '***';
+		}
+		$prefix_len = min( 3, strlen( $digits ) - 4 );
+		$prefix     = substr( $digits, 0, $prefix_len );
+		$suffix     = substr( $digits, -4 );
+		$masked_mid = str_repeat( '*', max( 0, strlen( $digits ) - $prefix_len - 4 ) );
+		return '+' . $prefix . $masked_mid . $suffix;
+	}
+
+	/**
 	 * GET a Message instance from the Twilio REST API.
 	 *
 	 * @param string               $message_sid Message SID (SM…).
@@ -490,6 +508,120 @@ class Cpm_Humanblockchain_Otp_Service {
 		}
 		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
 		return is_array( $body ) ? $body : null;
+	}
+
+	/**
+	 * List recent Messages API rows for a destination (Verify SMS also appears here).
+	 *
+	 * @param string               $to        E.164 destination.
+	 * @param array{ sid: string, token: string, from: string } $creds Credentials.
+	 * @param int                  $page_size Max rows (1–20).
+	 * @return array<int, array<string, mixed>>
+	 */
+	private static function twilio_list_messages_to( $to, array $creds, $page_size = 5 ) {
+		$sid   = $creds['sid'];
+		$token = $creds['token'];
+		if ( $sid === '' || $token === '' || $to === '' ) {
+			return array();
+		}
+		$url  = 'https://api.twilio.com/2010-04-01/Accounts/' . $sid . '/Messages.json';
+		$url .= '?To=' . rawurlencode( $to ) . '&PageSize=' . max( 1, min( 20, (int) $page_size ) );
+		$auth = base64_encode( $sid . ':' . $token );
+		$args = array(
+			'headers'   => array( 'Authorization' => 'Basic ' . $auth ),
+			'timeout'   => 10,
+			'sslverify' => true,
+		);
+		$resp = wp_remote_get( $url, $args );
+		if ( is_wp_error( $resp ) ) {
+			return array();
+		}
+		$code = (int) wp_remote_retrieve_response_code( $resp );
+		if ( $code < 200 || $code >= 300 ) {
+			return array();
+		}
+		$body = json_decode( wp_remote_retrieve_body( $resp ), true );
+		if ( ! is_array( $body ) || empty( $body['messages'] ) || ! is_array( $body['messages'] ) ) {
+			return array();
+		}
+		return $body['messages'];
+	}
+
+	/**
+	 * After Verify accepts a request, poll Messaging logs for delivery failure (pending ≠ delivered).
+	 *
+	 * @param string               $to         E.164 destination.
+	 * @param array{ sid: string, token: string, from: string } $creds Credentials.
+	 * @param int                  $not_before Unix timestamp; ignore older messages.
+	 * @return array{ confirmed: bool, failed: bool, message?: string }
+	 */
+	private static function twilio_poll_outbound_sms_delivery( $to, array $creds, $not_before ) {
+		$in_progress = array( 'queued', 'sending', 'accepted', 'scheduled' );
+		$terminal_ok = array( 'sent', 'delivered', 'read' );
+		$terminal_bad = array( 'failed', 'undelivered', 'canceled' );
+
+		for ( $i = 0; $i < 15; $i++ ) {
+			$messages = self::twilio_list_messages_to( $to, $creds, 8 );
+			foreach ( $messages as $msg ) {
+				if ( ! is_array( $msg ) ) {
+					continue;
+				}
+				$created_ts = isset( $msg['date_created'] ) ? strtotime( (string) $msg['date_created'] ) : 0;
+				if ( $created_ts > 0 && $created_ts < (int) $not_before ) {
+					continue;
+				}
+				$data = $msg;
+				$st   = isset( $data['status'] ) ? (string) $data['status'] : '';
+				if ( $st !== '' && in_array( $st, $in_progress, true ) && ! empty( $data['sid'] ) ) {
+					$data = self::twilio_message_after_send_poll( $data, $creds, $to );
+					$st   = isset( $data['status'] ) ? (string) $data['status'] : $st;
+				}
+				if ( $st !== '' && in_array( $st, $terminal_bad, true ) ) {
+					return array(
+						'confirmed' => true,
+						'failed'    => true,
+						'message'   => self::message_failed_user_text( $data ),
+					);
+				}
+				if ( $st !== '' && in_array( $st, $terminal_ok, true ) ) {
+					return array(
+						'confirmed' => true,
+						'failed'    => false,
+					);
+				}
+			}
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+				error_log( 'cpm_nwp twilio verify delivery poll to=' . $to . ' i=' . $i );
+			}
+			usleep( 400000 );
+		}
+
+		return array(
+			'confirmed' => false,
+			'failed'    => false,
+		);
+	}
+
+	/**
+	 * Hint when Twilio accepted the request but handset delivery could not be confirmed.
+	 *
+	 * @param string $phone_e164 E.164 destination.
+	 * @return string
+	 */
+	private static function delivery_unconfirmed_user_hint( $phone_e164 ) {
+		$masked = self::mask_phone_e164( $phone_e164 );
+		$lead   = sprintf(
+			/* translators: %s: masked E.164 phone, e.g. +977****8973 */
+			__( 'Twilio accepted the SMS request to %s. If nothing arrives within 2 minutes:', 'cpm-humanblockchain' ),
+			$masked
+		);
+		$hints = array(
+			__( 'In Twilio Console enable outbound SMS for the destination country under Messaging → Settings → SMS geographic permissions (Nepal +977 is often disabled by default).', 'cpm-humanblockchain' ),
+			__( 'On a trial account, add this number under Phone Numbers → Verified Caller IDs.', 'cpm-humanblockchain' ),
+			__( 'For Twilio Verify, check Monitor → Logs → Verify (not only Messaging) for delivery errors.', 'cpm-humanblockchain' ),
+		);
+		return $lead . ' ' . implode( ' ', $hints );
 	}
 
 	/**
@@ -636,9 +768,12 @@ class Cpm_Humanblockchain_Otp_Service {
 				);
 			}
 			return array(
-				'success' => true,
-				'message' => __( 'SMS sent successfully.', 'cpm-humanblockchain' ),
-				'error'   => null,
+				'success'        => true,
+				'message'        => self::otp_sent_success_message( $to, false ),
+				'error'          => null,
+				'phone_masked'   => self::mask_phone_e164( $to ),
+				'delivery_mode'  => 'sms',
+				'unconfirmed'    => false,
 			);
 		}
 
@@ -695,6 +830,93 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * GET from Twilio Verify API.
+	 *
+	 * @param string $path Relative to https://verify.twilio.com/v2/.
+	 * @return array{ http_code: int, data: array|null, raw: string }
+	 */
+	private static function twilio_verify_get( $path ) {
+		$creds = self::get_credentials();
+		$sid   = $creds['sid'];
+		$token = $creds['token'];
+		$url   = 'https://verify.twilio.com/v2/' . ltrim( $path, '/' );
+		$auth  = base64_encode( $sid . ':' . $token );
+		$args  = array(
+			'headers'   => array( 'Authorization' => 'Basic ' . $auth ),
+			'timeout'   => 10,
+			'sslverify' => true,
+		);
+		$resp  = wp_remote_get( $url, $args );
+		if ( is_wp_error( $resp ) ) {
+			return array(
+				'http_code' => 0,
+				'data'      => null,
+				'raw'       => '',
+			);
+		}
+		$http_code = (int) wp_remote_retrieve_response_code( $resp );
+		$raw       = wp_remote_retrieve_body( $resp );
+		$data      = json_decode( $raw, true );
+		return array(
+			'http_code' => $http_code,
+			'data'      => is_array( $data ) ? $data : null,
+			'raw'       => $raw,
+		);
+	}
+
+	/**
+	 * Poll a Verification resource after create; fail fast on canceled.
+	 *
+	 * @param string $service_sid       Verify Service SID (VA…).
+	 * @param string $verification_sid  Verification SID (VE…).
+	 * @return array{ failed: bool, message?: string }
+	 */
+	private static function twilio_verify_poll_verification( $service_sid, $verification_sid ) {
+		if ( $service_sid === '' || $verification_sid === '' ) {
+			return array( 'failed' => false );
+		}
+		$path = 'Services/' . rawurlencode( $service_sid ) . '/Verifications/' . rawurlencode( $verification_sid );
+		for ( $i = 0; $i < 8; $i++ ) {
+			usleep( 300000 );
+			$parsed = self::twilio_verify_get( $path );
+			if ( $parsed['http_code'] < 200 || $parsed['http_code'] >= 300 || ! is_array( $parsed['data'] ) ) {
+				continue;
+			}
+			$st = isset( $parsed['data']['status'] ) ? (string) $parsed['data']['status'] : '';
+			if ( 'canceled' === $st ) {
+				$msg = __( 'Twilio Verify canceled the SMS before delivery. Check Twilio Console → Monitor → Logs → Verify for this number.', 'cpm-humanblockchain' );
+				return array(
+					'failed'  => true,
+					'message' => self::maybe_append_geo_permission_help( $msg, $parsed['data'] ),
+				);
+			}
+			if ( in_array( $st, array( 'pending', 'approved' ), true ) ) {
+				break;
+			}
+		}
+		return array( 'failed' => false );
+	}
+
+	/**
+	 * User-facing success line after OTP dispatch.
+	 *
+	 * @param string $phone_e164 E.164 destination.
+	 * @param bool   $unconfirmed True when Twilio accepted but delivery was not confirmed.
+	 * @return string
+	 */
+	private static function otp_sent_success_message( $phone_e164, $unconfirmed = false ) {
+		$masked = self::mask_phone_e164( $phone_e164 );
+		if ( $unconfirmed ) {
+			return self::delivery_unconfirmed_user_hint( $phone_e164 );
+		}
+		return sprintf(
+			/* translators: %s: masked E.164 phone */
+			__( 'Verification code sent to %s. Check your messages.', 'cpm-humanblockchain' ),
+			$masked
+		);
+	}
+
+	/**
 	 * Start SMS verification via Twilio Verify (same flow as Smallstreet Verify Service).
 	 *
 	 * @param string $phone_e164 E.164.
@@ -702,6 +924,8 @@ class Cpm_Humanblockchain_Otp_Service {
 	 */
 	private static function send_otp_via_twilio_verify( $phone_e164 ) {
 		$service_sid = self::get_verify_service_sid();
+		$creds       = self::get_credentials();
+		$sent_at     = time();
 		$path        = 'Services/' . rawurlencode( $service_sid ) . '/Verifications';
 		$parsed      = self::twilio_verify_post(
 			$path,
@@ -736,10 +960,32 @@ class Cpm_Humanblockchain_Otp_Service {
 						. ' status=' . ( $st !== '' ? $st : '(empty)' ) . ' sid=' . ( $has_sid ? (string) $parsed['data']['sid'] : '-' )
 					);
 				}
+				if ( $has_sid ) {
+					$verify_poll = self::twilio_verify_poll_verification( $service_sid, (string) $parsed['data']['sid'] );
+					if ( ! empty( $verify_poll['failed'] ) ) {
+						return array(
+							'success' => false,
+							'message' => isset( $verify_poll['message'] ) ? (string) $verify_poll['message'] : __( 'SMS could not be delivered.', 'cpm-humanblockchain' ),
+							'error'   => 'verify_canceled',
+						);
+					}
+				}
+				$delivery = self::twilio_poll_outbound_sms_delivery( $phone_e164, $creds, $sent_at - 3 );
+				if ( ! empty( $delivery['failed'] ) ) {
+					return array(
+						'success' => false,
+						'message' => isset( $delivery['message'] ) ? (string) $delivery['message'] : __( 'SMS could not be delivered.', 'cpm-humanblockchain' ),
+						'error'   => 'verify_delivery_failed',
+					);
+				}
+				$unconfirmed = empty( $delivery['confirmed'] );
 				return array(
-					'success' => true,
-					'message' => __( 'SMS sent successfully.', 'cpm-humanblockchain' ),
-					'error'   => null,
+					'success'      => true,
+					'message'      => self::otp_sent_success_message( $phone_e164, $unconfirmed ),
+					'error'        => null,
+					'phone_masked' => self::mask_phone_e164( $phone_e164 ),
+					'delivery_mode' => 'verify',
+					'unconfirmed'  => $unconfirmed,
 				);
 			}
 			if ( $st !== '' ) {

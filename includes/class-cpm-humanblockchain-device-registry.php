@@ -825,7 +825,19 @@ class Cpm_Humanblockchain_Device_Registry {
 		$result = Cpm_Humanblockchain_Otp_Service::send_otp_sms( $phone_e164 );
 
 		if ( $result['success'] ) {
-			wp_send_json_success( array( 'message' => __( 'Verification code sent to your phone. Check your messages.', 'cpm-humanblockchain' ) ) );
+			$payload = array(
+				'message' => isset( $result['message'] ) ? (string) $result['message'] : __( 'Verification code sent to your phone. Check your messages.', 'cpm-humanblockchain' ),
+			);
+			if ( ! empty( $result['phone_masked'] ) ) {
+				$payload['phone_masked'] = (string) $result['phone_masked'];
+			}
+			if ( ! empty( $result['delivery_mode'] ) ) {
+				$payload['delivery_mode'] = (string) $result['delivery_mode'];
+			}
+			if ( isset( $result['unconfirmed'] ) ) {
+				$payload['unconfirmed'] = (bool) $result['unconfirmed'];
+			}
+			wp_send_json_success( $payload );
 		}
 
 		wp_send_json_error( array( 'message' => $result['message'] ) );
