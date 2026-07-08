@@ -129,7 +129,7 @@ class Cpm_Humanblockchain_Admin {
 		) );
 		register_setting( $i, 'cpm_nwp_twilio_verify_service_sid', array(
 			'type'              => 'string',
-			'sanitize_callback' => 'sanitize_text_field',
+			'sanitize_callback' => array( $this, 'sanitize_verify_service_sid' ),
 		) );
 		register_setting( $i, 'cpm_nwp_default_country', array(
 			'type'              => 'string',
@@ -197,6 +197,34 @@ class Cpm_Humanblockchain_Admin {
 			return is_string( $prev ) ? $prev : '';
 		}
 		return sanitize_text_field( $value );
+	}
+
+	/**
+	 * Validate Twilio Verify Service SID on save (VA…, not AC… or MG…).
+	 *
+	 * @param mixed $value Raw value.
+	 * @return string
+	 */
+	public function sanitize_verify_service_sid( $value ) {
+		$value = is_string( $value ) ? trim( $value ) : '';
+		if ( $value === '' ) {
+			return '';
+		}
+		$value = sanitize_text_field( $value );
+		if ( class_exists( 'Cpm_Humanblockchain_Otp_Service' ) ) {
+			$err = Cpm_Humanblockchain_Otp_Service::validate_verify_service_sid_format( $value );
+			if ( $err ) {
+				add_settings_error(
+					'cpm_nwp_twilio_verify_service_sid',
+					'cpm_nwp_invalid_verify_sid',
+					$err,
+					'error'
+				);
+				$prev = get_option( 'cpm_nwp_twilio_verify_service_sid', '' );
+				return is_string( $prev ) ? $prev : '';
+			}
+		}
+		return $value;
 	}
 
 	/**
@@ -902,7 +930,7 @@ class Cpm_Humanblockchain_Admin {
 						<td>
 							<input type="text" id="cpm_nwp_twilio_verify_service_sid" name="cpm_nwp_twilio_verify_service_sid" value="<?php echo esc_attr( is_string( $verify_sid_saved ) ? $verify_sid_saved : '' ); ?>" class="regular-text" placeholder="VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
 							<p class="description">
-								<?php esc_html_e( 'Twilio Console → Verify → Services. When set, OTP uses Twilio Verify (best for Nepal +977). No From number required. If blank, the legacy cpm-twilio APP_SID constant is used when that plugin is active.', 'cpm-humanblockchain' ); ?>
+								<?php esc_html_e( 'Twilio Console → Verify → Services. Must start with VA (not AC or MG). When set, OTP uses Twilio Verify. If this matches the cpm-twilio plugin Verify service, that plugin’s Account SID + Auth Token are used automatically.', 'cpm-humanblockchain' ); ?>
 								<?php if ( $uses_verify_api && $verify_sid !== '' ) : ?>
 									<br><strong><?php esc_html_e( 'Active Verify Service:', 'cpm-humanblockchain' ); ?></strong>
 									<code><?php echo esc_html( substr( $verify_sid, 0, 6 ) . '…' . substr( $verify_sid, -4 ) ); ?></code>

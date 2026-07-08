@@ -315,7 +315,14 @@
 		function closeDiscordModalAndRefresh() {
 			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
-			window.location.reload();
+			if ( window.cpmNwp ) {
+				window.cpmNwp.openAccountOtpOnLoad = false;
+			}
+			var target = window.cpmHbPostOtpLoginRedirect
+				|| ( window.cpmNwp && window.cpmNwp.myAccountUrl )
+				|| window.location.href;
+			window.cpmHbPostOtpLoginRedirect = '';
+			window.location.href = target;
 		}
 
 		function showInlineFeedback( $box, message, type ) {
@@ -918,6 +925,9 @@
 				} )
 				.done( function( res ) {
 					if ( res && res.success && res.data ) {
+						if ( res.data.post_login_redirect ) {
+							window.cpmHbPostOtpLoginRedirect = res.data.post_login_redirect;
+						}
 						if ( res.data.redirect_url ) {
 							if ( res.data.smallstreet_backorders != null ) {
 								try {
@@ -933,6 +943,9 @@
 								window.cpmHbLanding.buyerProofScan = false;
 								window.cpmHbLanding.podProofScan = false;
 								window.cpmHbLanding.landingRole = '';
+							}
+							if ( window.cpmNwp ) {
+								window.cpmNwp.openAccountOtpOnLoad = false;
 							}
 							window.location.href = res.data.redirect_url;
 							return;
@@ -967,12 +980,25 @@
 							if ( window.cpmHbLanding ) {
 								window.cpmHbLanding.pendingOtpRedirect = '';
 							}
+							if ( window.cpmNwp ) {
+								window.cpmNwp.openAccountOtpOnLoad = false;
+							}
 							if ( window.cpmNwp && window.cpmNwp.discordInviteUrl ) {
 								$( '#cpm-nwp-discord-join-link' ).attr( 'href', window.cpmNwp.discordInviteUrl );
 							}
 							$discordModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 							return;
+						}
+						if ( window.cpmHbPostOtpLoginRedirect ) {
+							if ( window.cpmNwp ) {
+								window.cpmNwp.openAccountOtpOnLoad = false;
+							}
+							window.location.href = window.cpmHbPostOtpLoginRedirect;
+							return;
+						}
+						if ( window.cpmNwp ) {
+							window.cpmNwp.openAccountOtpOnLoad = false;
 						}
 						window.location.reload();
 					} else {

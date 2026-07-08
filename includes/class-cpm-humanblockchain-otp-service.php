@@ -369,6 +369,95 @@ class Cpm_Humanblockchain_Otp_Service {
 	}
 
 	/**
+	 * Validate Verify Service SID format before calling Twilio (VA…, 34 chars).
+	 *
+	 * @param string $service_sid Raw SID.
+	 * @return string|null Error message or null if valid / empty.
+	 */
+	public static function validate_verify_service_sid_format( $service_sid ) {
+		$service_sid = self::trim_twilio_secret( (string) $service_sid );
+		if ( $service_sid === '' ) {
+			return null;
+		}
+		if ( preg_match( '/^AC/i', $service_sid ) ) {
+			return __( 'Invalid Verify Service SID: you entered an Account SID (AC…). In Twilio Console open Verify → Services and copy the Service SID starting with VA….', 'cpm-humanblockchain' );
+		}
+		if ( preg_match( '/^MG/i', $service_sid ) ) {
+			return __( 'Invalid Verify Service SID: you entered a Messaging Service SID (MG…). Use the Verify Service SID (VA…) from Twilio Console → Verify → Services.', 'cpm-humanblockchain' );
+		}
+		if ( ! preg_match( '/^VA[0-9a-fA-F]{32}$/', $service_sid ) ) {
+			return __( 'Invalid Verify Service SID: must start with VA and be 34 characters (Twilio Console → Verify → Services).', 'cpm-humanblockchain' );
+		}
+		return null;
+	}
+
+	/**
+	 * Credentials for Twilio Verify — must match the Verify Service (VA…) account.
+	 *
+	 * When the active Verify service is the legacy cpm-twilio APP_SID, use that plugin’s ACCOUNT_SID + AUTH_TOKEN.
+	 *
+	 * @return array{ sid: string, token: string, from: string }
+	 */
+	private static function get_verify_credentials() {
+		$creds      = self::get_credentials();
+		$verify_sid = self::get_verify_service_sid();
+
+		if ( $verify_sid !== '' && defined( 'APP_SID' ) && defined( 'ACCOUNT_SID' ) && defined( 'AUTH_TOKEN' ) ) {
+			$app_sid = self::trim_twilio_secret( APP_SID );
+			if ( $app_sid !== '' && hash_equals( $app_sid, $verify_sid ) ) {
+				$legacy_sid   = self::trim_twilio_secret( ACCOUNT_SID );
+				$legacy_token = self::trim_twilio_secret( AUTH_TOKEN );
+				if ( $legacy_sid !== '' && $legacy_token !== '' ) {
+					$legacy = array(
+						'sid'   => $legacy_sid,
+						'token' => $legacy_token,
+						'from'  => $creds['from'],
+					);
+					return apply_filters( 'cpm_nwp_twilio_credentials', $legacy );
+				}
+			}
+		}
+
+		return $creds;
+	}
+
+	/**
+	 * Extra help for Twilio Verify error 60200 (“Invalid parameter”).
+	 *
+	 * @param string               $message       Twilio message.
+	 * @param array<string, mixed> $body_response Decoded JSON.
+	 * @param string               $service_sid   Verify Service SID used.
+	 * @param string               $phone_e164    Destination sent to Twilio.
+	 * @return string
+	 */
+	private static function maybe_append_verify_parameter_help( $message, array $body_response, $service_sid, $phone_e164 ) {
+		$code = isset( $body_response['code'] ) ? (int) $body_response['code'] : 0;
+		$msg  = strtolower( (string) $message );
+		if ( 60200 !== $code && false === strpos( $msg, 'invalid parameter' ) ) {
+			return (string) $message;
+		}
+
+		$hints = array();
+		$sid   = self::trim_twilio_secret( (string) $service_sid );
+		if ( preg_match( '/^AC/i', $sid ) ) {
+			$hints[] = __( 'The Verify Service SID field contains an Account SID (AC…). Replace it with VA… from Verify → Services.', 'cpm-humanblockchain' );
+		} elseif ( preg_match( '/^MG/i', $sid ) ) {
+			$hints[] = __( 'The Verify Service SID field contains a Messaging SID (MG…). Use VA… instead.', 'cpm-humanblockchain' );
+		} else {
+			$hints[] = __( 'Account SID and Auth Token must belong to the same Twilio project as this Verify Service (VA…). If you copied the VA from the cpm-twilio plugin, leave NWP Account SID/Token blank or update them to that same Twilio account.', 'cpm-humanblockchain' );
+		}
+		if ( false !== strpos( $msg, 'to' ) && $phone_e164 !== '' ) {
+			$hints[] = sprintf(
+				/* translators: %s: E.164 phone */
+				__( 'Number sent to Twilio: %s (must include leading +).', 'cpm-humanblockchain' ),
+				$phone_e164
+			);
+		}
+
+		return trim( (string) $message ) . ' ' . implode( ' ', $hints );
+	}
+
+	/**
 	 * Whether OTP uses Twilio Verify (not Messages API + local transient OTP).
 	 *
 	 * @return bool
@@ -819,7 +908,7 @@ class Cpm_Humanblockchain_Otp_Service {
 	 * @return array{ response: array|WP_Error, http_code: int, data: array|null, raw: string }
 	 */
 	private static function twilio_verify_post( $path, array $form ) {
-		$creds = self::get_credentials();
+		$creds = self::get_verify_credentials();
 		$sid   = $creds['sid'];
 		$token = $creds['token'];
 		$url   = 'https://verify.twilio.com/v2/' . ltrim( $path, '/' );
@@ -856,7 +945,7 @@ class Cpm_Humanblockchain_Otp_Service {
 	 * @return array{ http_code: int, data: array|null, raw: string }
 	 */
 	private static function twilio_verify_get( $path ) {
-		$creds = self::get_credentials();
+		$creds = self::get_verify_credentials();
 		$sid   = $creds['sid'];
 		$token = $creds['token'];
 		$url   = 'https://verify.twilio.com/v2/' . ltrim( $path, '/' );
@@ -944,9 +1033,17 @@ class Cpm_Humanblockchain_Otp_Service {
 	 */
 	private static function send_otp_via_twilio_verify( $phone_e164 ) {
 		$service_sid = self::get_verify_service_sid();
-		$creds       = self::get_credentials();
-		$sent_at     = time();
-		$path        = 'Services/' . rawurlencode( $service_sid ) . '/Verifications';
+		$format_err  = self::validate_verify_service_sid_format( $service_sid );
+		if ( $format_err ) {
+			return array(
+				'success' => false,
+				'message' => $format_err,
+				'error'   => 'invalid_verify_service_sid',
+			);
+		}
+		$creds   = self::get_verify_credentials();
+		$sent_at = time();
+		$path    = 'Services/' . rawurlencode( $service_sid ) . '/Verifications';
 		$parsed      = self::twilio_verify_post(
 			$path,
 			array(
@@ -1030,6 +1127,7 @@ class Cpm_Humanblockchain_Otp_Service {
 					(int) $parsed['http_code']
 				);
 			} else {
+				$err_msg = self::maybe_append_verify_parameter_help( $err_msg, $d, $service_sid, $phone_e164 );
 				$err_msg = self::maybe_append_twilio_auth_help( self::maybe_append_geo_permission_help( $err_msg, $d ) );
 			}
 		}

@@ -844,6 +844,55 @@ class Cpm_Humanblockchain_Device_Registry {
 	}
 
 	/**
+	 * Set WordPress / WooCommerce auth cookies after OTP verify (admin-ajax).
+	 *
+	 * @param int      $wp_uid User ID.
+	 * @param WP_User  $user   User object.
+	 * @return void
+	 */
+	private static function establish_user_session( $wp_uid, $user ) {
+		$wp_uid = (int) $wp_uid;
+		if ( $wp_uid <= 0 || ! $user instanceof WP_User ) {
+			return;
+		}
+
+		wp_set_current_user( $wp_uid );
+		wp_set_auth_cookie( $wp_uid, true, is_ssl() );
+		if ( function_exists( 'wc_set_customer_auth_cookie' ) ) {
+			wc_set_customer_auth_cookie( $wp_uid );
+		}
+		/** This action is documented in wp-includes/user.php. */
+		do_action( 'wp_login', $user->user_login, $user );
+	}
+
+	/**
+	 * Redirect URL that completes login on a normal page load (not admin-ajax).
+	 *
+	 * Reuses hb_passkey_finish_* transients handled by Hb_Biometric_Settings::maybe_finish_passkey_login().
+	 *
+	 * @param int    $wp_uid   User ID.
+	 * @param string $base_url Optional destination before finish arg.
+	 * @return string
+	 */
+	private static function build_auth_finish_redirect_url( $wp_uid, $base_url = '' ) {
+		$wp_uid = (int) $wp_uid;
+		if ( $wp_uid <= 0 ) {
+			return is_string( $base_url ) && $base_url !== '' ? $base_url : home_url( '/' );
+		}
+
+		$token = wp_generate_password( 32, false, false );
+		set_transient( 'hb_passkey_finish_' . $token, $wp_uid, 60 );
+
+		if ( ! is_string( $base_url ) || $base_url === '' ) {
+			$base_url = class_exists( 'Cpm_Humanblockchain_Public' )
+				? Cpm_Humanblockchain_Public::get_my_account_page_url()
+				: home_url( '/my-account/' );
+		}
+
+		return add_query_arg( 'hb_passkey_finish', $token, $base_url );
+	}
+
+	/**
 	 * Handle Verify OTP AJAX: check code, mark device activated, log user in, then client shows Discord or — for seller + ?proof=scan — transaction code modal and local xp_ledger.
 	 *
 	 * @since 1.0.0
@@ -949,10 +998,9 @@ class Cpm_Humanblockchain_Device_Registry {
 
 		Cpm_Humanblockchain_Otp_Service::clear_otp_transient( $phone_e164 );
 
-		wp_set_current_user( $wp_uid );
-		wp_set_auth_cookie( $wp_uid, true, is_ssl() );
-		/** This action is documented in wp-includes/user.php. */
-		do_action( 'wp_login', $user->user_login, $user );
+		self::establish_user_session( $wp_uid, $user );
+
+		$post_login_redirect = self::build_auth_finish_redirect_url( $wp_uid );
 
 		$buyer_proof_scan = isset( $_POST['cpm_hb_buyer_proof_scan'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['cpm_hb_buyer_proof_scan'] ) );
 		$landing_role     = isset( $_POST['cpm_hb_user_role'] ) ? sanitize_text_field( wp_unslash( $_POST['cpm_hb_user_role'] ) ) : '';
@@ -1040,11 +1088,15 @@ class Cpm_Humanblockchain_Device_Registry {
 		// Unified outcome: logged in above; show Discord on success unless a filter sets an immediate redirect (client checks redirect first).
 		$redirect     = apply_filters( 'cpm_nwp_after_verify_redirect', '' );
 		$show_discord = (bool) apply_filters( 'cpm_nwp_after_verify_show_discord_modal', true );
+		if ( ! $redirect ) {
+			$redirect = $post_login_redirect;
+		}
 
 		$payload = array(
-			'message'            => $check['message'],
-			'redirect_url'       => $redirect ? esc_url_raw( $redirect ) : '',
-			'show_discord_modal' => $show_discord,
+			'message'              => $check['message'],
+			'redirect_url'         => $show_discord ? '' : esc_url_raw( $redirect ),
+			'post_login_redirect'  => esc_url_raw( $post_login_redirect ),
+			'show_discord_modal'   => $show_discord,
 		);
 
 		wp_send_json_success( $payload );
