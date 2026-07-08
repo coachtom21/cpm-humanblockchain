@@ -1015,8 +1015,9 @@ class Cpm_Humanblockchain_Otp_Service {
 	 */
 	private static function otp_sent_success_message( $phone_e164, $unconfirmed = false ) {
 		$masked = self::mask_phone_e164( $phone_e164 );
-		if ( $unconfirmed ) {
-			return self::delivery_unconfirmed_user_hint( $phone_e164 );
+		if ( $unconfirmed && defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'cpm_nwp OTP sent to ' . $phone_e164 . ' but Twilio delivery was not confirmed as delivered.' );
 		}
 		return sprintf(
 			/* translators: %s: masked E.164 phone */

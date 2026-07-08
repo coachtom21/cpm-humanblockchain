@@ -806,8 +806,7 @@
 							clearInlineFeedback( $activateFeedback );
 							cpmHbMarkOtpFlowActive();
 							$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
-							var feedbackType = ( res.data && res.data.unconfirmed ) ? 'warning' : 'success';
-							showInlineFeedback( $verifyFeedback, res.data.message, feedbackType );
+							showInlineFeedback( $verifyFeedback, res.data.message, 'success' );
 							$( '#cpm-nwp-verify-otp-input' ).trigger( 'focus' );
 						} else {
 							var err = ( res && res.data && res.data.message ) ? res.data.message : 'Request failed.';
