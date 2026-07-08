@@ -1062,11 +1062,13 @@ class Cpm_Humanblockchain_Device_Registry {
 			}
 			$pod_url = apply_filters( 'cpm_hb_proof_of_delivery_url', self::get_backorder_page_url() );
 			$pod_url = add_query_arg( 'proof', 'scan', $pod_url );
+			$pod_finish = self::build_auth_finish_redirect_url( $wp_uid, $pod_url );
 
 			$payload = array(
-				'message'              => $check['message'],
-				'redirect_url'         => esc_url_raw( $pod_url ),
-				'show_discord_modal'   => false,
+				'message'                => $check['message'],
+				'redirect_url'           => esc_url_raw( $pod_finish ),
+				'post_login_redirect'    => esc_url_raw( $pod_finish ),
+				'show_discord_modal'     => false,
 				'smallstreet_backorders' => null,
 			);
 

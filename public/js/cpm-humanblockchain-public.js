@@ -254,6 +254,7 @@
 
 		function cpmHbOpenMyAccountPhoneLogin( returnUrl ) {
 			window.cpmHbSkipPodOtpContext = true;
+			cpmHbMarkOtpFlowActive();
 			if ( ! window.cpmHbLanding ) {
 				window.cpmHbLanding = {};
 			}
@@ -312,17 +313,36 @@
 		/** Called from landing-entry.js after logged-in seller PoD AJAX (no OTP). */
 		window.cpmHbShowSellerPodSuccess = showSellerScanSuccessModal;
 
-		function closeDiscordModalAndRefresh() {
-			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+		function cpmHbMarkOtpFlowActive() {
+			window.cpmHbOtpFlowActive = true;
+			if ( typeof window.cpmHbCancelBiometricLogin === 'function' ) {
+				window.cpmHbCancelBiometricLogin();
+			}
+		}
+
+		function cpmHbNavigateAfterOtpLogin( url ) {
 			if ( window.cpmNwp ) {
 				window.cpmNwp.openAccountOtpOnLoad = false;
 			}
+			window.cpmHbOtpFlowActive = false;
+			if ( window.cpmHbLanding ) {
+				window.cpmHbLanding.pendingOtpRedirect = '';
+				window.cpmHbLanding.phoneModalFromMyAccount = false;
+			}
+			clearInlineFeedback( $activateFeedback );
+			$( 'body' ).removeClass( 'cpm-nwp-modal-open' );
+			$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+			window.location.href = url || ( window.cpmNwp && window.cpmNwp.myAccountUrl ) || window.location.href;
+		}
+
+		function closeDiscordModalAndRefresh() {
+			$discordModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 			var target = window.cpmHbPostOtpLoginRedirect
 				|| ( window.cpmNwp && window.cpmNwp.myAccountUrl )
 				|| window.location.href;
 			window.cpmHbPostOtpLoginRedirect = '';
-			window.location.href = target;
+			cpmHbNavigateAfterOtpLogin( target );
 		}
 
 		function showInlineFeedback( $box, message, type ) {
@@ -784,6 +804,7 @@
 							$( '#cpm-hb-pod-geo-lng-verify' ).val( $( '#cpm-hb-pod-geo-lng-activate' ).val() || '' );
 							$activateModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 							clearInlineFeedback( $activateFeedback );
+							cpmHbMarkOtpFlowActive();
 							$verifyModal.removeClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'false' );
 							var feedbackType = ( res.data && res.data.unconfirmed ) ? 'warning' : 'success';
 							showInlineFeedback( $verifyFeedback, res.data.message, feedbackType );
@@ -851,6 +872,7 @@
 				return false;
 			}
 			clearInlineFeedback( $verifyFeedback );
+			cpmHbMarkOtpFlowActive();
 			applyProofScanContextIfNeeded();
 			ensureHbLandingFromNwp();
 			cpmNwpRefreshLandingRoleFromSessionStorage();
@@ -921,13 +943,37 @@
 					url: verifyAjaxUrl,
 					type: 'POST',
 					data: payload,
-					dataType: 'json'
+					dataType: 'text',
+					xhrFields: { withCredentials: true }
 				} )
-				.done( function( res ) {
+				.done( function( responseText ) {
+					var res = null;
+					try {
+						res = JSON.parse( responseText );
+					} catch ( parseErr ) {
+						res = null;
+					}
 					if ( res && res.success && res.data ) {
 						if ( res.data.post_login_redirect ) {
 							window.cpmHbPostOtpLoginRedirect = res.data.post_login_redirect;
 						}
+						var finishUrl = res.data.post_login_redirect || res.data.redirect_url || '';
+
+						if ( res.data.seller_scan_success && res.data.seller_transaction_code ) {
+							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
+							clearInlineFeedback( $verifyFeedback );
+							if ( window.cpmHbLanding ) {
+								window.cpmHbLanding.buyerProofScan = false;
+								window.cpmHbLanding.podProofScan = false;
+								window.cpmHbLanding.phoneModalFromLanding = false;
+								window.cpmHbLanding.pendingOtpRedirect = '';
+								window.cpmHbLanding.landingRole = '';
+							}
+							window.cpmHbOtpFlowActive = false;
+							showSellerScanSuccessModal( res.data.seller_transaction_code );
+							return;
+						}
+
 						if ( res.data.redirect_url ) {
 							if ( res.data.smallstreet_backorders != null ) {
 								try {
@@ -944,36 +990,10 @@
 								window.cpmHbLanding.podProofScan = false;
 								window.cpmHbLanding.landingRole = '';
 							}
-							if ( window.cpmNwp ) {
-								window.cpmNwp.openAccountOtpOnLoad = false;
-							}
-							window.location.href = res.data.redirect_url;
+							cpmHbNavigateAfterOtpLogin( res.data.redirect_url );
 							return;
 						}
-						if ( res.data.seller_scan_success && res.data.seller_transaction_code ) {
-							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
-							clearInlineFeedback( $verifyFeedback );
-							if ( window.cpmHbLanding ) {
-								window.cpmHbLanding.buyerProofScan = false;
-								window.cpmHbLanding.podProofScan = false;
-								window.cpmHbLanding.phoneModalFromLanding = false;
-								window.cpmHbLanding.pendingOtpRedirect = '';
-								window.cpmHbLanding.landingRole = '';
-							}
-							showSellerScanSuccessModal( res.data.seller_transaction_code );
-							return;
-						}
-						// PoD buyer path: must run before Discord — otherwise pendingOtpRedirect is cleared and users never reach backorders.
-						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
-							var postUrl = window.cpmHbLanding.pendingOtpRedirect;
-							window.cpmHbLanding.pendingOtpRedirect = '';
-							window.cpmHbLanding.phoneModalFromLanding = false;
-							window.cpmHbLanding.buyerProofScan = false;
-							window.cpmHbLanding.podProofScan = false;
-							window.cpmHbLanding.landingRole = '';
-							window.location.href = postUrl;
-							return;
-						}
+
 						if ( res.data.show_discord_modal ) {
 							$verifyModal.addClass( 'cpm-nwp-modal--hidden' ).attr( 'aria-hidden', 'true' );
 							clearInlineFeedback( $verifyFeedback );
@@ -983,6 +1003,9 @@
 							if ( window.cpmNwp ) {
 								window.cpmNwp.openAccountOtpOnLoad = false;
 							}
+							if ( finishUrl ) {
+								window.cpmHbPostOtpLoginRedirect = finishUrl;
+							}
 							if ( window.cpmNwp && window.cpmNwp.discordInviteUrl ) {
 								$( '#cpm-nwp-discord-join-link' ).attr( 'href', window.cpmNwp.discordInviteUrl );
 							}
@@ -990,17 +1013,18 @@
 							$( 'body' ).addClass( 'cpm-nwp-modal-open' );
 							return;
 						}
-						if ( window.cpmHbPostOtpLoginRedirect ) {
-							if ( window.cpmNwp ) {
-								window.cpmNwp.openAccountOtpOnLoad = false;
-							}
-							window.location.href = window.cpmHbPostOtpLoginRedirect;
+
+						if ( window.cpmHbLanding && window.cpmHbLanding.pendingOtpRedirect ) {
+							cpmHbNavigateAfterOtpLogin( finishUrl || window.cpmHbLanding.pendingOtpRedirect );
 							return;
 						}
-						if ( window.cpmNwp ) {
-							window.cpmNwp.openAccountOtpOnLoad = false;
+
+						if ( finishUrl ) {
+							cpmHbNavigateAfterOtpLogin( finishUrl );
+							return;
 						}
-						window.location.reload();
+
+						cpmHbNavigateAfterOtpLogin( window.location.href );
 					} else {
 						var verr = ( res && res.data && res.data.message ) ? res.data.message : 'Verification failed.';
 						if ( maybeRetryVerifyOtpAfterStaleNonce( isNonceRetry, verr ) ) {
@@ -1011,11 +1035,19 @@
 				} )
 				.fail( function( xhr ) {
 					var vmsg = 'Request failed. Please try again.';
-					if ( xhr && xhr.responseJSON && xhr.responseJSON.data ) {
-						if ( typeof xhr.responseJSON.data === 'string' ) {
-							vmsg = xhr.responseJSON.data;
-						} else if ( xhr.responseJSON.data.message ) {
-							vmsg = xhr.responseJSON.data.message;
+					var parsed = null;
+					if ( xhr && xhr.responseText ) {
+						try {
+							parsed = JSON.parse( xhr.responseText );
+						} catch ( parseErr ) {
+							parsed = xhr.responseJSON || null;
+						}
+					}
+					if ( parsed && parsed.data ) {
+						if ( typeof parsed.data === 'string' ) {
+							vmsg = parsed.data;
+						} else if ( parsed.data.message ) {
+							vmsg = parsed.data.message;
 						}
 					}
 					if ( maybeRetryVerifyOtpAfterStaleNonce( isNonceRetry, vmsg ) ) {
