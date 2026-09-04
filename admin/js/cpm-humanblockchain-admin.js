@@ -14,6 +14,26 @@
 		var $wrap = $( '#cpm-nwp-qr-preview' );
 		var $img = $( '#cpm-nwp-qr-preview-img' );
 		var $edit = $( '#cpm-nwp-qr-preview-edit' );
+		var $dlPng = $( '#cpm-nwp-qr-dl-png' );
+		var $dlJpg = $( '#cpm-nwp-qr-dl-jpg' );
+		var $dlSep = $( '#cpm-nwp-qr-dl-sep' );
+
+		function setDownloadLinks( pngUrl, jpgUrl, attachmentId ) {
+			if ( pngUrl && $dlPng.length ) {
+				$dlPng.attr( 'href', pngUrl ).show();
+			}
+			if ( jpgUrl && $dlJpg.length ) {
+				$dlJpg.attr( 'href', jpgUrl ).show();
+			}
+			if ( $dlSep.length && pngUrl && jpgUrl ) {
+				$dlSep.show();
+			}
+			if ( attachmentId && cpmNwpAdmin.postEdit && $edit.length ) {
+				var el = cpmNwpAdmin.postEdit + '?post=' + encodeURIComponent( attachmentId ) + '&action=edit';
+				var mediaLabel = cpmNwpAdmin.mediaStr || 'Open in Media Library';
+				$edit.attr( 'href', el ).text( mediaLabel ).show();
+			}
+		}
 
 		$btn.on( 'click', function() {
 			var u = ( $url.val() || '' ).trim();
@@ -38,10 +58,11 @@
 							$img.attr( 'src', res.data.imageUrl ).show();
 						}
 						$wrap.show().attr( 'aria-hidden', 'false' );
-						if ( res.data.attachmentId && cpmNwpAdmin.postEdit ) {
-							var el = cpmNwpAdmin.postEdit + '?post=' + encodeURIComponent( res.data.attachmentId ) + '&action=edit';
-							$edit.html( '<a href="' + el + '">' + cpmNwpAdmin.mediaStr + '</a>' );
-						}
+						setDownloadLinks(
+							res.data.downloadPng || '',
+							res.data.downloadJpg || '',
+							res.data.attachmentId || 0
+						);
 						$btn.text( cpmNwpAdmin.strRegen ).data( 'cpm-regenerate', '1' );
 					} else {
 						var err = ( res && res.data && res.data.message ) ? res.data.message : 'Error';

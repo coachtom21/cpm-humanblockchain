@@ -426,12 +426,121 @@ class Cpm_Humanblockchain_Admin {
 		}
 		wp_send_json_success(
 			array(
-				'message'        => __( 'QR code image saved to the Media Library.', 'cpm-humanblockchain' ),
+				'message'       => __( 'QR code image saved to the Media Library.', 'cpm-humanblockchain' ),
 				'attachmentId'  => (int) $attach_id,
 				'imageUrl'      => $image_url,
 				'regenerate'    => true,
+				'downloadPng'   => $this->get_nwp_qr_download_url( (int) $attach_id, 'png' ),
+				'downloadJpg'   => $this->get_nwp_qr_download_url( (int) $attach_id, 'jpg' ),
 			)
 		);
+	}
+
+	/**
+	 * Admin download URL for the current NWP Gateway QR attachment.
+	 *
+	 * @param int    $attachment_id Media attachment ID.
+	 * @param string $format        png|jpg.
+	 * @return string
+	 */
+	private function get_nwp_qr_download_url( $attachment_id, $format = 'png' ) {
+		$attachment_id = absint( $attachment_id );
+		$format        = strtolower( (string) $format );
+		if ( 'jpeg' === $format ) {
+			$format = 'jpg';
+		}
+		if ( ! in_array( $format, array( 'png', 'jpg' ), true ) || $attachment_id <= 0 ) {
+			return '';
+		}
+		return add_query_arg(
+			array(
+				'action' => 'cpm_nwp_download_qr',
+				'format' => $format,
+				'nonce'  => wp_create_nonce( 'cpm_nwp_download_qr' ),
+			),
+			admin_url( 'admin-ajax.php' )
+		);
+	}
+
+	/**
+	 * AJAX: stream NWP Gateway QR as PNG or JPG download (admins only).
+	 *
+	 * @return void
+	 */
+	public function ajax_download_nwp_qr() {
+		nocache_headers();
+		if ( ! current_user_can( 'manage_options' ) ) {
+			status_header( 403 );
+			wp_die( esc_html__( 'You do not have permission to do this.', 'cpm-humanblockchain' ) );
+		}
+		if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['nonce'] ) ), 'cpm_nwp_download_qr' ) ) {
+			status_header( 403 );
+			wp_die( esc_html__( 'Invalid security token.', 'cpm-humanblockchain' ) );
+		}
+
+		$format = isset( $_GET['format'] ) ? strtolower( sanitize_key( wp_unslash( $_GET['format'] ) ) ) : 'png';
+		if ( 'jpeg' === $format ) {
+			$format = 'jpg';
+		}
+		if ( ! in_array( $format, array( 'png', 'jpg' ), true ) ) {
+			$format = 'png';
+		}
+
+		$attach_id = (int) get_option( 'cpm_nwp_qr_attachment_id', 0 );
+		$path      = $attach_id > 0 ? get_attached_file( $attach_id ) : '';
+		if ( ! is_string( $path ) || $path === '' || ! is_readable( $path ) ) {
+			status_header( 404 );
+			wp_die( esc_html__( 'No QR image is available. Generate a QR first.', 'cpm-humanblockchain' ) );
+		}
+
+		$binary = file_get_contents( $path );
+		if ( ! is_string( $binary ) || $binary === '' ) {
+			status_header( 502 );
+			wp_die( esc_html__( 'Could not read the QR image file.', 'cpm-humanblockchain' ) );
+		}
+
+		$filename = 'nwp-gateway-qr';
+		if ( 'jpg' === $format ) {
+			if ( ! function_exists( 'imagecreatefromstring' ) || ! function_exists( 'imagejpeg' ) ) {
+				status_header( 502 );
+				wp_die( esc_html__( 'JPG conversion is not available on this server.', 'cpm-humanblockchain' ) );
+			}
+			$im = @imagecreatefromstring( $binary );
+			if ( ! $im ) {
+				status_header( 502 );
+				wp_die( esc_html__( 'Could not convert QR image to JPG.', 'cpm-humanblockchain' ) );
+			}
+			$w = imagesx( $im );
+			$h = imagesy( $im );
+			$out = imagecreatetruecolor( $w, $h );
+			$white = imagecolorallocate( $out, 255, 255, 255 );
+			imagefill( $out, 0, 0, $white );
+			imagecopy( $out, $im, 0, 0, 0, 0, $w, $h );
+			ob_start();
+			imagejpeg( $out, null, 92 );
+			$converted = ob_get_clean();
+			imagedestroy( $im );
+			imagedestroy( $out );
+			if ( ! is_string( $converted ) || $converted === '' ) {
+				status_header( 502 );
+				wp_die( esc_html__( 'JPG export failed.', 'cpm-humanblockchain' ) );
+			}
+			header( 'Content-Type: image/jpeg' );
+			header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $filename . '.jpg' ) . '"' );
+			header( 'Content-Length: ' . strlen( $converted ) );
+			header( 'X-Content-Type-Options: nosniff' );
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo $converted;
+			exit;
+		}
+
+		header( 'Content-Type: image/png' );
+		header( 'Content-Disposition: attachment; filename="' . sanitize_file_name( $filename . '.png' ) . '"' );
+		header( 'Content-Length: ' . strlen( $binary ) );
+		header( 'X-Content-Type-Options: nosniff' );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo $binary;
+		exit;
 	}
 
 	/**
@@ -797,22 +906,32 @@ class Cpm_Humanblockchain_Admin {
 									<span id="cpm-nwp-qr-gen-status" class="description" style="margin-left:0.5em;vertical-align:middle;"></span>
 								</p>
 								<?php
-								$edit_link = ( $nwp_qr_att > 0 ) ? get_edit_post_link( $nwp_qr_att, 'raw' ) : '';
+								$edit_link   = ( $nwp_qr_att > 0 ) ? get_edit_post_link( $nwp_qr_att, 'raw' ) : '';
 								$show_prv    = ( $nwp_qr_image !== '' );
+								$dl_png      = $show_prv ? $this->get_nwp_qr_download_url( $nwp_qr_att, 'png' ) : '';
+								$dl_jpg      = $show_prv ? $this->get_nwp_qr_download_url( $nwp_qr_att, 'jpg' ) : '';
 								?>
-								<div id="cpm-nwp-qr-preview" style="margin-top:0.75em;padding:12px;border:1px solid #c3c4c7;background:#fff;max-width:220px;border-radius:4px;<?php echo $show_prv ? '' : ' display:none;'; ?>" aria-hidden="<?php echo $show_prv ? 'false' : 'true'; ?>">
+								<div id="cpm-nwp-qr-preview" style="margin-top:0.75em;padding:12px;border:1px solid #c3c4c7;background:#fff;max-width:260px;border-radius:4px;<?php echo $show_prv ? '' : ' display:none;'; ?>" aria-hidden="<?php echo $show_prv ? 'false' : 'true'; ?>">
 									<p style="margin:0 0 0.5em 0;" class="description"><strong><?php esc_html_e( 'Current QR', 'cpm-humanblockchain' ); ?></strong></p>
 									<p style="margin:0 0 0.5em 0;">
-										<img id="cpm-nwp-qr-preview-img" src="<?php echo $show_prv ? esc_url( $nwp_qr_image ) : ''; ?>" alt="" style="max-width:100%;height:auto;<?php echo $show_prv ? ' display:block' : ' display:none'; ?>">
+										<img id="cpm-nwp-qr-preview-img" src="<?php echo $show_prv ? esc_url( $nwp_qr_image ) : ''; ?>" alt="<?php esc_attr_e( 'NWP Gateway QR code', 'cpm-humanblockchain' ); ?>" style="max-width:100%;height:auto;<?php echo $show_prv ? ' display:block' : ' display:none'; ?>">
 									</p>
-									<p id="cpm-nwp-qr-preview-edit" style="margin:0;" class="description">
-										<?php
-										if ( is_string( $edit_link ) && $edit_link !== '' ) {
-											?>
-										<a href="<?php echo esc_url( $edit_link ); ?>"><?php esc_html_e( 'Open in Media Library', 'cpm-humanblockchain' ); ?></a>
-										<?php
-										}
-										?>
+									<p id="cpm-nwp-qr-preview-actions" style="margin:0;" class="description">
+										<?php if ( $dl_png !== '' ) : ?>
+											<a id="cpm-nwp-qr-dl-png" href="<?php echo esc_url( $dl_png ); ?>"><?php esc_html_e( 'Download PNG', 'cpm-humanblockchain' ); ?></a>
+											<span aria-hidden="true"> · </span>
+											<a id="cpm-nwp-qr-dl-jpg" href="<?php echo esc_url( $dl_jpg ); ?>"><?php esc_html_e( 'Download JPG', 'cpm-humanblockchain' ); ?></a>
+										<?php else : ?>
+											<a id="cpm-nwp-qr-dl-png" href="#" style="display:none;"><?php esc_html_e( 'Download PNG', 'cpm-humanblockchain' ); ?></a>
+											<span id="cpm-nwp-qr-dl-sep" aria-hidden="true" style="display:none;"> · </span>
+											<a id="cpm-nwp-qr-dl-jpg" href="#" style="display:none;"><?php esc_html_e( 'Download JPG', 'cpm-humanblockchain' ); ?></a>
+										<?php endif; ?>
+										<?php if ( is_string( $edit_link ) && $edit_link !== '' ) : ?>
+											<?php if ( $dl_png !== '' ) : ?><span aria-hidden="true"> · </span><?php endif; ?>
+											<a id="cpm-nwp-qr-preview-edit" href="<?php echo esc_url( $edit_link ); ?>"><?php esc_html_e( 'Open in Media Library', 'cpm-humanblockchain' ); ?></a>
+										<?php else : ?>
+											<a id="cpm-nwp-qr-preview-edit" href="#" style="display:none;"><?php esc_html_e( 'Open in Media Library', 'cpm-humanblockchain' ); ?></a>
+										<?php endif; ?>
 									</p>
 								</div>
 							</td>
