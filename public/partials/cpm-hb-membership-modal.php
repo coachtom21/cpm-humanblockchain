@@ -55,7 +55,7 @@ if ( ! is_array( $cpm_hb_membership_branches ) ) {
 
 			<div class="cpm-hb-membership-grid" role="radiogroup" aria-labelledby="cpm-hb-membership-title">
 				<button type="button" class="cpm-hb-membership-card" data-tier="yamer" role="radio" aria-checked="false" id="cpm-hb-tier-yamer">
-					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Buyer (YAM’er)', 'cpm-humanblockchain' ); ?></span>
+					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Buyer (Nugget)', 'cpm-humanblockchain' ); ?></span>
 					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( 'Free • Buyer-first path', 'cpm-humanblockchain' ); ?></span>
 					<ul class="cpm-hb-membership-card-list">
 						<li><?php esc_html_e( 'Requires device registration + MSB credentials', 'cpm-humanblockchain' ); ?></li>
@@ -65,7 +65,7 @@ if ( ! is_array( $cpm_hb_membership_branches ) ) {
 					</ul>
 				</button>
 				<button type="button" class="cpm-hb-membership-card" data-tier="megavoter" role="radio" aria-checked="false" id="cpm-hb-tier-megavoter">
-					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Seller / Sponsor (Megavoter)', 'cpm-humanblockchain' ); ?></span>
+					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Seller / Sponsor (Miner)', 'cpm-humanblockchain' ); ?></span>
 					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( '$12 annual pledge • Seller path', 'cpm-humanblockchain' ); ?></span>
 					<ul class="cpm-hb-membership-card-list">
 						<li><?php esc_html_e( 'Requires QRtiger v-card', 'cpm-humanblockchain' ); ?></li>
@@ -73,15 +73,6 @@ if ( ! is_array( $cpm_hb_membership_branches ) ) {
 						<li><?php esc_html_e( 'Discord Gracebook acceptance required', 'cpm-humanblockchain' ); ?></li>
 						<li><?php esc_html_e( 'Assigned Peace Pentagon role + Seller POC (Pending → Active)', 'cpm-humanblockchain' ); ?></li>
 						<li><?php esc_html_e( 'Can issue NWP through Seller POC', 'cpm-humanblockchain' ); ?></li>
-					</ul>
-				</button>
-				<button type="button" class="cpm-hb-membership-card" data-tier="patron" role="radio" aria-checked="false" id="cpm-hb-tier-patron">
-					<span class="cpm-hb-membership-card-title"><?php esc_html_e( 'Patron / Stakeholder', 'cpm-humanblockchain' ); ?></span>
-					<span class="cpm-hb-membership-card-badge"><?php esc_html_e( '$30 mo / leaderboard award', 'cpm-humanblockchain' ); ?></span>
-					<ul class="cpm-hb-membership-card-list">
-						<li><?php esc_html_e( 'Recognition for reliability and participation', 'cpm-humanblockchain' ); ?></li>
-						<li><?php esc_html_e( 'Supports Detente 2030 build-out', 'cpm-humanblockchain' ); ?></li>
-						<li><?php esc_html_e( 'May unlock deeper organizer responsibilities', 'cpm-humanblockchain' ); ?></li>
 					</ul>
 				</button>
 			</div>

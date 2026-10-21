@@ -102,7 +102,7 @@
 			$contact.addClass( 'is-open' ).attr( 'aria-hidden', 'false' );
 			$( 'body' ).addClass( 'cpm-hb-membership-modal-open' );
 			setTimeout( function() {
-				$( guest ? '#cpm-hb-membership-field-email' : '#cpm-hb-membership-field-phone' ).trigger( 'focus' );
+				$( '#cpm-hb-membership-field-phone' ).trigger( 'focus' );
 			}, 50 );
 		}
 

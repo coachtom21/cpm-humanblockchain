@@ -16,18 +16,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<button type="button" class="cpm-hb-membership-close" id="cpm-hb-membership-contact-close" aria-label="<?php esc_attr_e( 'Close', 'cpm-humanblockchain' ); ?>">&times;</button>
 		<div class="cpm-hb-membership-inner">
 			<h2 id="cpm-hb-membership-contact-title" class="cpm-hb-membership-title"><?php esc_html_e( 'Your details', 'cpm-humanblockchain' ); ?></h2>
-			<p class="cpm-hb-membership-intro"><?php esc_html_e( 'We need your email and phone to set your membership. Optional fields help if we create a new account.', 'cpm-humanblockchain' ); ?></p>
+			<p class="cpm-hb-membership-intro"><?php esc_html_e( 'We need your phone and email to set your membership. Optional fields help if we create a new account.', 'cpm-humanblockchain' ); ?></p>
 
 			<form id="cpm-hb-membership-contact-form" class="cpm-hb-membership-contact-form" novalidate>
 				<div class="cpm-hb-membership-contact-scroll">
 					<p class="cpm-hb-membership-contact-error" id="cpm-hb-membership-contact-error" role="alert" hidden></p>
-					<label class="cpm-hb-membership-field cpm-hb-membership-email-row">
-						<span class="cpm-hb-membership-label"><?php esc_html_e( 'Email', 'cpm-humanblockchain' ); ?></span>
-						<input type="email" name="email" id="cpm-hb-membership-field-email" class="cpm-hb-membership-input" autocomplete="email" required />
-					</label>
 					<label class="cpm-hb-membership-field">
 						<span class="cpm-hb-membership-label"><?php esc_html_e( 'Phone', 'cpm-humanblockchain' ); ?></span>
 						<input type="tel" name="phone" id="cpm-hb-membership-field-phone" class="cpm-hb-membership-input" autocomplete="tel" required />
+					</label>
+					<label class="cpm-hb-membership-field cpm-hb-membership-email-row">
+						<span class="cpm-hb-membership-label"><?php esc_html_e( 'Email', 'cpm-humanblockchain' ); ?></span>
+						<input type="email" name="email" id="cpm-hb-membership-field-email" class="cpm-hb-membership-input" autocomplete="email" required />
 					</label>
 
 					<div class="cpm-hb-membership-contact-optional">

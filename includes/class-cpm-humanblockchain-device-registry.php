@@ -539,9 +539,12 @@ class Cpm_Humanblockchain_Device_Registry {
 		$geo_lat     = isset( $_POST['geo_lat'] ) ? floatval( $_POST['geo_lat'] ) : null;
 		$geo_lng     = isset( $_POST['geo_lng'] ) ? floatval( $_POST['geo_lng'] ) : null;
 
-		// Required: email and device_hash (per doc)
+		// Observer path: email, mobile, and device_hash.
 		if ( empty( $email ) || empty( $device_hash ) ) {
 			wp_send_json_error( array( 'message' => __( 'Email and device identification are required.', 'cpm-humanblockchain' ) ) );
+		}
+		if ( empty( $mobile ) ) {
+			wp_send_json_error( array( 'message' => __( 'A mobile number is required to register as Observer.', 'cpm-humanblockchain' ) ) );
 		}
 
 		if ( ! is_email( $email ) ) {
@@ -670,7 +673,7 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		$response = array(
-			'message'   => __( 'Device registered successfully. You are ready for the next steps.', 'cpm-humanblockchain' ),
+			'message'   => __( 'Device registered. Verify the SMS code next. You are a Nugget — no payment required.', 'cpm-humanblockchain' ),
 			'device_id' => $device_id,
 			'repeated'  => false,
 		);
@@ -679,6 +682,13 @@ class Cpm_Humanblockchain_Device_Registry {
 		}
 
 		do_action( 'cpm_hb_after_device_registered', $device_id, $wp_user_id, $email );
+
+		if ( $wp_user_id > 0 ) {
+			$role = get_user_meta( $wp_user_id, 'hb_participation_role', true );
+			if ( $role === '' || $role === 'observer' || $role === 'yamer' ) {
+				update_user_meta( $wp_user_id, 'hb_participation_role', 'yamer' );
+			}
+		}
 
 		wp_send_json_success( $response );
 	}
@@ -999,6 +1009,8 @@ class Cpm_Humanblockchain_Device_Registry {
 		Cpm_Humanblockchain_Otp_Service::clear_otp_transient( $phone_e164 );
 
 		self::establish_user_session( $wp_uid, $user );
+
+		do_action( 'cpm_hb_after_otp_verified', $wp_uid, (int) $device_id );
 
 		$post_login_redirect = self::build_auth_finish_redirect_url( $wp_uid );
 

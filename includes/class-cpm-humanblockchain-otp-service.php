@@ -95,7 +95,73 @@ class Cpm_Humanblockchain_Otp_Service {
 		if ( in_array( $def, array( 'NP', 'AUTO' ), true ) && strlen( $digits ) === 11 && preg_match( '/^9[78]/', $digits ) ) {
 			return __( 'Nepal numbers must be exactly 10 digits without +977 (you entered 11 digits). Remove an extra digit, or use international format e.g. +9779849158973.', 'cpm-humanblockchain' );
 		}
-		return __( 'Please enter a valid mobile number (e.g. 9849158973 or +9779849158973).', 'cpm-humanblockchain' );
+		return __( 'Please enter a valid mobile number (e.g. US 4045551234 or +14045551234, Nepal 9849158973 or +9779849158973).', 'cpm-humanblockchain' );
+	}
+
+	/**
+	 * Build E.164 from country ISO + national digits (same rules as login / Activate Phone UI).
+	 *
+	 * Prefer this over bare normalize when the user explicitly chose a country, so US
+	 * numbers (including 970/971/984 area codes) are not mis-routed to Nepal.
+	 *
+	 * @param string $country_iso US|CA|NP|GB|IN|AU|…
+	 * @param string $national    National number digits (may include formatting).
+	 * @return string|null E.164 or null.
+	 */
+	public static function build_e164_from_country( $country_iso, $national ) {
+		$country_iso = strtoupper( trim( (string) $country_iso ) );
+		$national    = trim( (string) $national );
+
+		// Already international — trust normalize.
+		if ( preg_match( '/^\+[1-9]\d{6,14}$/', $national ) ) {
+			return self::normalize_phone_e164( $national );
+		}
+
+		$digits = preg_replace( '/\D/', '', $national );
+		if ( $digits === '' ) {
+			return null;
+		}
+
+		$dial_map = array(
+			'US' => '1',
+			'CA' => '1',
+			'NP' => '977',
+			'GB' => '44',
+			'IN' => '91',
+			'AU' => '61',
+		);
+		$dial = $dial_map[ $country_iso ] ?? '';
+
+		if ( $dial === '1' ) {
+			if ( strlen( $digits ) === 11 && substr( $digits, 0, 1 ) === '1' ) {
+				$digits = substr( $digits, 1 );
+			}
+			if ( strlen( $digits ) > 10 ) {
+				$digits = substr( $digits, 0, 10 );
+			}
+			return strlen( $digits ) === 10 ? '+1' . $digits : null;
+		}
+
+		if ( $dial === '977' ) {
+			if ( strlen( $digits ) === 13 && substr( $digits, 0, 3 ) === '977' ) {
+				return '+' . $digits;
+			}
+			if ( strlen( $digits ) > 10 ) {
+				$digits = substr( $digits, 0, 10 );
+			}
+			return strlen( $digits ) === 10 ? '+977' . $digits : null;
+		}
+
+		if ( $dial === '44' ) {
+			$digits = ltrim( $digits, '0' );
+			return $digits !== '' ? '+44' . $digits : null;
+		}
+
+		if ( $dial !== '' ) {
+			return '+' . $dial . $digits;
+		}
+
+		return self::normalize_phone_e164( $national );
 	}
 
 	/**

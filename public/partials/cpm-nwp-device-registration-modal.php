@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<div class="cpm-nwp-modal-header">
 			<div class="cpm-nwp-modal-title-wrap">
 				<h2 id="cpm-nwp-modal-title" class="cpm-nwp-modal-title"><?php esc_html_e( 'Register your device', 'cpm-humanblockchain' ); ?></h2>
-				<p class="cpm-nwp-modal-subtitle"><?php esc_html_e( 'Step 1 of 4 — Device registration. Capture device ID, email, mobile, and optional v-card link.', 'cpm-humanblockchain' ); ?></p>
+				<p class="cpm-nwp-modal-subtitle"><?php esc_html_e( 'Observer / Nugget — email and mobile only. Then verify a one-time phone code. No payment. Discord is optional.', 'cpm-humanblockchain' ); ?></p>
 			</div>
 			<button type="button" class="cpm-nwp-modal-close" aria-label="<?php esc_attr_e( 'Close', 'cpm-humanblockchain' ); ?>"><?php esc_html_e( 'Close', 'cpm-humanblockchain' ); ?></button>
 		</div>
@@ -64,7 +64,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 							}
 							?>
 						</select>
-						<input type="tel" id="cpm-nwp-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" aria-describedby="cpm-nwp-mobile-hint">
+						<input type="tel" id="cpm-nwp-mobile-national" class="cpm-nwp-mobile-national" inputmode="numeric" autocomplete="tel-national" placeholder="<?php esc_attr_e( 'Local number, digits only', 'cpm-humanblockchain' ); ?>" required aria-describedby="cpm-nwp-mobile-hint">
 						<input type="hidden" name="mobile" id="cpm-nwp-mobile-e164" value="">
 					</div>
 					<p id="cpm-nwp-mobile-hint" class="cpm-nwp-field-note"><?php esc_html_e( 'Choose country, then enter your number without the country code. Required (8+ digits) when the Register User API key is saved under Settings → NWP Gateway. Your country is stored with the device record.', 'cpm-humanblockchain' ); ?></p>
@@ -72,24 +72,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 				</div>
 			</div>
 
-			<div class="cpm-nwp-form-row">
-				<div class="cpm-nwp-form-field">
-					<label for="cpm-nwp-qrtiger"><?php esc_html_e( 'QRtiger v-card link (optional)', 'cpm-humanblockchain' ); ?></label>
-					<input type="url" id="cpm-nwp-qrtiger" name="qrtiger_vcard_link" placeholder="<?php esc_attr_e( 'https://...', 'cpm-humanblockchain' ); ?>">
-					<p class="cpm-nwp-field-note"><?php esc_html_e( 'If available. Not required for device registration.', 'cpm-humanblockchain' ); ?></p>
-				</div>
-			</div>
-
 			<div class="cpm-nwp-form-actions">
 				<button type="submit" class="cpm-nwp-btn cpm-nwp-btn--primary"><?php esc_html_e( 'Confirm Registration', 'cpm-humanblockchain' ); ?></button>
 				<button type="button" class="cpm-nwp-btn cpm-nwp-btn--secondary cpm-nwp-open-activate-modal cpm-nwp-open-activate-modal--from-register"><?php esc_html_e( 'Activate device', 'cpm-humanblockchain' ); ?></button>
-				<a href="<?php echo esc_url( home_url( '/nwp-gateway/membership-selection/' ) ); ?>" class="cpm-nwp-btn cpm-nwp-btn--secondary"><?php esc_html_e( 'Go to Membership', 'cpm-humanblockchain' ); ?></a>
 			</div>
 		</form>
 
 		<div class="cpm-nwp-modal-footer">
-			<p><strong><?php esc_html_e( 'Output created:', 'cpm-humanblockchain' ); ?></strong> <?php esc_html_e( 'device_registered = true — First trust point in the append-only ledger.', 'cpm-humanblockchain' ); ?></p>
-			<p class="cpm-nwp-footer-note"><?php esc_html_e( 'Next steps: Join Discord Gracebook → Choose membership → Print / Issue NWP.', 'cpm-humanblockchain' ); ?></p>
+			<p><strong><?php esc_html_e( 'You are an Observer.', 'cpm-humanblockchain' ); ?></strong> <?php esc_html_e( 'This registers the phone. Next you verify the SMS code. Discord and $12 membership are later choices, not required here.', 'cpm-humanblockchain' ); ?></p>
+			<p class="cpm-nwp-footer-note"><?php esc_html_e( 'XP is Experience Presence. It is not money. A personal balance shows on My Account after a confirmed move.', 'cpm-humanblockchain' ); ?></p>
 		</div>
 	</div>
 </div>

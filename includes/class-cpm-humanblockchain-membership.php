@@ -295,7 +295,15 @@ class Cpm_Humanblockchain_Membership {
 	 * @return string[]
 	 */
 	public static function valid_tier_slugs() {
-		return array( 'yamer', 'megavoter', 'patron' );
+		$slugs = array( 'yamer', 'megavoter' );
+		/**
+		 * Tiers offered in Get started / membership submit.
+		 * Patron is not a public membership.
+		 *
+		 * @param string[] $slugs
+		 */
+		$slugs = apply_filters( 'cpm_hb_valid_tier_slugs', $slugs );
+		return is_array( $slugs ) ? array_values( array_filter( array_map( 'sanitize_key', $slugs ) ) ) : array( 'yamer', 'megavoter' );
 	}
 
 	/**
@@ -395,7 +403,7 @@ class Cpm_Humanblockchain_Membership {
 		$block = (bool) apply_filters( 'cpm_hb_pmpro_block_checkout_due_to_active_membership', $block, (int) $current_user->ID, $pmpro_level );
 		if ( $block ) {
 			pmpro_setMessage(
-				__( 'You already have an active paid membership. Cancel it or wait until it expires before subscribing to a different plan. YAMer (free) members can upgrade to Pioneer or Patron at any time.', 'cpm-humanblockchain' ),
+				__( 'You already have an active paid membership. Cancel it or wait until it expires before subscribing to a different plan. Nugget (free) members can upgrade to Miner at any time.', 'cpm-humanblockchain' ),
 				'pmpro_error'
 			);
 			return false;
@@ -626,10 +634,10 @@ class Cpm_Humanblockchain_Membership {
 			'megavoter' => 2,
 			'patron'    => 3,
 		);
-		$labels = array(
-			'yamer'     => 'YAMer',
-			'megavoter' => 'Pioneer',
-			'patron'    => 'Patron',
+		$aliases = array(
+			'yamer'     => array( 'nugget', 'yamer', 'yammer' ),
+			'megavoter' => array( 'miner', 'megavoter', 'pioneer' ),
+			'patron'    => array( 'patron' ),
 		);
 		if ( ! isset( $defaults[ $tier ] ) ) {
 			return 0;
@@ -642,12 +650,10 @@ class Cpm_Humanblockchain_Membership {
 					$by_lower[ $n ] = (int) $lvl->id;
 				}
 			}
-			$want = strtolower( $labels[ $tier ] );
-			if ( isset( $by_lower[ $want ] ) ) {
-				return (int) $by_lower[ $want ];
-			}
-			if ( 'megavoter' === $tier && isset( $by_lower['megavoter'] ) ) {
-				return (int) $by_lower['megavoter'];
+			foreach ( $aliases[ $tier ] as $want ) {
+				if ( isset( $by_lower[ $want ] ) ) {
+					return (int) $by_lower[ $want ];
+				}
 			}
 		}
 		return (int) $defaults[ $tier ];
@@ -761,8 +767,8 @@ class Cpm_Humanblockchain_Membership {
 	 */
 	private static function default_level_names() {
 		return array(
-			'yamer'     => 'YAMer',
-			'megavoter' => 'Pioneer',
+			'yamer'     => 'Nugget',
+			'megavoter' => 'Miner',
 			'patron'    => 'Patron',
 		);
 	}

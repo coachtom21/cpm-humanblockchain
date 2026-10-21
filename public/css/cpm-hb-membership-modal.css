@@ -192,7 +192,7 @@ body.cpm-hb-membership-modal-open {
 
 #cpm-hb-membership-modal .cpm-hb-membership-grid {
 	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--cpm-hb-m-gap);
 	margin-bottom: 28px;
 	width: 100%;
@@ -598,7 +598,7 @@ body.cpm-hb-membership-modal-open {
  */
 #cpm-hb-membership-modal .cpm-hb-membership-grid {
 	display: grid !important;
-	grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+	grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 	gap: clamp(16px, 2.2vw, 24px) !important;
 	visibility: visible !important;
 	width: 100% !important;
