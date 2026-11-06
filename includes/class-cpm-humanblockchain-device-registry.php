@@ -223,6 +223,49 @@ class Cpm_Humanblockchain_Device_Registry {
 	 * @param int $user_id User ID.
 	 * @return string Phone string or empty.
 	 */
+	/**
+	 * Save the verified RSVP phone on the WordPress user and in the login device list.
+	 * My Account OTP finds the person by that device row, not by the encounter token.
+	 *
+	 * @param int    $user_id    WordPress user ID.
+	 * @param string $phone_e164 Phone already normalized to E.164.
+	 * @param string $email      Email used on the RSVP.
+	 * @return bool
+	 */
+	public static function register_phone_for_user( $user_id, $phone_e164, $email ) {
+		$user_id    = (int) $user_id;
+		$phone_e164 = trim( (string) $phone_e164 );
+		$email      = sanitize_email( (string) $email );
+		if ( $user_id <= 0 || $phone_e164 === '' || ! is_email( $email ) ) {
+			return false;
+		}
+
+		update_user_meta( $user_id, 'phone', $phone_e164 );
+		update_user_meta( $user_id, 'billing_phone', $phone_e164 );
+		update_user_meta( $user_id, 'mega-mobile', $phone_e164 );
+
+		if ( self::find_device_id_by_phone( $phone_e164 ) ) {
+			return true;
+		}
+
+		global $wpdb;
+		$now = current_time( 'mysql' );
+		$ok  = $wpdb->insert(
+			$wpdb->prefix . self::TABLE_NAME,
+			array(
+				'user_id'             => $user_id,
+				'device_hash'         => hash( 'sha256', 'hbc-rsvp|' . preg_replace( '/\D/', '', $phone_e164 ) ),
+				'email'               => $email,
+				'phone'               => $phone_e164,
+				'registered_at'       => $now,
+				'registration_status' => 'registered',
+				'created_at'          => $now,
+			)
+		);
+
+		return false !== $ok;
+	}
+
 	public static function get_phone_for_user( $user_id ) {
 		$user_id = (int) $user_id;
 		if ( $user_id <= 0 ) {
