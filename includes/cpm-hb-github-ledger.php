@@ -165,10 +165,11 @@ class Cpm_Hb_Github_Ledger {
 	 */
 	public static function scan_type_to_action( $scan_type ) {
 		$map = array(
-			'seller_scan'    => 'seller-scan',
-			'buyer_scan'     => 'buyer-scan',
-			'discord_verify' => 'discord-verify',
-			'personal_scan'  => 'personal-scan',
+			'seller_scan'           => 'seller-scan',
+			'buyer_scan'            => 'buyer-scan',
+			'discord_verify'        => 'discord-verify',
+			'personal_scan'         => 'personal-scan',
+			'human_gold_encounter'  => 'human-gold-encounter',
 		);
 		$scan_type = sanitize_key( (string) $scan_type );
 		if ( isset( $map[ $scan_type ] ) ) {

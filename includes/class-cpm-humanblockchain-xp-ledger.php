@@ -222,6 +222,115 @@ class Cpm_Humanblockchain_Xp_Ledger {
 	}
 
 	/**
+	 * Insert one confirmed Human Gold encounter into wp_xp_ledger.
+	 *
+	 * Amount stays a digit string. A second call with the same confirmation id returns the existing row.
+	 *
+	 * @param int                  $wp_user_id      WordPress user ID.
+	 * @param string               $confirmation_id Encounter confirmation id.
+	 * @param string               $xp_units        Non-negative integer string. Not cast to int.
+	 * @param array<string, mixed> $context         Optional identity_uuid, session_uuid. emit defaults to true.
+	 * @return int Ledger row id, or 0 when the row could not be stored.
+	 */
+	public static function record_encounter_xp( $wp_user_id, $confirmation_id, $xp_units, array $context = array() ) {
+		global $wpdb;
+
+		$wp_user_id = (int) $wp_user_id;
+		if ( $wp_user_id <= 0 ) {
+			return 0;
+		}
+
+		$xp_str = ltrim( preg_replace( '/\D/', '', (string) $xp_units ), '0' );
+		if ( $xp_str === '' || ! ctype_digit( $xp_str ) || strlen( $xp_str ) > 64 ) {
+			return 0;
+		}
+
+		$transaction_id = substr( sanitize_text_field( (string) $confirmation_id ), 0, 64 );
+		if ( $transaction_id === '' ) {
+			return 0;
+		}
+
+		$table    = self::table_name();
+		$existing = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table} WHERE scan_type = %s AND transaction_id = %s ORDER BY id ASC LIMIT 1",
+				'human_gold_encounter',
+				$transaction_id
+			)
+		);
+		if ( $existing ) {
+			return (int) $existing;
+		}
+
+		$ledger_date = current_time( 'mysql' );
+		$entry       = array(
+			'source'          => 'human_gold_encounter',
+			'confirmation_id' => $transaction_id,
+			'xp_units'        => $xp_str,
+			'scan_status'     => 'confirmed',
+		);
+		if ( ! empty( $context['identity_uuid'] ) ) {
+			$entry['identity_uuid'] = (string) $context['identity_uuid'];
+		}
+		if ( ! empty( $context['session_uuid'] ) ) {
+			$entry['session_uuid'] = (string) $context['session_uuid'];
+		}
+		$entry_store = array_merge( $entry, array( 'date' => $ledger_date ) );
+
+		$inserted = $wpdb->insert(
+			$table,
+			array(
+				'wp_user_id'         => $wp_user_id,
+				'scan_type'          => 'human_gold_encounter',
+				'transaction_id'     => $transaction_id,
+				'xp_units'           => $xp_str,
+				'scan_status'        => 'confirmed',
+				'entry_json'         => wp_json_encode( $entry_store ),
+				'remote_sync_status' => 'skipped',
+				'ledger_date'        => $ledger_date,
+				'created_at'         => current_time( 'mysql' ),
+				'updated_at'         => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+		);
+
+		if ( false === $inserted ) {
+			$existing = $wpdb->get_var(
+				$wpdb->prepare(
+					"SELECT id FROM {$table} WHERE scan_type = %s AND transaction_id = %s ORDER BY id ASC LIMIT 1",
+					'human_gold_encounter',
+					$transaction_id
+				)
+			);
+			return $existing ? (int) $existing : 0;
+		}
+
+		$row_id = (int) $wpdb->insert_id;
+		if ( $row_id <= 0 ) {
+			return 0;
+		}
+
+		$emit = ! array_key_exists( 'emit', $context ) || $context['emit'];
+		if ( $emit ) {
+			self::emit_github_ledger_row_event(
+				array(
+					'row_id'         => $row_id,
+					'wp_user_id'     => $wp_user_id,
+					'scan_type'      => 'human_gold_encounter',
+					'transaction_id' => $transaction_id,
+					'xp_units'       => $xp_str,
+					'scan_status'    => 'confirmed',
+					'ledger_date'    => $ledger_date,
+					'entry_json'     => $entry_store,
+					'event_kind'     => 'insert',
+				)
+			);
+		}
+
+		return $row_id;
+	}
+
+	/**
 	 * Scan endpoint (override via filter).
 	 *
 	 * @return string
