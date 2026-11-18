@@ -15,7 +15,7 @@
  * @wordpress-plugin
  * Plugin Name:       CPM Humanblockchain
  * Plugin URI:        https://https://codepixelzmedia.com/
- * Description:       The NWP scan is not the transaction itself. It is the onboarding gateway that prepares a person to participate in the YAM JAM game.
+ * Description:       The NWP scan is not the transaction itself. It is the onboarding gateway that prepares a person to participate in the trade-value record.
 The YAM-is-ON universal QR remains the separate buyer/seller pledge-confirmation tool for the actual $30 pledge and the $10.30 community value allocation.
 So the rule is:
 NWP = onboarding, identity, role readiness, print rights
